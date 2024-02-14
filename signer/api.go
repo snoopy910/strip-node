@@ -1,11 +1,14 @@
 package signer
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/mr-tron/base58"
 )
 
 var messageChan = make(map[string]chan (Message))
@@ -46,14 +49,15 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		x := toHexInt(networks[networkId].Key.ECDSAPub.X())
-		y := toHexInt(networks[networkId].Key.ECDSAPub.Y())
+		pk := edwards.PublicKey{
+			Curve: tss.Edwards(),
+			X:     networks[networkId].Key.EDDSAPub.X(),
+			Y:     networks[networkId].Key.EDDSAPub.Y(),
+		}
 
-		publicKeyStr := "04" + x + y
-		publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-		address := publicKeyToAddress(publicKeyBytes)
+		publicKeyStr := base58.Encode(pk.Serialize())
 
-		fmt.Fprintf(w, "%s", address)
+		fmt.Fprintf(w, "%s", publicKeyStr)
 	})
 
 	http.HandleFunc("/signature", func(w http.ResponseWriter, r *http.Request) {

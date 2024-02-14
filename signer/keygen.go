@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,9 +8,11 @@ import (
 	"time"
 
 	tssCommon "github.com/Silent-Protocol/go-sio/common"
-	"github.com/bnb-chain/tss-lib/ecdsa/keygen"
-	"github.com/bnb-chain/tss-lib/tss"
+	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
+	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/mr-tron/base58"
 )
 
 func updateKeygen(networkId string, partyKey string, from int, bz []byte, isBroadcast bool, to int) {
@@ -101,15 +102,11 @@ func generateKeygen(networkId string) {
 		ctx := tss.NewPeerContext(parties)
 
 		outChanKeygen := make(chan tss.Message)
-		saveChan := make(chan keygen.LocalPartySaveData)
+		saveChan := make(chan *keygen.LocalPartySaveData)
 
-		params := tss.NewParameters(tss.S256(), ctx, partiesIds[contractIndex.Index.Int64()], len(parties), int(contractThreshold.Int64()))
-		preParams, err := keygen.GeneratePreParams(2 * time.Minute)
-		if err != nil {
-			panic(err)
-		}
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[contractIndex.Index.Int64()], len(parties), int(contractThreshold.Int64()))
 
-		localParty := keygen.NewLocalParty(params, outChanKeygen, saveChan, *preParams)
+		localParty := keygen.NewLocalParty(params, outChanKeygen, saveChan)
 		partyProcesses[networkId]["keygen"] = PartyProcess{&localParty, true}
 		go localParty.Start()
 
@@ -140,20 +137,22 @@ func generateKeygen(networkId string) {
 			case save := <-saveChan:
 				fmt.Println("saving key")
 
-				x := toHexInt(save.ECDSAPub.X())
-				y := toHexInt(save.ECDSAPub.Y())
-				publicKeyStr := "04" + x + y
-				publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-				newTssAddressStr := publicKeyToAddress(publicKeyBytes)
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     save.EDDSAPub.X(),
+					Y:     save.EDDSAPub.Y(),
+				}
 
-				fmt.Println("new TSS Address is: ", newTssAddressStr)
+				publicKeyStr := base58.Encode(pk.Serialize())
+
+				fmt.Println("new TSS Address is: ", publicKeyStr)
 
 				networkData := NetworkData{
 					StartKey:     uint(contractStartKey.Int64()),
 					TotalSigners: uint(contractTotalSigners.Int64()),
 					Threshold:    uint(contractThreshold.Int64()),
 					Index:        uint(contractIndex.Index.Int64()),
-					Address:      newTssAddressStr,
+					Address:      publicKeyStr,
 				}
 
 				networkDataJSON, err := json.Marshal(networkData)
@@ -169,7 +168,7 @@ func generateKeygen(networkId string) {
 
 				_network := networks[networkId]
 
-				_network.Key = &save
+				_network.Key = save
 				out, err := json.Marshal(_network.Key)
 				if err != nil {
 					fmt.Println(err)
@@ -187,7 +186,7 @@ func generateKeygen(networkId string) {
 				networks[networkId] = _network
 				completed = true
 
-				fmt.Println("completed saving of new keygen ", newTssAddressStr)
+				fmt.Println("completed saving of new keygen ", publicKeyStr)
 			}
 		}
 	} else {

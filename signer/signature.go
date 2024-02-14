@@ -1,15 +1,16 @@
 package signer
 
 import (
-	"encoding/hex"
+	"crypto/ed25519"
 	"fmt"
 	"math/big"
 	"time"
 
-	cmn "github.com/bnb-chain/tss-lib/common"
-	"github.com/bnb-chain/tss-lib/ecdsa/signing"
-	"github.com/bnb-chain/tss-lib/tss"
-	"github.com/ethereum/go-ethereum/crypto"
+	cmn "github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/bnb-chain/tss-lib/v2/eddsa/signing"
+	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/mr-tron/base58"
 )
 
 func updateSignature(networkId string, partyKey string, from int, bz []byte, isBroadcast bool, to int) {
@@ -61,9 +62,9 @@ func generateSignature(networkId string, hash []byte) {
 	ctx := tss.NewPeerContext(parties)
 
 	outChanKeygen := make(chan tss.Message)
-	saveChan := make(chan cmn.SignatureData)
+	saveChan := make(chan *cmn.SignatureData)
 
-	params := tss.NewParameters(tss.S256(), ctx, partiesIds[networks[networkId].Index], len(parties), networks[networkId].Threshold)
+	params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[networks[networkId].Index], len(parties), networks[networkId].Threshold)
 
 	msg, _ := new(big.Int).SetString(string(hash), 16)
 
@@ -100,26 +101,33 @@ func generateSignature(networkId string, hash []byte) {
 		case save := <-saveChan:
 			completed = true
 
-			final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
-			data, err := hex.DecodeString(string(hash))
-			if err != nil {
-				panic(err)
+			final := base58.Encode(save.Signature)
+			fmt.Println(final)
+
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     networks[networkId].Key.EDDSAPub.X(),
+				Y:     networks[networkId].Key.EDDSAPub.Y(),
 			}
 
-			sdata, err := hex.DecodeString(final)
+			publicKeyStr := base58.Encode(pk.Serialize())
+
+			newSig, err := edwards.ParseSignature(save.Signature)
 			if err != nil {
-				panic(err)
+				println("new sig error, ", err.Error())
 			}
-			pubkey, err := crypto.Ecrecover(data, sdata)
-			if err != nil {
-				panic(err)
-			}
+
+			ok := edwards.Verify(&pk, hash, newSig.R, newSig.S)
+			fmt.Println(ok)
+
+			verified := ed25519.Verify(ed25519.PublicKey(pk.Serialize()), hash, save.Signature)
+			fmt.Println(verified)
 
 			message := Message{
 				Type:      MESSAGE_TYPE_SIGNATURE,
 				Hash:      hash,
 				Message:   []byte(final),
-				Address:   publicKeyToAddress(pubkey),
+				Address:   publicKeyStr,
 				NetworkId: networkId,
 			}
 

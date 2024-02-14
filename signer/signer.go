@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/Silent-Protocol/go-sio/common"
-	"github.com/bnb-chain/tss-lib/ecdsa/keygen"
-	"github.com/bnb-chain/tss-lib/tss"
+	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
+	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/multiformats/go-multiaddr"
 )

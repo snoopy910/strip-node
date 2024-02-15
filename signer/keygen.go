@@ -135,10 +135,14 @@ func generateKeygen(networkId string) {
 				go broadcast(message)
 
 			case save := <-saveChan:
+
+				_i := save.EDDSAPub.IsOnCurve()
+
+				fmt.Println("is on curve: ", _i)
 				fmt.Println("saving key")
 
 				pk := edwards.PublicKey{
-					Curve: tss.Edwards(),
+					Curve: save.EDDSAPub.Curve(),
 					X:     save.EDDSAPub.X(),
 					Y:     save.EDDSAPub.Y(),
 				}

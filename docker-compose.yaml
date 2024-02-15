@@ -24,7 +24,7 @@ services:
     container_name: add_signer_1
     command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURLs", "http://ganache:8545", "--signerPublicKey", "0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--isAddsigner", "true", "--networkIds", "1337"]
     depends_on:
-      deploy_paymaster:
+      deploy_signerhub:
         condition: service_completed_successfully
 
   add_signer_2:
@@ -61,9 +61,6 @@ services:
       - '30304:30304'
       - '8080:8080'
     command: ["--signerPublicKey", "0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--signerPrivateKey", "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2", "--rpcURLs", "http://ganache:8545", "--keyPath", "/app/keys", "--httpPort", "8080", "--port", "30304", "--bootnode", "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR", "--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--networkIds", "1337"]
-    depends_on:
-      add_signer_2:
-        condition: service_completed_successfully
 
   signer2:
     build: 
@@ -76,6 +73,3 @@ services:
       - '30305:30305'
       - '8081:8081'
     command: ["--signerPublicKey", "0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35", "--signerPrivateKey", "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de", "--rpcURLs", "http://ganache:8545", "--keyPath", "/app/keys", "--httpPort", "8081", "--port", "30305", "--bootnode", "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR", "--networkIds", "1337"]
-    depends_on:
-      add_signer_2:
-        condition: service_completed_successfully

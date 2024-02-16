@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -12,9 +11,6 @@ import (
 	bootnode "github.com/Silent-Protocol/go-sio/bootnode"
 	signer "github.com/Silent-Protocol/go-sio/signer"
 	signerhub "github.com/Silent-Protocol/go-sio/signerhub"
-	solana "github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/programs/system"
-	"github.com/gagliardetto/solana-go/rpc"
 )
 
 func main() {
@@ -54,45 +50,6 @@ func main() {
 			signerhub.DeploySignerHubContract(rpcs[i], *privateKey)
 		}
 	} else if *isSigningMessageGenerate {
-		c := rpc.New("https://api.devnet.solana.com")
-		// pubKeyByte, _ := base58.Decode("4dEgqPG9FtjCiwW1HUdReraBozwq6qUCcDFXD8BnUn9Z")
-		accountFrom := solana.MustPublicKeyFromBase58("4dEgqPG9FtjCiwW1HUdReraBozwq6qUCcDFXD8BnUn9Z")
-		accountTo := solana.MustPublicKeyFromBase58("5oNDL3swdJJF1g9DzJiZ4ynHXgszjAEpUkxVYejchzrY")
-		amount := uint64(1)
-
-		// _, err := c.RequestAirdrop(context.Background(), accountFrom, solana.LAMPORTS_PER_SOL, rpc.CommitmentConfirmed)
-
-		recentHash, err := c.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
-		if err != nil {
-			panic(err)
-		}
-
-		tx, err := solana.NewTransaction(
-			[]solana.Instruction{
-				system.NewTransferInstruction(
-					amount,
-					accountFrom,
-					accountTo,
-				).Build(),
-			},
-			solana.MustHashFromBase58(recentHash.Value.Blockhash.String()),
-			solana.TransactionPayer(accountFrom),
-		)
-
-		if err != nil {
-			panic(err)
-		}
-
-		msg, err := tx.Message.MarshalBinary()
-		if err != nil {
-			panic(err)
-		}
-
-		//0100010335db7213e45b7498a259b23793399c2821d56df35856f436d87c932ae396034c474f7335d5399e496566fcfe89b06ddf2f9df31fab601aafbf9afe5574a596ad000000000000000000000000000000000000000000000000000000000000000028ef4fdffb91cdfc80b5c397a086cd81d6a171dfd0ade48fd448243d8bc3686801020200010c020000000100000000000000
-		// fmt.Println(hex.EncodeToString(msg))
-
-		//[1 0 1 3 53 219 114 19 228 91 116 152 162 89 178 55 147 57 156 40 33 213 109 243 88 86 244 54 216 124 147 42 227 150 3 76 71 79 115 53 213 57 158 73 101 102 252 254 137 176 109 223 47 157 243 31 171 96 26 175 191 154 254 85 116 165 150 173 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 200 196 8 222 236 199 174 150 78 150 17 5 177 231 191 139 183 168 69 6
-		fmt.Println(msg)
 
 		// use it as original message
 		// msgBigInt := (&big.Int{}).SetBytes(msg)

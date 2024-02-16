@@ -103,7 +103,7 @@ func generateSignature(networkId string, hash []byte) {
 		case save := <-saveChan:
 			completed = true
 
-			final := base58.Encode(save.Signature)
+			// final := base58.Encode(save.Signature)
 
 			pk := edwards.PublicKey{
 				Curve: tss.Edwards(),
@@ -127,7 +127,7 @@ func generateSignature(networkId string, hash []byte) {
 			message := Message{
 				Type:      MESSAGE_TYPE_SIGNATURE,
 				Hash:      hash,
-				Message:   []byte(final),
+				Message:   save.Signature,
 				Address:   publicKeyStr,
 				NetworkId: networkId,
 			}

@@ -12,6 +12,8 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/rpc"
+	confirm "github.com/gagliardetto/solana-go/rpc/sendAndConfirmTransaction"
+	"github.com/gagliardetto/solana-go/rpc/ws"
 	"github.com/mr-tron/base58"
 )
 
@@ -99,20 +101,53 @@ func startHTTPServer(port string) {
 			panic(err)
 		}
 
-		//0100010335db7213e45b7498a259b23793399c2821d56df35856f436d87c932ae396034c474f7335d5399e496566fcfe89b06ddf2f9df31fab601aafbf9afe5574a596ad000000000000000000000000000000000000000000000000000000000000000028ef4fdffb91cdfc80b5c397a086cd81d6a171dfd0ade48fd448243d8bc3686801020200010c020000000100000000000000
-		// fmt.Println(hex.EncodeToString(msg))
-
-		//[1 0 1 3 53 219 114 19 228 91 116 152 162 89 178 55 147 57 156 40 33 213 109 243 88 86 244 54 216 124 147 42 227 150 3 76 71 79 115 53 213 57 158 73 101 102 252 254 137 176 109 223 47 157 243 31 171 96 26 175 191 154 254 85 116 165 150 173 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 200 196 8 222 236 199 174 150 78 150 17 5 177 231 191 139 183 168 69 6
-		fmt.Println(msg)
-
 		hash := string(msg)
-		fmt.Println(hash)
 		networkId := r.URL.Query().Get("networkId")
 		go generateSignatureMessage(networkId, msg)
 
 		messageChan[hash] = make(chan Message)
 
 		sig := <-messageChan[hash]
+
+		fmt.Println(len(sig.Message))
+		newSig, err := edwards.ParseSignature(sig.Message)
+		if err != nil {
+			println("new sig error, ", err.Error())
+		}
+
+		fmt.Println(len(newSig.R.Bytes()), len(newSig.S.Bytes()))
+		signingSigBytes := make([]byte, 88)
+		copy(signingSigBytes[:32], newSig.R.Bytes())
+		copy(signingSigBytes[32:], newSig.S.Bytes())
+
+		signature := solana.SignatureFromBytes(sig.Message)
+
+		tx.Signatures = append(tx.Signatures, signature)
+		err = tx.VerifySignatures()
+
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		wsClient, err := ws.Connect(context.Background(), rpc.DevNet_WS)
+		if err != nil {
+			panic(err)
+		}
+
+		rpcClient := rpc.New(rpc.DevNet_RPC)
+
+		sig1, err := confirm.SendAndConfirmTransaction(
+			context.Background(),
+			rpcClient,
+			wsClient,
+			tx,
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(sig1)
+
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode("{\"signature\":\"" + string(sig.Message) + "\",\"address\":\"" + sig.Address + "\"}")
 		if err != nil {

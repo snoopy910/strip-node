@@ -116,10 +116,6 @@ func startHTTPServer(port string) {
 		}
 
 		fmt.Println(len(newSig.R.Bytes()), len(newSig.S.Bytes()))
-		signingSigBytes := make([]byte, 88)
-		copy(signingSigBytes[:32], newSig.R.Bytes())
-		copy(signingSigBytes[32:], newSig.S.Bytes())
-
 		signature := solana.SignatureFromBytes(sig.Message)
 
 		tx.Signatures = append(tx.Signatures, signature)

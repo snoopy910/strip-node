@@ -66,7 +66,9 @@ func generateSignature(networkId string, hash []byte) {
 
 	params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[networks[networkId].Index], len(parties), networks[networkId].Threshold)
 
-	msg, _ := new(big.Int).SetString(string(hash), 16)
+	msg := (&big.Int{}).SetBytes(hash)
+	// msg, _ := new(big.Int).SetString(string(hash), 16)
+	// fmt.Println(hex.EncodeToString(hash))
 
 	localParty := signing.NewLocalParty(msg, params, *networks[networkId].Key, outChanKeygen, saveChan)
 	partyProcesses[networkId][string(hash)] = PartyProcess{&localParty, true}
@@ -102,7 +104,6 @@ func generateSignature(networkId string, hash []byte) {
 			completed = true
 
 			final := base58.Encode(save.Signature)
-			fmt.Println(final)
 
 			pk := edwards.PublicKey{
 				Curve: tss.Edwards(),

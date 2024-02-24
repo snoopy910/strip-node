@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -17,20 +18,14 @@ func Initialise(host string, db int, username string, password string) {
 	})
 }
 
-func AddKeyShare(identity string, identityCurve string, key string, keyCurve string) error {
+func AddKeyShare(identity string, identityCurve string, keyCurve string, key string) error {
+	fmt.Println("Adding key share to redis", identity+"_"+identityCurve+"_"+keyCurve)
 	err := client.Set(context.Background(), identity+"_"+identityCurve+"_"+keyCurve, key, 0).Err()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func GetKeyShare(identity string, identityCurve string, keyCurve string) (string, error) {
+	fmt.Println("Getting key share from redis", identity+"_"+identityCurve+"_"+keyCurve)
 	val, err := client.Get(context.Background(), identity+"_"+identityCurve+"_"+keyCurve).Result()
-	if err != nil {
-		return "", err
-	}
-
-	return val, nil
+	return val, err
 }

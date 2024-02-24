@@ -9,12 +9,6 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-// type Network struct {
-// 	RPC_URL                  string
-// 	SignerHubContractAddress string
-// 	Key                      *keygen.LocalPartySaveData
-// }
-
 var RPC_URL, SignerHubContractAddress, NodePrivateKey, NodePublicKey string
 var Index, Threshold, TotalSigners, StartKey int
 
@@ -24,7 +18,7 @@ type PartyProcess struct {
 }
 
 // identity => operationType => PartyData
-var partyProcesses = make(map[string]map[string]PartyProcess)
+var partyProcesses = make(map[string]PartyProcess)
 
 func Start(
 	signerPrivateKey string,

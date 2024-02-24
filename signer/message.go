@@ -89,11 +89,11 @@ func handleIncomingMessage(message []byte) {
 	if msg.Type == MESSAGE_TYPE_GENERATE_START_KEYGEN {
 		go generateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve)
 	} else if msg.Type == MESSAGE_TYPE_GENERATE_KEYGEN {
-		go updateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, "keygen", msg.From, msg.Message, msg.IsBroadcast, msg.To)
+		go updateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_START_SIGN {
 		go generateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.Hash)
 	} else if msg.Type == MESSAGE_TYPE_SIGN {
-		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, string(msg.Hash), msg.From, msg.Message, msg.IsBroadcast, msg.To)
+		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
 		if val, ok := messageChan[string(msg.Hash)]; ok {
 			val <- msg

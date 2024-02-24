@@ -16,23 +16,23 @@ import (
 	"github.com/mr-tron/base58"
 )
 
-func updateSignature(identity string, identityCurve string, keyCurve string, hash string, from int, bz []byte, isBroadcast bool, to int) {
+func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
 	parties, _ := getParties(TotalSigners, StartKey)
 
 	//wait for 1 minute for party to be ready
 	for i := 0; i < 6; i++ {
-		if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][hash].Exists {
+		if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Exists {
 			time.Sleep(10 * time.Second)
 		} else {
 			break
 		}
 	}
 
-	if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][hash].Exists {
+	if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Exists {
 		return
 	}
 
-	party := *partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][hash].Party
+	party := *partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Party
 
 	if to != -1 && to != party.PartyID().Index {
 		return
@@ -58,8 +58,8 @@ func updateSignature(identity string, identityCurve string, keyCurve string, has
 func generateSignature(identity string, identityCurve string, keyCurve string, hash []byte) {
 	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
 
-	if err != nil {
-		fmt.Println(err)
+	if err != nil && fmt.Sprint(err) != "redis: nil" {
+		fmt.Println("error from redis:", err)
 		return
 	}
 
@@ -71,6 +71,8 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	if keyShare != "" {
 		fmt.Println("key share found. continuing to generate key share")
 	}
+
+	delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 	parties, partiesIds := getParties(TotalSigners, StartKey)
 
@@ -89,7 +91,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	json.Unmarshal([]byte(keyShare), &rawKey)
 
 	localParty := signing.NewLocalParty(msg, params, *rawKey, outChanKeygen, saveChan)
-	partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][string(hash)] = PartyProcess{&localParty, true}
+	partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 	go localParty.Start()
 
@@ -154,7 +156,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				KeyCurve:      keyCurve,
 			}
 
-			delete(partyProcesses, string(hash))
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 			go broadcast(message)
 		}

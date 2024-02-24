@@ -14,7 +14,7 @@ import (
 	"github.com/mr-tron/base58"
 )
 
-func updateKeygen(identity string, identityCurve string, keyCurve string, partyKey string, from int, bz []byte, isBroadcast bool, to int) {
+func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
 	instance := getSignerHubContract(
 		RPC_URL,
 		SignerHubContractAddress,
@@ -32,18 +32,18 @@ func updateKeygen(identity string, identityCurve string, keyCurve string, partyK
 
 	//wait for 1 minute for party to be ready
 	for i := 0; i < 6; i++ {
-		if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][partyKey].Exists {
+		if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Exists {
 			time.Sleep(10 * time.Second)
 		} else {
 			break
 		}
 	}
 
-	if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][partyKey].Exists {
+	if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Exists {
 		return
 	}
 
-	party := *partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][partyKey].Party
+	party := *partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Party
 
 	if to != -1 && to != party.PartyID().Index {
 		return
@@ -69,8 +69,10 @@ func updateKeygen(identity string, identityCurve string, keyCurve string, partyK
 func generateKeygen(identity string, identityCurve string, keyCurve string) {
 	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
 
-	if err != nil {
-		fmt.Println(err)
+	fmt.Println("key share from redis: ", keyShare, err)
+
+	if err != nil && fmt.Sprint(err) != "redis: nil" {
+		fmt.Println("error from redis:", err)
 		return
 	}
 
@@ -94,7 +96,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 	params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
 
 	localParty := keygen.NewLocalParty(params, outChanKeygen, saveChan)
-	partyProcesses[identity+"_"+identityCurve+"_"+keyCurve]["keygen"] = PartyProcess{&localParty, true}
+	partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 	go localParty.Start()
 
 	completed := false
@@ -145,6 +147,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 			db.AddKeyShare(identity, identityCurve, keyCurve, json)
 
 			completed = true
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
 		}

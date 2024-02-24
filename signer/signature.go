@@ -106,9 +106,6 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		go localParty.Start()
 	}
 
-	// msg, _ := new(big.Int).SetString(string(hash), 16)
-	// fmt.Println(hex.EncodeToString(hash))
-
 	completed := false
 	for !completed {
 		select {

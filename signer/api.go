@@ -1,11 +1,17 @@
 package signer
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/Silent-Protocol/go-sio/db"
+	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
+	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
+	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/mr-tron/base58"
 )
 
@@ -52,21 +58,56 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/address", func(w http.ResponseWriter, r *http.Request) {
-		// networkId := r.URL.Query().Get("networkId")
+		identity := r.URL.Query().Get("identity")
+		identityCurve := r.URL.Query().Get("identityCurve")
+		keyCurve := r.URL.Query().Get("keyCurve")
 
-		// if networks[networkId].Key == nil {
-		// 	return
-		// }
+		keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
 
-		// pk := edwards.PublicKey{
-		// 	Curve: tss.Edwards(),
-		// 	X:     networks[networkId].Key.EDDSAPub.X(),
-		// 	Y:     networks[networkId].Key.EDDSAPub.Y(),
-		// }
+		if err != nil && fmt.Sprint(err) != "redis: nil" {
+			http.Error(w, "error from redis", http.StatusBadRequest)
+			return
+		}
 
-		// publicKeyStr := base58.Encode(pk.Serialize())
+		if keyShare == "" {
+			http.Error(w, "key share not found.", http.StatusBadRequest)
+			return
+		}
 
-		// fmt.Fprintf(w, "%s", publicKeyStr)
+		var rawKeyEddsa *eddsaKeygen.LocalPartySaveData
+		var rawKeyEcdsa *ecdsaKeygen.LocalPartySaveData
+
+		if keyCurve == EDDSA_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			publicKeyStr := base58.Encode(pk.Serialize())
+
+			err := json.NewEncoder(w).Encode("{\"address\":\"" + publicKeyStr + "\"}")
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
+		} else {
+			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+
+			x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
+			y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
+
+			publicKeyStr := "04" + x + y
+			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+			address := publicKeyToAddress(publicKeyBytes)
+
+			err := json.NewEncoder(w).Encode("{\"address\":\"" + address + "\"}")
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
+		}
+
 	})
 
 	http.HandleFunc("/signature", func(w http.ResponseWriter, r *http.Request) {

@@ -56,14 +56,23 @@ Then finally start keygen generation round using this command:
 
 ```
 curl http://localhost:8080/keygen?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=ecdsa
+curl http://localhost:8080/keygen?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=eddsa
 ```
 
 ### Sign Hash
 
 ```
-curl http://localhost:8080/signature?hash=87PYroJ6QGefado5SrnphuZPQXpUeYEN91YXcE49y7jMxfhxNhuprSSXZR2Q1PZsznctd9Mji9vCgPTKtWR92tB2LbyAgd4AJoYg9icC2LudSrsJM5EW9iAc6kuji5ogtnzwFRpNorYMPfBAGNuAXS2Jh7Yu3tB4j3E57tBinQHRwYAawuFtwGvtapZLQ2Zak7feQdcrAmm1&identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=ecdsa
+curl http://localhost:8080/signature?message=87PYroJ6QGefado5SrnphuZPQXpUeYEN91YXcE49y7jMxfhxNhuprSSXZR2Q1PZsznctd9Mji9vCgPTKtWR92tB2LbyAgd4AJoYg9icC2LudSrsJM5EW9iAc6kuji5ogtnzwFRpNorYMPfBAGNuAXS2Jh7Yu3tB4j3E57tBinQHRwYAawuFtwGvtapZLQ2Zak7feQdcrAmm1&identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=eddsa
 
-curl http://localhost:8080/signature?hash=97250d83d64402e2a545ec59594743b6bf8e132395de3074392bbf34987bf675&identity=0x4BeA6238E0b0f1Fc40e2231B3093511C41F08585&identityCurve=ecdsa&keyCurve=ecdsa
+curl http://localhost:8080/signature?message=97250d83d64402e2a545ec59594743b6bf8e132395de3074392bbf34987bf675&identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=ecdsa
+```
+
+### Get Address
+
+```
+curl http://localhost:8080/address?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=eddsa
+
+curl http://localhost:8080/address?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=ecdsa
 ```
 
 ### E2E Tests

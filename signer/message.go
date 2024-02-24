@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/mr-tron/base58/base58"
 )
 
 type MessageType uint
@@ -95,9 +96,16 @@ func handleIncomingMessage(message []byte) {
 	} else if msg.Type == MESSAGE_TYPE_SIGN {
 		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
-		if val, ok := messageChan[string(msg.Hash)]; ok {
-			val <- msg
+		if msg.KeyCurve == EDDSA_CURVE {
+			if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
+				val <- msg
+			}
+		} else {
+			if val, ok := messageChan[string(msg.Hash)]; ok {
+				val <- msg
+			}
 		}
+
 	}
 }
 

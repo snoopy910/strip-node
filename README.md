@@ -55,13 +55,13 @@ go run main.go --signerPublicKey="0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0
 Then finally start keygen generation round using this command:
 
 ```
-http://localhost:8080/keygen?identity=0x4BeA6238E0b0f1Fc40e2231B3093511C41F08585&identityCurve=ecdsa&keyCurve=ecdsa
+curl http://localhost:8080/keygen?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=ecdsa
 ```
 
 ### Sign Hash
 
 ```
-curl http://localhost:8080/signature?hash=1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8&identity=0x4BeA6238E0b0f1Fc40e2231B3093511C41F08585&identityCurve=ecdsa&keyCurve=ecdsa
+curl http://localhost:8080/signature?hash=87PYroJ6QGefado5SrnphuZPQXpUeYEN91YXcE49y7jMxfhxNhuprSSXZR2Q1PZsznctd9Mji9vCgPTKtWR92tB2LbyAgd4AJoYg9icC2LudSrsJM5EW9iAc6kuji5ogtnzwFRpNorYMPfBAGNuAXS2Jh7Yu3tB4j3E57tBinQHRwYAawuFtwGvtapZLQ2Zak7feQdcrAmm1&identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=ecdsa
 
 curl http://localhost:8080/signature?hash=97250d83d64402e2a545ec59594743b6bf8e132395de3074392bbf34987bf675&identity=0x4BeA6238E0b0f1Fc40e2231B3093511C41F08585&identityCurve=ecdsa&keyCurve=ecdsa
 ```

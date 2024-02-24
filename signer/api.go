@@ -5,9 +5,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/mr-tron/base58"
 )
 
 var messageChan = make(map[string]chan (Message))
+
+var (
+	ECDSA_CURVE = "ecdsa"
+	EDDSA_CURVE = "eddsa"
+)
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string) {
 	message := Message{
@@ -67,14 +74,28 @@ func startHTTPServer(port string) {
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
 		keyCurve := r.URL.Query().Get("keyCurve")
-		go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
+
+		if keyCurve == EDDSA_CURVE {
+			msgBytes, err := base58.Decode(msg)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
+		} else if keyCurve == ECDSA_CURVE {
+			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
+		} else {
+			http.Error(w, "invalid key curve", http.StatusBadRequest)
+			return
+		}
 
 		messageChan[msg] = make(chan Message)
 
 		sig := <-messageChan[msg]
 
 		w.Header().Set("Content-Type", "application/json")
-		err := json.NewEncoder(w).Encode("{\"signature\":\"" + string(sig.Message) + "\",\"address\":\"" + sig.Address + "\"}")
+		err := json.NewEncoder(w).Encode("{\"signature\":\"" + base58.Encode(sig.Message) + "\",\"address\":\"" + sig.Address + "\"}")
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 		}

@@ -1,7 +1,7 @@
 package signer
 
 import (
-	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -9,10 +9,13 @@ import (
 
 	"github.com/Silent-Protocol/go-sio/db"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
-	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
-	"github.com/bnb-chain/tss-lib/v2/eddsa/signing"
+	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
+	ecdsaSigning "github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
+	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
+	eddsaSigning "github.com/bnb-chain/tss-lib/v2/eddsa/signing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
 )
 
@@ -81,19 +84,30 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	outChanKeygen := make(chan tss.Message)
 	saveChan := make(chan *cmn.SignatureData)
 
-	params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
+	var rawKeyEddsa *eddsaKeygen.LocalPartySaveData
+	var rawKeyEcdsa *ecdsaKeygen.LocalPartySaveData
 
-	msg := (&big.Int{}).SetBytes(hash)
+	if keyCurve == EDDSA_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
+		msg := (&big.Int{}).SetBytes(hash)
+
+		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
+	} else {
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), Threshold)
+		msg, _ := new(big.Int).SetString(string(hash), 16)
+		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
+	}
+
 	// msg, _ := new(big.Int).SetString(string(hash), 16)
 	// fmt.Println(hex.EncodeToString(hash))
-
-	var rawKey *keygen.LocalPartySaveData
-	json.Unmarshal([]byte(keyShare), &rawKey)
-
-	localParty := signing.NewLocalParty(msg, params, *rawKey, outChanKeygen, saveChan)
-	partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-	go localParty.Start()
 
 	completed := false
 	for !completed {
@@ -125,40 +139,59 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		case save := <-saveChan:
 			completed = true
 
-			// final := base58.Encode(save.Signature)
+			if keyCurve == EDDSA_CURVE {
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
 
-			pk := edwards.PublicKey{
-				Curve: tss.Edwards(),
-				X:     rawKey.EDDSAPub.X(),
-				Y:     rawKey.EDDSAPub.Y(),
+				publicKeyStr := base58.Encode(pk.Serialize())
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       publicKeyStr,
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else {
+				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
+
+				data, err := hex.DecodeString(string(hash))
+				if err != nil {
+					panic(err)
+				}
+
+				sdata, err := hex.DecodeString(final)
+				if err != nil {
+					panic(err)
+				}
+				pubkey, err := crypto.Ecrecover(data, sdata)
+				if err != nil {
+					panic(err)
+				}
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       []byte(final),
+					Address:       publicKeyToAddress(pubkey),
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
 			}
-
-			publicKeyStr := base58.Encode(pk.Serialize())
-
-			newSig, err := edwards.ParseSignature(save.Signature)
-			if err != nil {
-				println("new sig error, ", err.Error())
-			}
-
-			ok := edwards.Verify(&pk, hash, newSig.R, newSig.S)
-			fmt.Println(ok)
-
-			verified := ed25519.Verify(ed25519.PublicKey(pk.Serialize()), hash, save.Signature)
-			fmt.Println(verified)
-
-			message := Message{
-				Type:          MESSAGE_TYPE_SIGNATURE,
-				Hash:          hash,
-				Message:       save.Signature,
-				Address:       publicKeyStr,
-				Identity:      identity,
-				IdentityCurve: identityCurve,
-				KeyCurve:      keyCurve,
-			}
-
-			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
-
-			go broadcast(message)
 		}
 	}
 }

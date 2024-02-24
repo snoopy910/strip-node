@@ -1,13 +1,15 @@
 package signer
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/Silent-Protocol/go-sio/db"
-	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
+	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
+	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -91,13 +93,25 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 	ctx := tss.NewPeerContext(parties)
 
 	outChanKeygen := make(chan tss.Message)
-	saveChan := make(chan *keygen.LocalPartySaveData)
 
-	params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
+	saveChanEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 
-	localParty := keygen.NewLocalParty(params, outChanKeygen, saveChan)
-	partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-	go localParty.Start()
+	if keyCurve == EDDSA_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
+		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEddsa)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		go localParty.Start()
+	} else {
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(Threshold))
+		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
+		if err != nil {
+			panic(err)
+		}
+		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEcdsa, *preParams)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		go localParty.Start()
+	}
 
 	completed := false
 	for !completed {
@@ -125,7 +139,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 
 			go broadcast(message)
 
-		case save := <-saveChan:
+		case save := <-saveChanEddsa:
 			fmt.Println("saving key")
 
 			pk := edwards.PublicKey{
@@ -137,6 +151,29 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 			publicKeyStr := base58.Encode(pk.Serialize())
 
 			fmt.Println("new TSS Address is: ", publicKeyStr)
+
+			out, err := json.Marshal(save)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			json := string(out)
+			db.AddKeyShare(identity, identityCurve, keyCurve, json)
+
+			completed = true
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+			fmt.Println("completed saving of new keygen ", publicKeyStr)
+		case save := <-saveChanEcdsa:
+			fmt.Println("saving key")
+
+			x := toHexInt(save.ECDSAPub.X())
+			y := toHexInt(save.ECDSAPub.Y())
+			publicKeyStr := "04" + x + y
+			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+			newTssAddressStr := publicKeyToAddress(publicKeyBytes)
+
+			fmt.Println("new TSS Address is: ", newTssAddressStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {

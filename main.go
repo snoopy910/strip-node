@@ -2,19 +2,17 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
-	"strings"
 
 	bootnode "github.com/Silent-Protocol/go-sio/bootnode"
+	"github.com/Silent-Protocol/go-sio/db"
 	signer "github.com/Silent-Protocol/go-sio/signer"
 	signerhub "github.com/Silent-Protocol/go-sio/signerhub"
 )
 
 func main() {
-	isSigningMessageGenerate := flag.Bool("isSigningMessageGenerate", LookupEnvOrBool("IS_SIGNING_MESSAGE_GENERATE", false), "generate signature")
 	isDeploySignerHub := flag.Bool("isDeploySignerHub", LookupEnvOrBool("IS_DEPLOY_SIGNER_HUB", false), "deploy SignerHub contract")
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to SignerHub")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
@@ -25,13 +23,16 @@ func main() {
 	httpPort := flag.String("httpPort", LookupEnvOrString("HTTP_PORT", "8080"), "http API port")
 	signerPublicKey := flag.String("signerPublicKey", LookupEnvOrString("SIGNER_PUBLIC_KEY", ""), "public key of the signer nodes")
 	signerPrivateKey := flag.String("signerPrivateKey", LookupEnvOrString("SIGNER_PRIVATE_KEY", ""), "private key of the signer nodes")
-	verifyHash := flag.Bool("verifyHash", LookupEnvOrBool("VERIFY_HASH", false), "URL of the paymaster service")
 
 	//specific to network
-	signerHubContractAddresses := flag.String("signerHubAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESSES", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of SignerHub contract")
-	paymasterURLs := flag.String("paymasterURLs", LookupEnvOrString("PAYMASTER_URLS", "http://localhost:80"), "URL of the paymaster service")
-	networkIds := flag.String("networkIds", LookupEnvOrString("NETWORK_IDS", "1"), "ethereum network id")
-	rpcURLs := flag.String("rpcURLs", LookupEnvOrString("RPC_URLS", "http://localhost:8545"), "ethereum node URL")
+	signerHubContractAddress := flag.String("signerHubAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of SignerHub contract")
+	rpcURL := flag.String("rpcURL", LookupEnvOrString("RPC_URL", "http://localhost:8545"), "ethereum node RPC URL")
+
+	// redis
+	redisHost := flag.String("redisHost", LookupEnvOrString("REDIS_HOST", "localhost:6379"), "redis host")
+	redisDB := flag.Int("redisDB", LookupEnvOrInt("REDIS_DB", 0), "redis db")
+	redisUsername := flag.String("redisUsername", LookupEnvOrString("REDIS_USERNAME", ""), "redis username")
+	redisPassword := flag.String("redisPassword", LookupEnvOrString("REDIS_PASSWORD", ""), "redis password")
 
 	defaultPath, err := os.Getwd()
 	if err != nil {
@@ -43,41 +44,22 @@ func main() {
 	flag.Parse()
 
 	if *isDeploySignerHub {
-		networks := strings.Split(*networkIds, ",")
-		rpcs := strings.Split(*rpcURLs, ",")
-		for i := 0; i < len(networks); i++ {
-			fmt.Println("Network: ", networks[i])
-			signerhub.DeploySignerHubContract(rpcs[i], *privateKey)
-		}
-	} else if *isSigningMessageGenerate {
-
-		// use it as original message
-		// msgBigInt := (&big.Int{}).SetBytes(msg)
+		signerhub.DeploySignerHubContract(*rpcURL, *privateKey)
 	} else if *isAddSigner {
-		rpcs := strings.Split(*rpcURLs, ",")
-		networks := strings.Split(*networkIds, ",")
-		contractAddresses := strings.Split(*signerHubContractAddresses, ",")
-		for i := 0; i < len(networks); i++ {
-			fmt.Println("Network: ", networks[i])
-			signerhub.AddSignerToHub(rpcs[i], contractAddresses[i], *privateKey, *signerPublicKey)
-		}
+		signerhub.AddSignerToHub(*rpcURL, *signerHubContractAddress, *privateKey, *signerPublicKey)
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else {
+		db.Initialise(*redisHost, *redisDB, *redisUsername, *redisPassword)
 		signer.Start(
 			*signerPrivateKey,
 			*signerPublicKey,
 			*bootnodeURL,
-			*path,
 			*httpPort,
 			*listenHost,
 			*port,
-			*privateKey,
-			*verifyHash,
-			*networkIds,
-			*rpcURLs,
-			*signerHubContractAddresses,
-			*paymasterURLs,
+			*rpcURL,
+			*signerHubContractAddress,
 		)
 	}
 }

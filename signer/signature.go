@@ -2,34 +2,37 @@ package signer
 
 import (
 	"crypto/ed25519"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/Silent-Protocol/go-sio/db"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/eddsa/signing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/mr-tron/base58"
 )
 
-func updateSignature(networkId string, partyKey string, from int, bz []byte, isBroadcast bool, to int) {
-	parties, _ := getParties(networks[networkId].TotalSigners, networks[networkId].StartKeyInt)
+func updateSignature(identity string, identityCurve string, keyCurve string, hash string, from int, bz []byte, isBroadcast bool, to int) {
+	parties, _ := getParties(TotalSigners, StartKey)
 
 	//wait for 1 minute for party to be ready
 	for i := 0; i < 6; i++ {
-		if !partyProcesses[networkId][partyKey].Exists {
+		if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][hash].Exists {
 			time.Sleep(10 * time.Second)
 		} else {
 			break
 		}
 	}
 
-	if !partyProcesses[networkId][partyKey].Exists {
+	if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][hash].Exists {
 		return
 	}
 
-	party := *partyProcesses[networkId][partyKey].Party
+	party := *partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][hash].Party
 
 	if to != -1 && to != party.PartyID().Index {
 		return
@@ -52,26 +55,41 @@ func updateSignature(networkId string, partyKey string, from int, bz []byte, isB
 	fmt.Println("processed signature generation message with status: ", ok)
 }
 
-func generateSignature(networkId string, hash []byte) {
-	if networks[networkId].Key == nil {
+func generateSignature(identity string, identityCurve string, keyCurve string, hash []byte) {
+	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
+
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
 
-	parties, partiesIds := getParties(networks[networkId].TotalSigners, networks[networkId].StartKeyInt)
+	if keyShare == "" {
+		fmt.Println("key share not found. stopping to generate key share")
+		return
+	}
+
+	if keyShare != "" {
+		fmt.Println("key share found. continuing to generate key share")
+	}
+
+	parties, partiesIds := getParties(TotalSigners, StartKey)
 
 	ctx := tss.NewPeerContext(parties)
 
 	outChanKeygen := make(chan tss.Message)
 	saveChan := make(chan *cmn.SignatureData)
 
-	params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[networks[networkId].Index], len(parties), networks[networkId].Threshold)
+	params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
 
 	msg := (&big.Int{}).SetBytes(hash)
 	// msg, _ := new(big.Int).SetString(string(hash), 16)
 	// fmt.Println(hex.EncodeToString(hash))
 
-	localParty := signing.NewLocalParty(msg, params, *networks[networkId].Key, outChanKeygen, saveChan)
-	partyProcesses[networkId][string(hash)] = PartyProcess{&localParty, true}
+	var rawKey *keygen.LocalPartySaveData
+	json.Unmarshal([]byte(keyShare), &rawKey)
+
+	localParty := signing.NewLocalParty(msg, params, *rawKey, outChanKeygen, saveChan)
+	partyProcesses[identity+"_"+identityCurve+"_"+keyCurve][string(hash)] = PartyProcess{&localParty, true}
 
 	go localParty.Start()
 
@@ -89,13 +107,15 @@ func generateSignature(networkId string, hash []byte) {
 			}
 
 			message := Message{
-				Type:        MESSAGE_TYPE_SIGN,
-				From:        msg.GetFrom().Index,
-				To:          to,
-				Message:     bytes,
-				IsBroadcast: msg.IsBroadcast(),
-				Hash:        hash,
-				NetworkId:   networkId,
+				Type:          MESSAGE_TYPE_SIGN,
+				From:          msg.GetFrom().Index,
+				To:            to,
+				Message:       bytes,
+				IsBroadcast:   msg.IsBroadcast(),
+				Hash:          hash,
+				Identity:      identity,
+				IdentityCurve: identityCurve,
+				KeyCurve:      keyCurve,
 			}
 
 			go broadcast(message)
@@ -107,8 +127,8 @@ func generateSignature(networkId string, hash []byte) {
 
 			pk := edwards.PublicKey{
 				Curve: tss.Edwards(),
-				X:     networks[networkId].Key.EDDSAPub.X(),
-				Y:     networks[networkId].Key.EDDSAPub.Y(),
+				X:     rawKey.EDDSAPub.X(),
+				Y:     rawKey.EDDSAPub.Y(),
 			}
 
 			publicKeyStr := base58.Encode(pk.Serialize())
@@ -125,11 +145,13 @@ func generateSignature(networkId string, hash []byte) {
 			fmt.Println(verified)
 
 			message := Message{
-				Type:      MESSAGE_TYPE_SIGNATURE,
-				Hash:      hash,
-				Message:   save.Signature,
-				Address:   publicKeyStr,
-				NetworkId: networkId,
+				Type:          MESSAGE_TYPE_SIGNATURE,
+				Hash:          hash,
+				Message:       save.Signature,
+				Address:       publicKeyStr,
+				Identity:      identity,
+				IdentityCurve: identityCurve,
+				KeyCurve:      keyCurve,
 			}
 
 			delete(partyProcesses, string(hash))

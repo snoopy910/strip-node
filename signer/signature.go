@@ -20,8 +20,6 @@ import (
 )
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
-	fmt.Println("xxxxxxx")
-
 	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
 	if err != nil && fmt.Sprint(err) != "redis: nil" {
 		fmt.Println("error from redis:", err)

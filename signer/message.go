@@ -90,7 +90,7 @@ func handleIncomingMessage(message []byte) {
 	if msg.Type == MESSAGE_TYPE_GENERATE_START_KEYGEN {
 		go generateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.Signers)
 	} else if msg.Type == MESSAGE_TYPE_GENERATE_KEYGEN {
-		go updateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
+		go updateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To, msg.Signers)
 	} else if msg.Type == MESSAGE_TYPE_START_SIGN {
 		go generateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.Hash)
 	} else if msg.Type == MESSAGE_TYPE_SIGN {

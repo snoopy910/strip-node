@@ -55,3 +55,11 @@ func SliceIndexOfString(s []string, e string) int {
 	}
 	return -1
 }
+
+func CalculateThreshold(totalSigners int) uint {
+	if totalSigners == 1 || totalSigners == 2 {
+		return uint(totalSigners)
+	} else {
+		return uint((totalSigners / 2) + 1)
+	}
+}

@@ -1,15 +1,12 @@
 package signer
 
 import (
-	"log"
-
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/multiformats/go-multiaddr"
 )
 
 var RPC_URL, SignerHubContractAddress, NodePrivateKey, NodePublicKey string
-var Threshold, TotalSigners, MaximumSigners int
+var MaximumSigners int
 
 type PartyProcess struct {
 	Party  *tss.Party
@@ -33,21 +30,9 @@ func Start(
 	SignerHubContractAddress = signerHubContractAddress
 	NodePrivateKey = signerPrivateKey
 	NodePublicKey = signerPublicKey
+
+	// this should come from contract
 	MaximumSigners = maximumSigners
-
-	instance := getSignerHubContract(RPC_URL, SignerHubContractAddress)
-
-	t, err := instance.CurrentThreshold(&bind.CallOpts{})
-	if err != nil {
-		log.Fatal(err)
-	}
-	Threshold = int(t.Int64())
-
-	ts, err := instance.NextIndex(&bind.CallOpts{})
-	if err != nil {
-		log.Fatal(err)
-	}
-	TotalSigners = int(ts.Int64())
 
 	go startHTTPServer(httpPort)
 

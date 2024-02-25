@@ -20,6 +20,28 @@ import (
 )
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
+	fmt.Println("xxxxxxx")
+
+	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
+	if err != nil && fmt.Sprint(err) != "redis: nil" {
+		fmt.Println("error from redis:", err)
+		return
+	}
+
+	if signersString == "" {
+		fmt.Println("signers not found. stopping signing")
+		return
+	}
+
+	if signersString != "" {
+		fmt.Println("signers found. continuing to sign")
+	}
+
+	signers := []string{}
+	json.Unmarshal([]byte(signersString), &signers)
+
+	TotalSigners := len(signers)
+
 	parties, _ := getParties(TotalSigners)
 
 	//wait for 1 minute for party to be ready
@@ -67,12 +89,12 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	}
 
 	if keyShare == "" {
-		fmt.Println("key share not found. stopping to generate key share")
+		fmt.Println("key share not found. stopping to sign")
 		return
 	}
 
 	if keyShare != "" {
-		fmt.Println("key share found. continuing to generate key share")
+		fmt.Println("key share found. continuing to sign")
 	}
 
 	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
@@ -81,25 +103,23 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		return
 	}
 
-	if keyShare == "" {
-		fmt.Println("signers not found. stopping to generate key share")
+	if signersString == "" {
+		fmt.Println("signers not found. stopping to sign")
 		return
 	}
 
-	if keyShare != "" {
-		fmt.Println("signers found. continuing to generate key share")
+	if signersString != "" {
+		fmt.Println("signers found. continuing to sign")
 	}
-
-	fmt.Println(signersString)
 
 	signers := []string{}
 	json.Unmarshal([]byte(signersString), &signers)
 
-	fmt.Println("signers: ", signers)
-
 	Index := SliceIndexOfString(signers, NodePublicKey)
 
 	delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+	TotalSigners := len(signers)
 
 	parties, partiesIds := getParties(TotalSigners)
 
@@ -112,7 +132,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	var rawKeyEcdsa *ecdsaKeygen.LocalPartySaveData
 
 	if keyCurve == EDDSA_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := (&big.Int{}).SetBytes(hash)
 
 		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
@@ -120,8 +140,9 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
+
 	} else {
-		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), Threshold)
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
 		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
@@ -156,6 +177,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 			}
 
 			go broadcast(message)
+			fmt.Println("Message broadcasted")
 
 		case save := <-saveChan:
 			completed = true

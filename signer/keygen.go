@@ -14,8 +14,8 @@ import (
 	"github.com/mr-tron/base58"
 )
 
-func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
-
+func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int, signers []string) {
+	TotalSigners := len(signers)
 	parties, _ := getParties(TotalSigners)
 
 	//wait for 1 minute for party to be ready
@@ -62,6 +62,8 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		return
 	}
 
+	TotalSigners := len(signers)
+
 	if TotalSigners > MaximumSigners && len(signers) > MaximumSigners {
 		fmt.Println("too many signers for keygen generation")
 		return
@@ -101,12 +103,12 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 
 	if keyCurve == EDDSA_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), Threshold)
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	} else {
-		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(Threshold))
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
 		if err != nil {
 			panic(err)
@@ -138,6 +140,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				Identity:      identity,
 				IdentityCurve: identityCurve,
 				KeyCurve:      keyCurve,
+				Signers:       signers,
 			}
 
 			go broadcast(message)

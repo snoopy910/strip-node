@@ -37,3 +37,21 @@ func publicKeyToAddress(pubkey []byte) string {
 func toHexInt(n *big.Int) string {
 	return fmt.Sprintf("%x", n) // or %x or upper case
 }
+
+func SliceContainsString(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
+func SliceIndexOfString(s []string, e string) int {
+	for i, a := range s {
+		if a == e {
+			return i
+		}
+	}
+	return -1
+}

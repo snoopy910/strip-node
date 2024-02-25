@@ -75,6 +75,30 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		fmt.Println("key share found. continuing to generate key share")
 	}
 
+	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
+	if err != nil && fmt.Sprint(err) != "redis: nil" {
+		fmt.Println("error from redis:", err)
+		return
+	}
+
+	if keyShare == "" {
+		fmt.Println("signers not found. stopping to generate key share")
+		return
+	}
+
+	if keyShare != "" {
+		fmt.Println("signers found. continuing to generate key share")
+	}
+
+	fmt.Println(signersString)
+
+	signers := []string{}
+	json.Unmarshal([]byte(signersString), &signers)
+
+	fmt.Println("signers: ", signers)
+
+	Index := SliceIndexOfString(signers, NodePublicKey)
+
 	delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 	parties, partiesIds := getParties(TotalSigners)

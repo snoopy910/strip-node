@@ -29,3 +29,13 @@ func GetKeyShare(identity string, identityCurve string, keyCurve string) (string
 	val, err := client.Get(context.Background(), identity+"_"+identityCurve+"_"+keyCurve).Result()
 	return val, err
 }
+
+func AddSignersForKeyShare(identity string, identityCurve string, keyCurve string, signers string) error {
+	err := client.Set(context.Background(), identity+"_"+identityCurve+"_"+keyCurve+"_"+"signers", signers, 0).Err()
+	return err
+}
+
+func GetSignersForKeyShare(identity string, identityCurve string, keyCurve string) (string, error) {
+	val, err := client.Get(context.Background(), identity+"_"+identityCurve+"_"+keyCurve+"_"+"signers").Result()
+	return val, err
+}

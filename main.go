@@ -27,6 +27,7 @@ func main() {
 	//specific to network
 	signerHubContractAddress := flag.String("signerHubAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of SignerHub contract")
 	rpcURL := flag.String("rpcURL", LookupEnvOrString("RPC_URL", "http://localhost:8545"), "ethereum node RPC URL")
+	maximumSigners := flag.Int("maximumSigners", LookupEnvOrInt("MAXIMUM_SIGNERS", 3), "maximum number of signers for an account")
 
 	// redis
 	redisHost := flag.String("redisHost", LookupEnvOrString("REDIS_HOST", "localhost:6379"), "redis host")
@@ -60,6 +61,7 @@ func main() {
 			*port,
 			*rpcURL,
 			*signerHubContractAddress,
+			*maximumSigners,
 		)
 	}
 }

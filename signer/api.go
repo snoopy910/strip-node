@@ -22,12 +22,13 @@ var (
 	EDDSA_CURVE = "eddsa"
 )
 
-func generateKeygenMessage(identity string, identityCurve string, keyCurve string) {
+func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
 	message := Message{
 		Type:          MESSAGE_TYPE_GENERATE_START_KEYGEN,
 		Identity:      identity,
 		IdentityCurve: identityCurve,
 		KeyCurve:      keyCurve,
+		Signers:       signers,
 	}
 
 	broadcast(message)
@@ -45,12 +46,31 @@ func generateSignatureMessage(identity string, identityCurve string, keyCurve st
 	broadcast(message)
 }
 
+type CreateWallet struct {
+	Identity      string   `json:"identity"`
+	IdentityCurve string   `json:"identityCurve"`
+	KeyCurve      string   `json:"keyCurve"`
+	Signers       []string `json:"signers"`
+}
+
+type SignMessage struct {
+	Message       string `json:"message"`
+	Identity      string `json:"identity"`
+	IdentityCurve string `json:"identityCurve"`
+	KeyCurve      string `json:"keyCurve"`
+}
+
 func startHTTPServer(port string) {
 	http.HandleFunc("/keygen", func(w http.ResponseWriter, r *http.Request) {
-		identity := r.URL.Query().Get("identity")
-		identityCurve := r.URL.Query().Get("identityCurve")
-		keyCurve := r.URL.Query().Get("keyCurve")
-		go generateKeygenMessage(identity, identityCurve, keyCurve)
+		var createWallet CreateWallet
+
+		err := json.NewDecoder(r.Body).Decode(&createWallet)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		go generateKeygenMessage(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve, createWallet.Signers)
 	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {

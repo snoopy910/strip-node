@@ -55,8 +55,29 @@ go run main.go --signerPublicKey="0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0
 Then finally start keygen generation round using this command:
 
 ```
-curl http://localhost:8080/keygen?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=ecdsa
-curl http://localhost:8080/keygen?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa&keyCurve=eddsa
+curl --location 'http://localhost:8080/keygen' \
+--header 'Content-Type: application/json' \
+--data '{
+    "identity": "0x40310390beF6D518f62Cc41a60a4E9b4a8b98730",
+    "identityCurve":"ecdsa",
+    "keyCurve":"eddsa",
+    "signers": [
+        "0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf",
+        "0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35"
+    ]
+}'
+
+curl --location 'http://localhost:8080/keygen' \
+--header 'Content-Type: application/json' \
+--data '{
+    "identity": "0x40310390beF6D518f62Cc41a60a4E9b4a8b98730",
+    "identityCurve":"ecdsa",
+    "keyCurve":"ecdsa",
+    "signers": [
+        "0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf",
+        "0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35"
+    ]
+}'
 ```
 
 ### Sign Hash

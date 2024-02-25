@@ -3,21 +3,19 @@ package signer
 import (
 	"log"
 
-	"github.com/Silent-Protocol/go-sio/common"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/multiformats/go-multiaddr"
 )
 
 var RPC_URL, SignerHubContractAddress, NodePrivateKey, NodePublicKey string
-var Index, Threshold, TotalSigners int
+var Threshold, TotalSigners, MaximumSigners int
 
 type PartyProcess struct {
 	Party  *tss.Party
 	Exists bool
 }
 
-// identity => operationType => PartyData
 var partyProcesses = make(map[string]PartyProcess)
 
 func Start(
@@ -29,11 +27,13 @@ func Start(
 	port int,
 	rpcURL string,
 	signerHubContractAddress string,
+	maximumSigners int,
 ) {
 	RPC_URL = rpcURL
 	SignerHubContractAddress = signerHubContractAddress
 	NodePrivateKey = signerPrivateKey
 	NodePublicKey = signerPublicKey
+	MaximumSigners = maximumSigners
 
 	instance := getSignerHubContract(RPC_URL, SignerHubContractAddress)
 
@@ -48,12 +48,6 @@ func Start(
 		log.Fatal(err)
 	}
 	TotalSigners = int(ts.Int64())
-
-	_i, err := instance.Signers(&bind.CallOpts{}, common.PublicKeyStrToBytes32(NodePublicKey))
-	if err != nil {
-		log.Fatal(err)
-	}
-	Index = int(_i.Index.Int64())
 
 	go startHTTPServer(httpPort)
 

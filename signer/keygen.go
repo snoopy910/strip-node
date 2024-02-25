@@ -54,7 +54,24 @@ func updateKeygen(identity string, identityCurve string, keyCurve string, from i
 	fmt.Println("processed keygen message with status: ", ok)
 }
 
-func generateKeygen(identity string, identityCurve string, keyCurve string) {
+func generateKeygen(identity string, identityCurve string, keyCurve string, signers []string) {
+	Index := SliceIndexOfString(signers, NodePublicKey)
+
+	if Index == -1 {
+		fmt.Println("signer is not in consortium for keygen generation")
+		return
+	}
+
+	if TotalSigners > MaximumSigners && len(signers) > MaximumSigners {
+		fmt.Println("too many signers for keygen generation")
+		return
+	}
+
+	if TotalSigners <= MaximumSigners && len(signers) != TotalSigners {
+		fmt.Println("not enough signers for keygen generation")
+		return
+	}
+
 	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
 
 	fmt.Println("key share from redis: ", keyShare, err)
@@ -143,8 +160,15 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 				fmt.Println(err)
 			}
 
-			json := string(out)
-			db.AddKeyShare(identity, identityCurve, keyCurve, json)
+			_json := string(out)
+			db.AddKeyShare(identity, identityCurve, keyCurve, _json)
+
+			signersOut, err := json.Marshal(signers)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			db.AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
 
 			completed = true
 			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
@@ -166,8 +190,15 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 				fmt.Println(err)
 			}
 
-			json := string(out)
-			db.AddKeyShare(identity, identityCurve, keyCurve, json)
+			_json := string(out)
+			db.AddKeyShare(identity, identityCurve, keyCurve, _json)
+
+			signersOut, err := json.Marshal(signers)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			db.AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
 
 			completed = true
 			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)

@@ -40,6 +40,7 @@ type Message struct {
 	Hash               []byte      `json:"hash"`
 	Address            string      `json:"address"`
 	Signature          []byte      `json:"signature"`
+	Signers            []string    `json:"signers"`
 }
 
 type IsValid struct {
@@ -87,7 +88,7 @@ func handleIncomingMessage(message []byte) {
 	}
 
 	if msg.Type == MESSAGE_TYPE_GENERATE_START_KEYGEN {
-		go generateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve)
+		go generateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.Signers)
 	} else if msg.Type == MESSAGE_TYPE_GENERATE_KEYGEN {
 		go updateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_START_SIGN {

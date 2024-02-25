@@ -10,21 +10,13 @@ import (
 	"github.com/insight-chain/inb-go/crypto/sha3"
 )
 
-type NetworkData struct {
-	StartKey     uint   `json:"startKey"`
-	Threshold    uint   `json:"threshold"`
-	TotalSigners uint   `json:"totalSigners"`
-	Index        uint   `json:"index"`
-	Address      string `json:"address"`
-}
-
 var zeroAddress = "0x0000000000000000000000000000000000000000"
 
-func getParties(totalSigners int, startKeyInt int) (tss.SortedPartyIDs, []*tss.PartyID) {
+func getParties(totalSigners int) (tss.SortedPartyIDs, []*tss.PartyID) {
 	partiesIds := []*tss.PartyID{}
 
 	for i := 0; i < totalSigners; i++ {
-		party := tss.NewPartyID(strconv.Itoa(i+1), "", big.NewInt(int64(startKeyInt+i)))
+		party := tss.NewPartyID(strconv.Itoa(i+1), "", big.NewInt(int64(i+1)))
 		partiesIds = append(partiesIds, party)
 	}
 

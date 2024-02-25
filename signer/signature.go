@@ -20,7 +20,7 @@ import (
 )
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
-	parties, _ := getParties(TotalSigners, StartKey)
+	parties, _ := getParties(TotalSigners)
 
 	//wait for 1 minute for party to be ready
 	for i := 0; i < 6; i++ {
@@ -77,7 +77,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 	delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
-	parties, partiesIds := getParties(TotalSigners, StartKey)
+	parties, partiesIds := getParties(TotalSigners)
 
 	ctx := tss.NewPeerContext(parties)
 

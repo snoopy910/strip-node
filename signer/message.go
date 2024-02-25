@@ -36,7 +36,6 @@ type Message struct {
 	Type               MessageType `json:"type"`
 	IsToNewCommittee   bool        `json:"isToNewCommittee"`
 	IsFromNewCommittee bool        `json:"isFromNewCommittee"`
-	StartKey           uint        `json:"startKey"`
 	IsBroadcast        bool        `json:"isBroadcast"`
 	Hash               []byte      `json:"hash"`
 	Address            string      `json:"address"`

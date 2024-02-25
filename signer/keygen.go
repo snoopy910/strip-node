@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/Silent-Protocol/go-sio/db"
@@ -12,25 +11,12 @@ import (
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/mr-tron/base58"
 )
 
 func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
-	instance := getSignerHubContract(
-		RPC_URL,
-		SignerHubContractAddress,
-	)
 
-	startKey, err := instance.StartKey(&bind.CallOpts{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	contractStartKey := startKey.Int64()
-	contractTotalSigners, _ := instance.NextIndex(&bind.CallOpts{})
-
-	parties, _ := getParties(int(contractTotalSigners.Int64()), int(contractStartKey))
+	parties, _ := getParties(TotalSigners)
 
 	//wait for 1 minute for party to be ready
 	for i := 0; i < 6; i++ {
@@ -88,7 +74,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string) {
 	}
 
 	delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
-	parties, partiesIds := getParties(TotalSigners, StartKey)
+	parties, partiesIds := getParties(TotalSigners)
 
 	ctx := tss.NewPeerContext(parties)
 

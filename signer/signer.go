@@ -10,7 +10,7 @@ import (
 )
 
 var RPC_URL, SignerHubContractAddress, NodePrivateKey, NodePublicKey string
-var Index, Threshold, TotalSigners, StartKey int
+var Index, Threshold, TotalSigners int
 
 type PartyProcess struct {
 	Party  *tss.Party
@@ -54,13 +54,6 @@ func Start(
 		log.Fatal(err)
 	}
 	Index = int(_i.Index.Int64())
-
-	startKey, err := instance.StartKey(&bind.CallOpts{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	StartKey = int(startKey.Int64())
 
 	go startHTTPServer(httpPort)
 

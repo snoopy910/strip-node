@@ -18,10 +18,11 @@ First run ganache to simulate a local ethereum network:
 ganache --port 8545 -h=0.0.0.0 -m="rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain"
 ```
 
-Then run redis:
+Then run postgres:
 
 ```
-docker run -p 6379:6379 -d redis
+docker run --name node1-postgres -p 5432:5432 -e POSTGRES_PASSWORD=password -d postgres
+docker run --name node2-postgres -p 5433:5432 -e POSTGRES_PASSWORD=password -d postgres
 ```
 
 Then deploy the SignerHub contract:
@@ -47,9 +48,9 @@ go run main.go --port=30303 --isBootstrap=true --keyPath="./static-bootnode"
 And then run the following commands to spin two signers:
 
 ```
-go run main.go --signerPublicKey="0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf" --signerPrivateKey="0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2" --bootnode="/ip4/0.0.0.0/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR" --httpPort="8080" --port=30304 --keyPath="./keys/node1" --redisDB=0
+go run main.go --signerPublicKey="0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf" --signerPrivateKey="0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2" --bootnode="/ip4/0.0.0.0/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR" --httpPort="8080" --port=30304 --keyPath="./keys/node1"
 
-go run main.go --signerPublicKey="0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35" --signerPrivateKey="0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de" --bootnode="/ip4/0.0.0.0/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR" --httpPort="8081" --port=30305 --keyPath="./keys/node2" --redisDB=1
+go run main.go --signerPublicKey="0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35" --signerPrivateKey="0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de" --bootnode="/ip4/0.0.0.0/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR" --httpPort="8081" --port=30305 --keyPath="./keys/node2" --postgresHost="localhost:5433"
 ```
 
 Then finally start keygen generation round using this command:

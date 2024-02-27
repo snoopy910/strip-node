@@ -76,10 +76,10 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
 
-	fmt.Println("key share from redis: ", keyShare, err)
+	fmt.Println("key share from postgres: ", keyShare, err)
 
-	if err != nil && fmt.Sprint(err) != "redis: nil" {
-		fmt.Println("error from redis:", err)
+	if err != nil {
+		fmt.Println("error from postgres:", err)
 		return
 	}
 

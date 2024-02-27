@@ -66,7 +66,7 @@ func discoverPeers(h host.Host, bootnode []multiaddr.Multiaddr) {
 			}
 			err := h.Connect(ctx, peer)
 			if err != nil {
-				fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+				// fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
 			} else {
 				fmt.Println("Connected to:", peer.ID.Pretty())
 				anyConnected = true

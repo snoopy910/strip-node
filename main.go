@@ -29,11 +29,11 @@ func main() {
 	rpcURL := flag.String("rpcURL", LookupEnvOrString("RPC_URL", "http://localhost:8545"), "ethereum node RPC URL")
 	maximumSigners := flag.Int("maximumSigners", LookupEnvOrInt("MAXIMUM_SIGNERS", 3), "maximum number of signers for an account")
 
-	// redis
-	redisHost := flag.String("redisHost", LookupEnvOrString("REDIS_HOST", "localhost:6379"), "redis host")
-	redisDB := flag.Int("redisDB", LookupEnvOrInt("REDIS_DB", 0), "redis db")
-	redisUsername := flag.String("redisUsername", LookupEnvOrString("REDIS_USERNAME", ""), "redis username")
-	redisPassword := flag.String("redisPassword", LookupEnvOrString("REDIS_PASSWORD", ""), "redis password")
+	// postgres
+	postgresHost := flag.String("postgresHost", LookupEnvOrString("POSTGRES_HOST", "localhost:5432"), "postgres host")
+	postgresDB := flag.String("postgresDB", LookupEnvOrString("POSTGRES_DB", "postgres"), "postgres db name")
+	postgresUser := flag.String("postgresUser", LookupEnvOrString("POSTGRES_USER", "postgres"), "postgres user")
+	postgresPassword := flag.String("postgresPassword", LookupEnvOrString("POSTGRES_PASSWORD", "password"), "postgres password")
 
 	defaultPath, err := os.Getwd()
 	if err != nil {
@@ -51,7 +51,7 @@ func main() {
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else {
-		db.Initialise(*redisHost, *redisDB, *redisUsername, *redisPassword)
+		db.Initialise(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		signer.Start(
 			*signerPrivateKey,
 			*signerPublicKey,

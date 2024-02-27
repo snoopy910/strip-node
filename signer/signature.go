@@ -21,8 +21,8 @@ import (
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
 	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
-	if err != nil && fmt.Sprint(err) != "redis: nil" {
-		fmt.Println("error from redis:", err)
+	if err != nil {
+		fmt.Println("error from postgres:", err)
 		return
 	}
 
@@ -81,8 +81,8 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 func generateSignature(identity string, identityCurve string, keyCurve string, hash []byte) {
 	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
 
-	if err != nil && fmt.Sprint(err) != "redis: nil" {
-		fmt.Println("error from redis:", err)
+	if err != nil {
+		fmt.Println("error from postgres:", err)
 		return
 	}
 
@@ -96,8 +96,8 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	}
 
 	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
-	if err != nil && fmt.Sprint(err) != "redis: nil" {
-		fmt.Println("error from redis:", err)
+	if err != nil {
+		fmt.Println("error from postgres:", err)
 		return
 	}
 

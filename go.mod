@@ -14,8 +14,6 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.9.0
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.8.0
-	github.com/redis/go-redis v6.15.9+incompatible
-	github.com/redis/go-redis/v9 v9.5.1
 )
 
 require (

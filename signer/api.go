@@ -84,8 +84,8 @@ func startHTTPServer(port string) {
 
 		keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
 
-		if err != nil && fmt.Sprint(err) != "redis: nil" {
-			http.Error(w, "error from redis", http.StatusBadRequest)
+		if err != nil {
+			http.Error(w, "error from postgres", http.StatusBadRequest)
 			return
 		}
 

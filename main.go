@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	bootnode "github.com/Silent-Protocol/go-sio/bootnode"
+	"github.com/Silent-Protocol/go-sio/sequencer"
 	signer "github.com/Silent-Protocol/go-sio/signer"
 	signerhub "github.com/Silent-Protocol/go-sio/signerhub"
 )
@@ -16,6 +17,7 @@ func main() {
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to SignerHub")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
 	isBootstrap := flag.Bool("isBootstrap", LookupEnvOrBool("IS_BOOTSTRAP", false), "is the process a signer")
+	isSequencer := flag.Bool("isSequencer", LookupEnvOrBool("IS_SEQUENCER", false), "is the process a sequencer")
 	listenHost := flag.String("host", LookupEnvOrString("LISTEN_HOST", "0.0.0.0"), "The bootstrap node host listen address\n")
 	port := flag.Int("port", LookupEnvOrInt("PORT", 4001), "The bootstrap node listen port")
 	bootnodeURL := flag.String("bootnode", LookupEnvOrString("BOOTNODE_URL", ""), "is the process a signer")
@@ -49,6 +51,9 @@ func main() {
 		signerhub.AddSignerToHub(*rpcURL, *signerHubContractAddress, *privateKey, *signerPublicKey)
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
+	} else if *isSequencer {
+		sequencer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
+		sequencer.StartSequencer(*httpPort)
 	} else {
 		signer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		signer.Start(

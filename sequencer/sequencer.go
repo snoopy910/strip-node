@@ -1,19 +1,9 @@
 package sequencer
 
-type Operation struct {
-	SerializedTxn string
-	DataToSign    string
-	ChainId       string
-	KeyCurve      string
-}
+func StartSequencer(httpPort string) {
+	keepAlive := make(chan string)
 
-type Intent struct {
-	Operations    []Operation
-	Signature     string
-	Identity      string
-	IdentityCurve string
-}
+	go startHTTPServer(httpPort)
 
-func StartSequencer() {
-
+	<-keepAlive
 }

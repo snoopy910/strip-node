@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/Silent-Protocol/go-sio/db"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	ecdsaSigning "github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
@@ -20,7 +19,7 @@ import (
 )
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
-	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
+	signersString, err := GetSignersForKeyShare(identity, identityCurve, keyCurve)
 	if err != nil {
 		fmt.Println("error from postgres:", err)
 		return
@@ -79,7 +78,7 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 }
 
 func generateSignature(identity string, identityCurve string, keyCurve string, hash []byte) {
-	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
+	keyShare, err := GetKeyShare(identity, identityCurve, keyCurve)
 
 	if err != nil {
 		fmt.Println("error from postgres:", err)
@@ -95,7 +94,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		fmt.Println("key share found. continuing to sign")
 	}
 
-	signersString, err := db.GetSignersForKeyShare(identity, identityCurve, keyCurve)
+	signersString, err := GetSignersForKeyShare(identity, identityCurve, keyCurve)
 	if err != nil {
 		fmt.Println("error from postgres:", err)
 		return

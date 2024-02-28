@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	bootnode "github.com/Silent-Protocol/go-sio/bootnode"
-	"github.com/Silent-Protocol/go-sio/db"
 	signer "github.com/Silent-Protocol/go-sio/signer"
 	signerhub "github.com/Silent-Protocol/go-sio/signerhub"
 )
@@ -51,7 +50,7 @@ func main() {
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else {
-		db.Initialise(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
+		signer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		signer.Start(
 			*signerPrivateKey,
 			*signerPublicKey,

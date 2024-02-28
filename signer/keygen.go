@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Silent-Protocol/go-sio/db"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -74,7 +73,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		return
 	}
 
-	keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
+	keyShare, err := GetKeyShare(identity, identityCurve, keyCurve)
 
 	fmt.Println("key share from postgres: ", keyShare, err)
 
@@ -164,14 +163,14 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			}
 
 			_json := string(out)
-			db.AddKeyShare(identity, identityCurve, keyCurve, _json)
+			AddKeyShare(identity, identityCurve, keyCurve, _json)
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
 				fmt.Println(err)
 			}
 
-			db.AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
+			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
 
 			completed = true
 			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
@@ -194,14 +193,14 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			}
 
 			_json := string(out)
-			db.AddKeyShare(identity, identityCurve, keyCurve, _json)
+			AddKeyShare(identity, identityCurve, keyCurve, _json)
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
 				fmt.Println(err)
 			}
 
-			db.AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
+			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
 
 			completed = true
 			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)

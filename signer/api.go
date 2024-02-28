@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Silent-Protocol/go-sio/db"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -82,7 +81,7 @@ func startHTTPServer(port string) {
 		identityCurve := r.URL.Query().Get("identityCurve")
 		keyCurve := r.URL.Query().Get("keyCurve")
 
-		keyShare, err := db.GetKeyShare(identity, identityCurve, keyCurve)
+		keyShare, err := GetKeyShare(identity, identityCurve, keyCurve)
 
 		if err != nil {
 			http.Error(w, "error from postgres", http.StatusBadRequest)

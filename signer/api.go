@@ -15,6 +15,7 @@ import (
 )
 
 var messageChan = make(map[string]chan (Message))
+var keygenGeneratedChan = make(map[string]chan (string))
 
 var (
 	ECDSA_CURVE = "ecdsa"
@@ -69,7 +70,14 @@ func startHTTPServer(port string) {
 			return
 		}
 
+		key := createWallet.Identity + "_" + createWallet.IdentityCurve + "_" + createWallet.KeyCurve
+
+		keygenGeneratedChan[key] = make(chan string)
+
 		go generateKeygenMessage(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve, createWallet.Signers)
+
+		<-keygenGeneratedChan[key]
+		delete(keygenGeneratedChan, key)
 	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +134,6 @@ func startHTTPServer(port string) {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
 		}
-
 	})
 
 	http.HandleFunc("/signature", func(w http.ResponseWriter, r *http.Request) {

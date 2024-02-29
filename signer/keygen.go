@@ -108,11 +108,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		go localParty.Start()
 	} else {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
-		if err != nil {
-			panic(err)
-		}
-		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEcdsa, *preParams)
+		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEcdsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	}
@@ -175,6 +171,10 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			completed = true
 			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
+			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
+				val <- "generated keygen"
+			}
+
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
 		case save := <-saveChanEcdsa:
 			fmt.Println("saving key")
@@ -204,6 +204,10 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			completed = true
 			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
+				val <- "generated keygen"
+			}
 
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
 		}

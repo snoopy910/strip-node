@@ -105,7 +105,6 @@ func handleIncomingMessage(message []byte) {
 				val <- msg
 			}
 		}
-
 	}
 }
 

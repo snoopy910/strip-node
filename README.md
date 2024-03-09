@@ -15,7 +15,7 @@ go build
 First run ganache to simulate a local ethereum network:
 
 ```
-ganache --port 8545 -h=0.0.0.0 -m="rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain"
+ganache --port 8545 -h=0.0.0.0 -m="rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain" 
 ```
 
 Then run postgres:

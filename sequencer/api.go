@@ -25,6 +25,19 @@ type Intent struct {
 	Status        string      `json:"status"`
 }
 
+const (
+	INTENT_STATUS_PROCESSING = "processing"
+	INTENT_STATUS_COMPLETED  = "completed"
+	INTENT_STATUS_FAILED     = "failed"
+)
+
+const (
+	OPERATION_STATUS_PENDING   = "pending"
+	OPERATION_STATUS_WAITING   = "waiting"
+	OPERATION_STATUS_COMPLETED = "completed"
+	OPERATION_STATUS_FAILED    = "failed"
+)
+
 func startHTTPServer(port string) {
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		var intent Intent

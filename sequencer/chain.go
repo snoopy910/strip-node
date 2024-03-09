@@ -11,9 +11,15 @@ type Chain struct {
 
 var Chains = []Chain{
 	{
+		ChainId:   "1337",
+		ChainType: "evm",
+		ChainUrl:  "http://localhost:8545",
+		KeyCurve:  "ecdsa",
+	},
+	{
 		ChainId:   "11155111",
 		ChainType: "evm",
-		ChainUrl:  "https://ethereum-sepolia-rpc.publicnode.com	",
+		ChainUrl:  "https://ethereum-sepolia-rpc.publicnode.com",
 		KeyCurve:  "ecdsa",
 	},
 	{

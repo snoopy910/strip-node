@@ -66,7 +66,7 @@ func AddIntent(
 		Signature:     Intent.Signature,
 		Identity:      Intent.Identity,
 		IdentityCurve: Intent.IdentityCurve,
-		Status:        "processing",
+		Status:        INTENT_STATUS_PROCESSING,
 	}
 
 	_, err := client.Model(intentSchema).Insert()
@@ -81,7 +81,7 @@ func AddIntent(
 			DataToSign:    operation.DataToSign,
 			ChainId:       operation.ChainId,
 			KeyCurve:      operation.KeyCurve,
-			Status:        "pending",
+			Status:        OPERATION_STATUS_PENDING,
 			TxnHash:       "",
 		}
 

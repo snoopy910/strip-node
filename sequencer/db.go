@@ -110,6 +110,7 @@ func GetIntent(intentId int64) (*Intent, error) {
 	operations := make([]Operation, len(operationsSchema))
 	for i, operationSchema := range operationsSchema {
 		operations[i] = Operation{
+			ID:            operationSchema.Id,
 			SerializedTxn: operationSchema.SerializedTxn,
 			DataToSign:    operationSchema.DataToSign,
 			ChainId:       operationSchema.ChainId,
@@ -120,6 +121,7 @@ func GetIntent(intentId int64) (*Intent, error) {
 	}
 
 	intent := &Intent{
+		ID:            intentSchema.Id,
 		Operations:    operations,
 		Signature:     intentSchema.Signature,
 		Identity:      intentSchema.Identity,
@@ -168,4 +170,47 @@ func GetIntents(status string) ([]*Intent, error) {
 	}
 
 	return intents, nil
+}
+
+func UpdateOperationTxnHash(operationId int64, status string, txnHash string) error {
+	operationSchema := &OperationSchema{
+		Id:      operationId,
+		Status:  status,
+		TxnHash: txnHash,
+	}
+
+	_, err := client.Model(operationSchema).Column("status", "txn_hash").Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func UpdateOperationStatus(operationId int64, status string) error {
+	operationSchema := &OperationSchema{
+		Id:     operationId,
+		Status: status,
+	}
+
+	_, err := client.Model(operationSchema).Column("status").Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func UpdateIntentStatus(intentId int64, status string) error {
+	intentSchema := &IntentSchema{
+		Id:     intentId,
+		Status: status,
+	}
+
+	_, err := client.Model(intentSchema).Column("status").Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package signer
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -26,6 +27,7 @@ func getParties(totalSigners int) (tss.SortedPartyIDs, []*tss.PartyID) {
 }
 
 func publicKeyToAddress(pubkey []byte) string {
+	fmt.Println("publicKeyToAddress", hex.EncodeToString(pubkey))
 	var buf []byte
 	_hash := sha3.NewKeccak256()
 	_hash.Write(pubkey[1:])

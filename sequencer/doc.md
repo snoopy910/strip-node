@@ -39,16 +39,16 @@ curl --location 'localhost:8082/createIntent' \
 --header 'Content-Type: application/json' \
 --data '{
     "signature": "0x01",
-    "identity": "0x02",
-    "identityCurve": "0x03",
+    "identity": "0x40310390beF6D518f62Cc41a60a4E9b4a8b98730",
+    "identityCurve": "ecdsa",
     "operations": [{
-        "serializedTxn": "0xeb808477359400825208941c3bb7529e6a484db8f6d7f30e8e840c68dcd13788016345785d8a000080808080",
-        "dataToSign": "0xcdf74de9e6b07952da2e4c6f38e14c1536abefeb9e1f37240e9392e195785c20",
+        "serializedTxn": "eb808477359400825208941c3bb7529e6a484db8f6d7f30e8e840c68dcd13788016345785d8a000080808080",
+        "dataToSign": "cdf74de9e6b07952da2e4c6f38e14c1536abefeb9e1f37240e9392e195785c20",
         "chainId": "1337",
         "keyCurve": "ecdsa"
     },{
-        "serializedTxn": "0xeb018477359400825208941c3bb7529e6a484db8f6d7f30e8e840c68dcd13788016345785d8a000080808080",
-        "dataToSign": "0x341d703a42c3a62818d5ec709c2935411cbf72836c9277fcdfbfdc216d212a6d",
+        "serializedTxn": "eb018477359400825208941c3bb7529e6a484db8f6d7f30e8e840c68dcd13788016345785d8a000080808080",
+        "dataToSign": "341d703a42c3a62818d5ec709c2935411cbf72836c9277fcdfbfdc216d212a6d",
         "chainId": "1337",
         "keyCurve": "ecdsa"
     }]

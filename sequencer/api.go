@@ -9,6 +9,7 @@ import (
 )
 
 type Operation struct {
+	ID            int64  `json:"id"`
 	SerializedTxn string `json:"serializedTxn"`
 	DataToSign    string `json:"dataToSign"`
 	ChainId       string `json:"chainId"`
@@ -18,6 +19,7 @@ type Operation struct {
 }
 
 type Intent struct {
+	ID            int64       `json:"id"`
 	Operations    []Operation `json:"operations"`
 	Signature     string      `json:"signature"`
 	Identity      string      `json:"identity"`
@@ -54,6 +56,8 @@ func startHTTPServer(port string) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		go ProcessIntent(id)
 
 		fmt.Fprintf(w, "{\"id\": %d}", id)
 	})

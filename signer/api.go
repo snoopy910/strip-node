@@ -126,6 +126,7 @@ func startHTTPServer(port string) {
 			y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 
 			publicKeyStr := "04" + x + y
+			fmt.Println("publicKeyStr", publicKeyStr)
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
 			address := publicKeyToAddress(publicKeyBytes)
 
@@ -162,7 +163,18 @@ func startHTTPServer(port string) {
 		sig := <-messageChan[msg]
 
 		w.Header().Set("Content-Type", "application/json")
-		err := json.NewEncoder(w).Encode("{\"signature\":\"" + base58.Encode(sig.Message) + "\",\"address\":\"" + sig.Address + "\"}")
+
+		signatureResponse := SignatureReponse{}
+
+		if keyCurve == ECDSA_CURVE {
+			signatureResponse.Signature = string(sig.Message)
+			signatureResponse.Address = sig.Address
+		} else {
+			signatureResponse.Signature = base58.Encode(sig.Message)
+			signatureResponse.Address = sig.Address
+		}
+
+		err := json.NewEncoder(w).Encode(signatureResponse)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 		}
@@ -171,4 +183,9 @@ func startHTTPServer(port string) {
 	})
 
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
+}
+
+type SignatureReponse struct {
+	Signature string `json:"signature"`
+	Address   string `json:"address"`
 }

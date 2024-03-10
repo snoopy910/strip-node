@@ -108,7 +108,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		go localParty.Start()
 	} else {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEcdsa)
+		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
+		if err != nil {
+			panic(err)
+		}
+		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEcdsa, *preParams)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	}

@@ -179,7 +179,7 @@ func UpdateOperationTxnHash(operationId int64, status string, txnHash string) er
 		TxnHash: txnHash,
 	}
 
-	_, err := client.Model(operationSchema).Column("status", "txn_hash").Update()
+	_, err := client.Model(operationSchema).Column("status", "txn_hash").WherePK().Update()
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func UpdateOperationStatus(operationId int64, status string) error {
 		Status: status,
 	}
 
-	_, err := client.Model(operationSchema).Column("status").Update()
+	_, err := client.Model(operationSchema).Column("status").WherePK().Update()
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func UpdateIntentStatus(intentId int64, status string) error {
 		Status: status,
 	}
 
-	_, err := client.Model(intentSchema).Column("status").Update()
+	_, err := client.Model(intentSchema).Column("status").WherePK().Update()
 	if err != nil {
 		return err
 	}

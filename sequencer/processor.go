@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -168,22 +169,14 @@ func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, d
 	var tx types.Transaction
 	rlp.DecodeBytes(serializedTx, &tx)
 
-	// signature, err := hex.DecodeString(signatureHex)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// r := new([32]byte)
-	// copy(r[:], signature[0:32])
-
-	// s := new([32]byte)
-	// copy(s[:], signature[32:64])
-
-	// v := uint8(signature[64]) + 27 // Adjust v value for Ethereum
-
 	sigData, err := hex.DecodeString(signatureHex)
 
-	_tx, err := tx.WithSignature(types.NewEIP155Signer(nil), []byte(sigData))
+	if err != nil {
+		return "", err
+	}
+
+	n, _ := new(big.Int).SetString(chainId, 10)
+	_tx, err := tx.WithSignature(types.NewLondonSigner(n), []byte(sigData))
 
 	if err != nil {
 		return "", err

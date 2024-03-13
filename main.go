@@ -13,6 +13,8 @@ import (
 )
 
 func main() {
+	isSolanaTest := flag.Bool("isSolanaTest", LookupEnvOrBool("IS_SOLANA_TEST", false), "is the process a signer")
+
 	isDeploySignerHub := flag.Bool("isDeploySignerHub", LookupEnvOrBool("IS_DEPLOY_SIGNER_HUB", false), "deploy SignerHub contract")
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to SignerHub")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
@@ -54,6 +56,8 @@ func main() {
 	} else if *isSequencer {
 		sequencer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		sequencer.StartSequencer(*httpPort)
+	} else if *isSolanaTest {
+		sequencer.TestBuildSolana()
 	} else {
 		signer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		signer.Start(

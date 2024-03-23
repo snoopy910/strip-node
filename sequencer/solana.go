@@ -7,6 +7,7 @@ import (
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
+	"github.com/mr-tron/base58"
 )
 
 func TestBuildSolana() {
@@ -36,8 +37,8 @@ func TestBuildSolana() {
 	// 	panic(err)
 	// }
 
-	// sig, _ := base58.Decode("3SCUJAbErrWQK7AZvYMn3dbZyjqGPAPoBRZgrDc7vrvSVC7ZVZffvSE8HixNKJctAVJuSffob7EeVduiawLoY6pK")
-	// signature := solana.SignatureFromBytes(sig)
+	sig, _ := base58.Decode("3SCUJAbErrWQK7AZvYMn3dbZyjqGPAPoBRZgrDc7vrvSVC7ZVZffvSE8HixNKJctAVJuSffob7EeVduiawLoY6pK")
+	signature := solana.SignatureFromBytes(sig)
 
 	// tx.Signatures = append(tx.Signatures, signature)
 	// err = tx.VerifySignatures()
@@ -54,14 +55,17 @@ func TestBuildSolana() {
 		panic(err)
 	}
 
-	fmt.Println(_msg)
+	_msgBytes, _ := base64.StdEncoding.DecodeString(_msg)
+	_msgBase58 := base58.Encode(_msgBytes)
+
+	fmt.Println(_msgBase58)
 
 	// solana.TransactionFromDecoder(bin.NewBinDecoder(msg))
 
 	// encoded := base64.StdEncoding.EncodeToString(msg)
 	// fmt.Println(encoded)
 
-	decodedTransactionData, err := base64.StdEncoding.DecodeString(_msg)
+	decodedTransactionData, err := base58.Decode(_msgBase58)
 	if err != nil {
 		fmt.Println("Error decoding transaction data:", err)
 		return
@@ -80,9 +84,18 @@ func TestBuildSolana() {
 		panic(err)
 	}
 
-	fmt.Println(_tx)
+	_tx.Signatures = append(_tx.Signatures, signature)
 
-	// _tx.Signatures = append(_tx.Signatures, solana.SignatureFromBytes(base64.de))
+	// fmt.Println(_tx)
+
+	err = _tx.VerifySignatures()
+
+	if err != nil {
+		fmt.Println("error during verification")
+		fmt.Println(err)
+	} else {
+		fmt.Println("Signatures verified")
+	}
 
 	// tx.Message.MarshalBinary() gives the hash to sign
 	// tx.ToBase64() is the actual transaction data

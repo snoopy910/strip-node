@@ -15,6 +15,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
+	bin "github.com/gagliardetto/binary"
+	"github.com/gagliardetto/solana-go"
+	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/mr-tron/base58"
 )
 
 func ProcessIntent(intentId int64) {
@@ -62,7 +66,31 @@ func ProcessIntent(intentId int64) {
 
 					UpdateOperationTxnHash(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 				} else if operation.KeyCurve == "eddsa" {
-					// @TOTO
+					chain, err := GetChain(operation.ChainId)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
+
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if chain.ChainType == "solana" {
+						txnHash, err := sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						UpdateOperationTxnHash(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+					}
 				}
 
 				break
@@ -73,13 +101,24 @@ func ProcessIntent(intentId int64) {
 				confirmed := false
 				if operation.KeyCurve == "ecdsa" {
 					confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.TxnHash)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
 				} else if operation.KeyCurve == "eddsa" {
-					// @TODO
-				}
+					chain, err := GetChain(operation.ChainId)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
 
-				if err != nil {
-					fmt.Println(err)
-					break
+					if chain.ChainType == "solana" {
+						confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.TxnHash)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+					}
 				}
 
 				if !confirmed {
@@ -150,6 +189,29 @@ func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) 
 	return !isPending, nil
 }
 
+func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	chain, err := GetChain(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	c := rpc.New(chain.ChainUrl)
+
+	signature, err := solana.SignatureFromBase58(txnHash)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = c.GetConfirmedTransaction(context.Background(), signature)
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+
+}
+
 func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
 	chain, err := GetChain(chainId)
 	if err != nil {
@@ -188,4 +250,44 @@ func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, d
 	}
 
 	return _tx.Hash().Hex(), nil
+}
+
+func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
+	chain, err := GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	c := rpc.New(chain.ChainUrl)
+
+	decodedTransactionData, err := base58.Decode(serializedTxn)
+	if err != nil {
+		fmt.Println("Error decoding transaction data:", err)
+		return "", err
+	}
+
+	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
+	if err != nil {
+		return "", err
+	}
+
+	sig, _ := base58.Decode(signatureBase58)
+	signature := solana.SignatureFromBytes(sig)
+
+	_tx.Signatures = append(_tx.Signatures, signature)
+
+	err = _tx.VerifySignatures()
+
+	if err != nil {
+		fmt.Println("error during verification")
+		fmt.Println(err)
+		return "", err
+	}
+
+	hash, err := c.SendTransaction(context.Background(), _tx)
+	if err != nil {
+		return "", err
+	}
+
+	return hash.String(), nil
 }

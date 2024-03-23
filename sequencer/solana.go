@@ -12,7 +12,16 @@ import (
 
 func TestBuildSolana() {
 	// pubKeyByte, _ := base58.Decode("4dEgqPG9FtjCiwW1HUdReraBozwq6qUCcDFXD8BnUn9Z")
-	accountFrom := solana.MustPublicKeyFromBase58("oz2g94bsqEcgHKaDtsiN9Gi2DkMqJpZU6FZUy87GcUX")
+
+	// c := rpc.New("https://api.devnet.solana.com")
+	// recentHash, err := c.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// fmt.Println(recentHash.Value.Blockhash.String())
+
+	accountFrom := solana.MustPublicKeyFromBase58("DpZqkyDKkVv2S7Lhbd5dUVcVCPJz2Lypr4W5Cru2sHr7")
 	accountTo := solana.MustPublicKeyFromBase58("5oNDL3swdJJF1g9DzJiZ4ynHXgszjAEpUkxVYejchzrY")
 	amount := uint64(1)
 
@@ -37,19 +46,13 @@ func TestBuildSolana() {
 	// 	panic(err)
 	// }
 
-	sig, _ := base58.Decode("3SCUJAbErrWQK7AZvYMn3dbZyjqGPAPoBRZgrDc7vrvSVC7ZVZffvSE8HixNKJctAVJuSffob7EeVduiawLoY6pK")
+	// fmt.Println("Input to sign: ", base58.Encode(msg))
+
+	// fmt.Println("Input to sign: ", base58.Encode(msg))
+
+	sig, _ := base58.Decode("5jLFtNTCAnHA9uurWhyNNqzwHLwWCaSNrZBWG48AANMGkreX1DYGbkHL2VWNNt2Kz327QwzzsAacJj2YFdSsfkwN")
 	signature := solana.SignatureFromBytes(sig)
 
-	// tx.Signatures = append(tx.Signatures, signature)
-	// err = tx.VerifySignatures()
-
-	// if err != nil {
-	// 	fmt.Println(err)
-	// } else {
-	// 	fmt.Println("Signatures verified")
-	// }
-
-	// after signing marshal it again
 	_msg, err := tx.ToBase64()
 	if err != nil {
 		panic(err)
@@ -60,33 +63,19 @@ func TestBuildSolana() {
 
 	fmt.Println(_msgBase58)
 
-	// solana.TransactionFromDecoder(bin.NewBinDecoder(msg))
-
-	// encoded := base64.StdEncoding.EncodeToString(msg)
-	// fmt.Println(encoded)
-
 	decodedTransactionData, err := base58.Decode(_msgBase58)
 	if err != nil {
 		fmt.Println("Error decoding transaction data:", err)
 		return
 	}
 
-	// var decodedTransaction types.Transaction
-	// err = decodedTransaction.UnmarshalBinary(decodedTransactionData)
-	// if err != nil {
-	// 	fmt.Println("Error unmarshalling transaction data:", err)
-	// 	return
-	// }
-
-	// signature
+	// // signature
 	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
 	if err != nil {
 		panic(err)
 	}
 
 	_tx.Signatures = append(_tx.Signatures, signature)
-
-	// fmt.Println(_tx)
 
 	err = _tx.VerifySignatures()
 
@@ -96,8 +85,4 @@ func TestBuildSolana() {
 	} else {
 		fmt.Println("Signatures verified")
 	}
-
-	// tx.Message.MarshalBinary() gives the hash to sign
-	// tx.ToBase64() is the actual transaction data
-
 }

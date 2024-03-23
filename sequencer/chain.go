@@ -25,7 +25,7 @@ var Chains = []Chain{
 	{
 		ChainId:   "901",
 		ChainType: "solana",
-		ChainUrl:  "https://api.mainnet-beta.solana.com",
+		ChainUrl:  "https://api.devnet.solana.com",
 		KeyCurve:  "eddsa",
 	},
 }

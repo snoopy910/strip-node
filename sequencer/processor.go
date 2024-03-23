@@ -266,6 +266,8 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 		return "", err
 	}
 
+	fmt.Println(decodedTransactionData)
+
 	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
 	if err != nil {
 		return "", err
@@ -286,6 +288,7 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 
 	hash, err := c.SendTransaction(context.Background(), _tx)
 	if err != nil {
+		fmt.Println("error during sending transaction")
 		return "", err
 	}
 

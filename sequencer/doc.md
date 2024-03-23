@@ -47,10 +47,10 @@ curl --location 'localhost:8082/createIntent' \
         "chainId": "1337",
         "keyCurve": "ecdsa"
     },{
-        "serializedTxn": "eb018477359400825208941c3bb7529e6a484db8f6d7f30e8e840c68dcd13788016345785d8a000080808080",
-        "dataToSign": "341d703a42c3a62818d5ec709c2935411cbf72836c9277fcdfbfdc216d212a6d",
-        "chainId": "1337",
-        "keyCurve": "ecdsa"
+        "serializedTxn": "187PYuMkJ1sTeui7KoDted7fTc7BimkvmbK5VR4f6vwCBdotDjKZbMtmNn976iWqPoqFesmMEKDdj3SqmgWvQQhD4wsuov477Wd6r2yjinZ3BiBKupWYTvi2U9iqq6eRTUnKKdJV7rkywHeHimYR1jtAqzjsrjM9gt6aWppRjjULx94PCYqZbkEcbp3xeyHT7aBmPMAU2xRg3",
+        "dataToSign": "187PYuMkJ1sTeui7KoDted7fTc7BimkvmbK5VR4f6vwCBdotDjKZbMtmNn976iWqPoqFesmMEKDdj3SqmgWvQQhD4wsuov477Wd6r2yjinZ3BiBKupWYTvi2U9iqq6eRTUnKKdJV7rkywHeHimYR1jtAqzjsrjM9gt6aWppRjjULx94PCYqZbkEcbp3xeyHT7aBmPMAU2xRg3",
+        "chainId": "901",
+        "keyCurve": "eddsa"
     }]
 }'
 ```

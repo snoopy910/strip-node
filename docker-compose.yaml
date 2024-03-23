@@ -8,12 +8,12 @@ services:
       - '8545:8545'
     command: ["-h", "0.0.0.0", "-m", "rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain"]
 
-  deploy_signerhub:
+  deploy_intentoperatorsregistry:
     build: 
       context: .
       dockerfile: ./Dockerfile
-    container_name: deploy_signerhub
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURLs", "http://ganache:8545", "--isDeploySignerHub", "true", "--networkIds", "1337"]
+    container_name: deploy_intentoperatorsregistry
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURLs", "http://ganache:8545", "--isDeployIntentOperatorsRegistry", "true", "--networkIds", "1337"]
     depends_on:
       - ganache
 
@@ -24,7 +24,7 @@ services:
     container_name: add_signer_1
     command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURLs", "http://ganache:8545", "--signerPublicKey", "0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--isAddsigner", "true", "--networkIds", "1337"]
     depends_on:
-      deploy_signerhub:
+      deploy_intentoperatorsregistry:
         condition: service_completed_successfully
 
   add_signer_2:

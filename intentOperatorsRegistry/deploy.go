@@ -1,4 +1,4 @@
-package signerhub
+package intentoperatorsregistry
 
 import (
 	"context"
@@ -9,12 +9,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func DeploySignerHubContract(rpcURL string, privKey string) {
+func DeployIntentOperatorsRegistryContract(rpcURL string, privKey string) {
 	time.Sleep(5 * time.Second)
 
 	client, err := ethclient.Dial(rpcURL)
@@ -49,7 +48,7 @@ func DeploySignerHubContract(rpcURL string, privKey string) {
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
 
-	address, tx, instance, err := DeploySignerhub(auth, client, common.HexToAddress("0x0000000000000000000000000000000000000000"))
+	address, tx, instance, err := DeployIntentOperatorsRegistry(auth, client, big.NewInt(10))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -77,7 +76,7 @@ func DeploySignerHubContract(rpcURL string, privKey string) {
 		log.Fatal(err)
 	}
 
-	fmt.Println("SignerHub contract deployed successfully")
+	fmt.Println("IntentOperatorsRegistry contract deployed successfully")
 	fmt.Println("Deployment transaction: ", tx.Hash().String())
-	fmt.Println("Address of SignerHub: ", address)
+	fmt.Println("Address of IntentOperatorsRegistry: ", address)
 }

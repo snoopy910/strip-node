@@ -1,4 +1,4 @@
-package signerhub
+package intentoperatorsregistry
 
 import (
 	"context"
@@ -34,7 +34,7 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 		log.Fatal("error casting public key to ECDSA")
 	}
 
-	instance, err := NewSignerhub(common.HexToAddress(contractAddress), client)
+	instance, err := NewIntentOperatorsRegistry(common.HexToAddress(contractAddress), client)
 
 	if err != nil {
 		log.Fatal(err)
@@ -85,12 +85,6 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 		log.Fatal(err)
 	}
 
-	fmt.Println("Signer", signerPublicKey, " added. Transaction hash: ", tx.Hash().String())
-
 	time.Sleep(5 * time.Second)
-	signer, err := instance.Signers(&bind.CallOpts{}, tssCommon.PublicKeyStrToBytes32(signerPublicKey))
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Index of signer: ", signer.Index)
+	fmt.Println("Signer", signerPublicKey, " added. Transaction hash: ", tx.Hash().String())
 }

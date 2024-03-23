@@ -75,7 +75,7 @@ func handleIncomingMessage(message []byte) {
 	compressedPubKeyStr := hexutil.Encode(compressedPubKey)
 
 	publicKeyStr := hex.EncodeToString(sigPublicKey)
-	instance := getSignerHubContract(RPC_URL, SignerHubContractAddress)
+	instance := getIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
 
 	signerExists, err := instance.Signers(&bind.CallOpts{}, common.PublicKeyStrToBytes32(compressedPubKeyStr))
 	if err != nil {

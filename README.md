@@ -25,13 +25,13 @@ docker run --name node1-postgres -p 5432:5432 -e POSTGRES_PASSWORD=password -d p
 docker run --name node2-postgres -p 5433:5432 -e POSTGRES_PASSWORD=password -d postgres
 ```
 
-Then deploy the SignerHub contract:
+Then deploy the IntentOperatorsRegistry contract:
 
 ```
-go run main.go --isDeploySignerHub=true --privateKey="76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
+go run main.go --isDeployIntentOperatorsRegistry=true --privateKey="76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
 ```
 
-Then add two signers to the SignerHub contract:
+Then add two signers to the IntentOperatorsRegistry contract:
 
 ```
 go run main.go --isAddsigner=true --signerPublicKey="0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf" --privateKey="76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"

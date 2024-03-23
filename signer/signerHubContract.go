@@ -3,21 +3,21 @@ package signer
 import (
 	"log"
 
-	"github.com/Silent-Protocol/go-sio/signerhub"
+	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func getSignerHubContract(
+func getIntentOperatorsRegistryContract(
 	rpcURL string,
-	signerHubContractAddress string,
-) *signerhub.Signerhub {
+	intentOperatorsRegistryContractAddress string,
+) *intentoperatorsregistry.IntentOperatorsRegistry {
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	instance, err := signerhub.NewSignerhub(ethCommon.HexToAddress(signerHubContractAddress), client)
+	instance, err := intentoperatorsregistry.NewIntentOperatorsRegistry(ethCommon.HexToAddress(intentOperatorsRegistryContractAddress), client)
 
 	if err != nil {
 		log.Fatal(err)

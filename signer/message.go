@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Silent-Protocol/go-sio/common"
+	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -75,7 +76,7 @@ func handleIncomingMessage(message []byte) {
 	compressedPubKeyStr := hexutil.Encode(compressedPubKey)
 
 	publicKeyStr := hex.EncodeToString(sigPublicKey)
-	instance := getIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
 
 	signerExists, err := instance.Signers(&bind.CallOpts{}, common.PublicKeyStrToBytes32(compressedPubKeyStr))
 	if err != nil {

@@ -41,6 +41,18 @@ const (
 )
 
 func startHTTPServer(port string) {
+	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
+		// select a list of nodes.
+		// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
+		// If length of selected nodes is less than maximum nodes then use all nodes as signers.
+
+		// selectedSigners := []string{}
+
+		// if len(Signers) > max
+
+		// then store the wallet and it's list of signers in the db
+	})
+
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		var intent Intent
 

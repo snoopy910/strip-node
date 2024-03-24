@@ -55,7 +55,11 @@ func main() {
 		bootnode.Start(*listenHost, *port, *path)
 	} else if *isSequencer {
 		sequencer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
-		sequencer.StartSequencer(*httpPort)
+		sequencer.StartSequencer(
+			*httpPort,
+			*rpcURL,
+			*intentOperatorsRegistryContractAddress,
+		)
 	} else if *isSolanaTest {
 		sequencer.TestBuildSolana()
 	} else {

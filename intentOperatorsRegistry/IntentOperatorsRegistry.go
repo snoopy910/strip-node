@@ -31,8 +31,8 @@ var (
 
 // IntentOperatorsRegistryMetaData contains all meta data concerning the IntentOperatorsRegistry contract.
 var IntentOperatorsRegistryMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"maximumSigners\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"InvalidInitialization\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotInitializing\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"OwnableInvalidOwner\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"OwnableUnauthorizedAccount\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"version\",\"type\":\"uint64\"}],\"name\":\"Initialized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"publickey\",\"type\":\"bytes32\"},{\"indexed\":true,\"internalType\":\"string\",\"name\":\"url\",\"type\":\"string\"}],\"name\":\"SignedAdded\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"publickey\",\"type\":\"bytes32\"}],\"name\":\"SignedRemoved\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"MAXIMUM_SIGNERS\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"_publickey\",\"type\":\"bytes32\"},{\"internalType\":\"string\",\"name\":\"url\",\"type\":\"string\"}],\"name\":\"addSigner\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"_publickey\",\"type\":\"bytes32\"}],\"name\":\"removeSigner\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"signers\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"whitelisted\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-	Bin: "0x60a0604052348015600e575f80fd5b50604051610de0380380610de08339818101604052810190602e9190606d565b8060808181525050506093565b5f80fd5b5f819050919050565b604f81603f565b81146058575f80fd5b50565b5f815190506067816048565b92915050565b5f60208284031215607f57607e603b565b5b5f608a84828501605b565b91505092915050565b608051610d356100ab5f395f6105770152610d355ff3fe608060405234801561000f575f80fd5b5060043610610086575f3560e01c80638da5cb5b116100595780638da5cb5b146100ea5780639194a60914610108578063ab0bba8614610124578063f2fde38b1461014257610086565b8063141774ef1461008a578063715018a6146100ba5780638129fc1c146100c45780638cc6f44c146100ce575b5f80fd5b6100a4600480360381019061009f91906108fb565b61015e565b6040516100b19190610940565b60405180910390f35b6100c2610183565b005b6100cc610196565b005b6100e860048036038101906100e391906108fb565b610316565b005b6100f261041c565b6040516100ff9190610998565b60405180910390f35b610122600480360381019061011d9190610a12565b610451565b005b61012c610575565b6040516101399190610a87565b60405180910390f35b61015c60048036038101906101579190610aca565b610599565b005b5f602052805f5260405f205f91509050805f015f9054906101000a900460ff16905081565b61018b61061d565b6101945f6106a4565b565b5f61019f610775565b90505f815f0160089054906101000a900460ff161590505f825f015f9054906101000a900467ffffffffffffffff1690505f808267ffffffffffffffff161480156101e75750825b90505f60018367ffffffffffffffff1614801561021a57505f3073ffffffffffffffffffffffffffffffffffffffff163b145b905081158015610228575080155b1561025f576040517ff92ee8a900000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b6001855f015f6101000a81548167ffffffffffffffff021916908367ffffffffffffffff16021790555083156102ac576001855f0160086101000a81548160ff0219169083151502179055505b6102b53361079c565b831561030f575f855f0160086101000a81548160ff0219169083151502179055507fc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d260016040516103069190610b4a565b60405180910390a15b5050505050565b61031e61061d565b5f801b8103610362576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161035990610bbd565b60405180910390fd5b600115155f808381526020019081526020015f205f015f9054906101000a900460ff161515146103c7576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016103be90610c25565b60405180910390fd5b5f808281526020019081526020015f205f8082015f6101000a81549060ff02191690555050807f202ba177372096a533cb0be65537787905a2c9a9b25538d8d9f578706b412cb360405160405180910390a250565b5f806104266107b0565b9050805f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1691505090565b61045961061d565b5f801b830361049d576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161049490610bbd565b60405180910390fd5b5f15155f808581526020019081526020015f205f015f9054906101000a900460ff16151514610501576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016104f890610c8d565b60405180910390fd5b60015f808581526020019081526020015f205f015f6101000a81548160ff021916908315150217905550818160405161053b929190610ce7565b6040518091039020837fd993cade8966730f67b2b2c9d7689b17c3b727d61bf30f122bb3dcc5325fbec560405160405180910390a3505050565b7f000000000000000000000000000000000000000000000000000000000000000081565b6105a161061d565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff1603610611575f6040517f1e4fbdf70000000000000000000000000000000000000000000000000000000081526004016106089190610998565b60405180910390fd5b61061a816106a4565b50565b6106256107d7565b73ffffffffffffffffffffffffffffffffffffffff1661064361041c565b73ffffffffffffffffffffffffffffffffffffffff16146106a2576106666107d7565b6040517f118cdaa70000000000000000000000000000000000000000000000000000000081526004016106999190610998565b60405180910390fd5b565b5f6106ad6107b0565b90505f815f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905082825f015f6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055508273ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e060405160405180910390a3505050565b5f7ff0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00905090565b6107a46107de565b6107ad8161081e565b50565b5f7f9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300905090565b5f33905090565b6107e66108a2565b61081c576040517fd7e6bcf800000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b565b6108266107de565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff1603610896575f6040517f1e4fbdf700000000000000000000000000000000000000000000000000000000815260040161088d9190610998565b60405180910390fd5b61089f816106a4565b50565b5f6108ab610775565b5f0160089054906101000a900460ff16905090565b5f80fd5b5f80fd5b5f819050919050565b6108da816108c8565b81146108e4575f80fd5b50565b5f813590506108f5816108d1565b92915050565b5f602082840312156109105761090f6108c0565b5b5f61091d848285016108e7565b91505092915050565b5f8115159050919050565b61093a81610926565b82525050565b5f6020820190506109535f830184610931565b92915050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f61098282610959565b9050919050565b61099281610978565b82525050565b5f6020820190506109ab5f830184610989565b92915050565b5f80fd5b5f80fd5b5f80fd5b5f8083601f8401126109d2576109d16109b1565b5b8235905067ffffffffffffffff8111156109ef576109ee6109b5565b5b602083019150836001820283011115610a0b57610a0a6109b9565b5b9250929050565b5f805f60408486031215610a2957610a286108c0565b5b5f610a36868287016108e7565b935050602084013567ffffffffffffffff811115610a5757610a566108c4565b5b610a63868287016109bd565b92509250509250925092565b5f819050919050565b610a8181610a6f565b82525050565b5f602082019050610a9a5f830184610a78565b92915050565b610aa981610978565b8114610ab3575f80fd5b50565b5f81359050610ac481610aa0565b92915050565b5f60208284031215610adf57610ade6108c0565b5b5f610aec84828501610ab6565b91505092915050565b5f819050919050565b5f67ffffffffffffffff82169050919050565b5f819050919050565b5f610b34610b2f610b2a84610af5565b610b11565b610afe565b9050919050565b610b4481610b1a565b82525050565b5f602082019050610b5d5f830184610b3b565b92915050565b5f82825260208201905092915050565b7f7075626c6963206b657920697320656d707479000000000000000000000000005f82015250565b5f610ba7601383610b63565b9150610bb282610b73565b602082019050919050565b5f6020820190508181035f830152610bd481610b9b565b9050919050565b7f7369676e6572206973206e6f74206164646564207965740000000000000000005f82015250565b5f610c0f601783610b63565b9150610c1a82610bdb565b602082019050919050565b5f6020820190508181035f830152610c3c81610c03565b9050919050565b7f7369676e657220697320616c72656164792061646465640000000000000000005f82015250565b5f610c77601783610b63565b9150610c8282610c43565b602082019050919050565b5f6020820190508181035f830152610ca481610c6b565b9050919050565b5f81905092915050565b828183375f83830152505050565b5f610cce8385610cab565b9350610cdb838584610cb5565b82840190509392505050565b5f610cf3828486610cc3565b9150819050939250505056fea2646970667358221220a9fb4a459eb0d5a2f7bac5ea1961620a91781cad813ac55bac43ebeb8954cc9c64736f6c63430008190033",
+	ABI: "[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"maximumSigners\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"InvalidInitialization\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotInitializing\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"OwnableInvalidOwner\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"OwnableUnauthorizedAccount\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"version\",\"type\":\"uint64\"}],\"name\":\"Initialized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"publickey\",\"type\":\"bytes32\"},{\"indexed\":true,\"internalType\":\"string\",\"name\":\"url\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"bool\",\"name\":\"added\",\"type\":\"bool\"}],\"name\":\"SignerUpdated\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"MAXIMUM_SIGNERS\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"_publickey\",\"type\":\"bytes32\"},{\"internalType\":\"string\",\"name\":\"url\",\"type\":\"string\"}],\"name\":\"addSigner\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"_publickey\",\"type\":\"bytes32\"}],\"name\":\"removeSigner\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"signers\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"whitelisted\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	Bin: "0x60a0604052348015600e575f80fd5b50604051610e42380380610e428339818101604052810190602e9190606d565b8060808181525050506093565b5f80fd5b5f819050919050565b604f81603f565b81146058575f80fd5b50565b5f815190506067816048565b92915050565b5f60208284031215607f57607e603b565b5b5f608a84828501605b565b91505092915050565b608051610d976100ab5f395f6105a20152610d975ff3fe608060405234801561000f575f80fd5b5060043610610086575f3560e01c80638da5cb5b116100595780638da5cb5b146100ea5780639194a60914610108578063ab0bba8614610124578063f2fde38b1461014257610086565b8063141774ef1461008a578063715018a6146100ba5780638129fc1c146100c45780638cc6f44c146100ce575b5f80fd5b6100a4600480360381019061009f9190610926565b61015e565b6040516100b1919061096b565b60405180910390f35b6100c2610183565b005b6100cc610196565b005b6100e860048036038101906100e39190610926565b610316565b005b6100f261043b565b6040516100ff91906109c3565b60405180910390f35b610122600480360381019061011d9190610a3d565b610470565b005b61012c6105a0565b6040516101399190610ab2565b60405180910390f35b61015c60048036038101906101579190610af5565b6105c4565b005b5f602052805f5260405f205f91509050805f015f9054906101000a900460ff16905081565b61018b610648565b6101945f6106cf565b565b5f61019f6107a0565b90505f815f0160089054906101000a900460ff161590505f825f015f9054906101000a900467ffffffffffffffff1690505f808267ffffffffffffffff161480156101e75750825b90505f60018367ffffffffffffffff1614801561021a57505f3073ffffffffffffffffffffffffffffffffffffffff163b145b905081158015610228575080155b1561025f576040517ff92ee8a900000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b6001855f015f6101000a81548167ffffffffffffffff021916908367ffffffffffffffff16021790555083156102ac576001855f0160086101000a81548160ff0219169083151502179055505b6102b5336107c7565b831561030f575f855f0160086101000a81548160ff0219169083151502179055507fc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d260016040516103069190610b75565b60405180910390a15b5050505050565b61031e610648565b5f801b8103610362576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161035990610be8565b60405180910390fd5b600115155f808381526020019081526020015f205f015f9054906101000a900460ff161515146103c7576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016103be90610c50565b60405180910390fd5b5f808281526020019081526020015f205f8082015f6101000a81549060ff021916905550506040516103f890610c9b565b6040518091039020817f6eaf83ec4eec8fa4159f63480f8bc9e3f2e39f3fed2e5856d8d103268680e6f05f604051610430919061096b565b60405180910390a350565b5f806104456107db565b9050805f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1691505090565b610478610648565b5f801b83036104bc576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016104b390610be8565b60405180910390fd5b5f15155f808581526020019081526020015f205f015f9054906101000a900460ff16151514610520576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161051790610cf9565b60405180910390fd5b60015f808581526020019081526020015f205f015f6101000a81548160ff021916908315150217905550818160405161055a929190610d49565b6040518091039020837f6eaf83ec4eec8fa4159f63480f8bc9e3f2e39f3fed2e5856d8d103268680e6f06001604051610593919061096b565b60405180910390a3505050565b7f000000000000000000000000000000000000000000000000000000000000000081565b6105cc610648565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff160361063c575f6040517f1e4fbdf700000000000000000000000000000000000000000000000000000000815260040161063391906109c3565b60405180910390fd5b610645816106cf565b50565b610650610802565b73ffffffffffffffffffffffffffffffffffffffff1661066e61043b565b73ffffffffffffffffffffffffffffffffffffffff16146106cd57610691610802565b6040517f118cdaa70000000000000000000000000000000000000000000000000000000081526004016106c491906109c3565b60405180910390fd5b565b5f6106d86107db565b90505f815f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905082825f015f6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055508273ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e060405160405180910390a3505050565b5f7ff0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00905090565b6107cf610809565b6107d881610849565b50565b5f7f9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300905090565b5f33905090565b6108116108cd565b610847576040517fd7e6bcf800000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b565b610851610809565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff16036108c1575f6040517f1e4fbdf70000000000000000000000000000000000000000000000000000000081526004016108b891906109c3565b60405180910390fd5b6108ca816106cf565b50565b5f6108d66107a0565b5f0160089054906101000a900460ff16905090565b5f80fd5b5f80fd5b5f819050919050565b610905816108f3565b811461090f575f80fd5b50565b5f81359050610920816108fc565b92915050565b5f6020828403121561093b5761093a6108eb565b5b5f61094884828501610912565b91505092915050565b5f8115159050919050565b61096581610951565b82525050565b5f60208201905061097e5f83018461095c565b92915050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6109ad82610984565b9050919050565b6109bd816109a3565b82525050565b5f6020820190506109d65f8301846109b4565b92915050565b5f80fd5b5f80fd5b5f80fd5b5f8083601f8401126109fd576109fc6109dc565b5b8235905067ffffffffffffffff811115610a1a57610a196109e0565b5b602083019150836001820283011115610a3657610a356109e4565b5b9250929050565b5f805f60408486031215610a5457610a536108eb565b5b5f610a6186828701610912565b935050602084013567ffffffffffffffff811115610a8257610a816108ef565b5b610a8e868287016109e8565b92509250509250925092565b5f819050919050565b610aac81610a9a565b82525050565b5f602082019050610ac55f830184610aa3565b92915050565b610ad4816109a3565b8114610ade575f80fd5b50565b5f81359050610aef81610acb565b92915050565b5f60208284031215610b0a57610b096108eb565b5b5f610b1784828501610ae1565b91505092915050565b5f819050919050565b5f67ffffffffffffffff82169050919050565b5f819050919050565b5f610b5f610b5a610b5584610b20565b610b3c565b610b29565b9050919050565b610b6f81610b45565b82525050565b5f602082019050610b885f830184610b66565b92915050565b5f82825260208201905092915050565b7f7075626c6963206b657920697320656d707479000000000000000000000000005f82015250565b5f610bd2601383610b8e565b9150610bdd82610b9e565b602082019050919050565b5f6020820190508181035f830152610bff81610bc6565b9050919050565b7f7369676e6572206973206e6f74206164646564207965740000000000000000005f82015250565b5f610c3a601783610b8e565b9150610c4582610c06565b602082019050919050565b5f6020820190508181035f830152610c6781610c2e565b9050919050565b5f81905092915050565b50565b5f610c865f83610c6e565b9150610c9182610c78565b5f82019050919050565b5f610ca582610c7b565b9150819050919050565b7f7369676e657220697320616c72656164792061646465640000000000000000005f82015250565b5f610ce3601783610b8e565b9150610cee82610caf565b602082019050919050565b5f6020820190508181035f830152610d1081610cd7565b9050919050565b828183375f83830152505050565b5f610d308385610c6e565b9350610d3d838584610d17565b82840190509392505050565b5f610d55828486610d25565b9150819050939250505056fea264697066735822122079980d8c1b8d13cfafa88757ed857ec81a12d3668ec8ed94dbcd50230c3c1e9464736f6c63430008190033",
 }
 
 // IntentOperatorsRegistryABI is the input ABI used to generate the binding from.
@@ -687,9 +687,9 @@ func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) ParseOwnershipT
 	return event, nil
 }
 
-// IntentOperatorsRegistrySignedAddedIterator is returned from FilterSignedAdded and is used to iterate over the raw logs and unpacked data for SignedAdded events raised by the IntentOperatorsRegistry contract.
-type IntentOperatorsRegistrySignedAddedIterator struct {
-	Event *IntentOperatorsRegistrySignedAdded // Event containing the contract specifics and raw log
+// IntentOperatorsRegistrySignerUpdatedIterator is returned from FilterSignerUpdated and is used to iterate over the raw logs and unpacked data for SignerUpdated events raised by the IntentOperatorsRegistry contract.
+type IntentOperatorsRegistrySignerUpdatedIterator struct {
+	Event *IntentOperatorsRegistrySignerUpdated // Event containing the contract specifics and raw log
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -703,7 +703,7 @@ type IntentOperatorsRegistrySignedAddedIterator struct {
 // Next advances the iterator to the subsequent event, returning whether there
 // are any more events found. In case of a retrieval or parsing error, false is
 // returned and Error() can be queried for the exact failure.
-func (it *IntentOperatorsRegistrySignedAddedIterator) Next() bool {
+func (it *IntentOperatorsRegistrySignerUpdatedIterator) Next() bool {
 	// If the iterator failed, stop iterating
 	if it.fail != nil {
 		return false
@@ -712,7 +712,7 @@ func (it *IntentOperatorsRegistrySignedAddedIterator) Next() bool {
 	if it.done {
 		select {
 		case log := <-it.logs:
-			it.Event = new(IntentOperatorsRegistrySignedAdded)
+			it.Event = new(IntentOperatorsRegistrySignerUpdated)
 			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 				it.fail = err
 				return false
@@ -727,7 +727,7 @@ func (it *IntentOperatorsRegistrySignedAddedIterator) Next() bool {
 	// Iterator still in progress, wait for either a data or an error event
 	select {
 	case log := <-it.logs:
-		it.Event = new(IntentOperatorsRegistrySignedAdded)
+		it.Event = new(IntentOperatorsRegistrySignerUpdated)
 		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 			it.fail = err
 			return false
@@ -743,28 +743,29 @@ func (it *IntentOperatorsRegistrySignedAddedIterator) Next() bool {
 }
 
 // Error returns any retrieval or parsing error occurred during filtering.
-func (it *IntentOperatorsRegistrySignedAddedIterator) Error() error {
+func (it *IntentOperatorsRegistrySignerUpdatedIterator) Error() error {
 	return it.fail
 }
 
 // Close terminates the iteration process, releasing any pending underlying
 // resources.
-func (it *IntentOperatorsRegistrySignedAddedIterator) Close() error {
+func (it *IntentOperatorsRegistrySignerUpdatedIterator) Close() error {
 	it.sub.Unsubscribe()
 	return nil
 }
 
-// IntentOperatorsRegistrySignedAdded represents a SignedAdded event raised by the IntentOperatorsRegistry contract.
-type IntentOperatorsRegistrySignedAdded struct {
+// IntentOperatorsRegistrySignerUpdated represents a SignerUpdated event raised by the IntentOperatorsRegistry contract.
+type IntentOperatorsRegistrySignerUpdated struct {
 	Publickey [32]byte
 	Url       common.Hash
+	Added     bool
 	Raw       types.Log // Blockchain specific contextual infos
 }
 
-// FilterSignedAdded is a free log retrieval operation binding the contract event 0xd993cade8966730f67b2b2c9d7689b17c3b727d61bf30f122bb3dcc5325fbec5.
+// FilterSignerUpdated is a free log retrieval operation binding the contract event 0x6eaf83ec4eec8fa4159f63480f8bc9e3f2e39f3fed2e5856d8d103268680e6f0.
 //
-// Solidity: event SignedAdded(bytes32 indexed publickey, string indexed url)
-func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) FilterSignedAdded(opts *bind.FilterOpts, publickey [][32]byte, url []string) (*IntentOperatorsRegistrySignedAddedIterator, error) {
+// Solidity: event SignerUpdated(bytes32 indexed publickey, string indexed url, bool added)
+func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) FilterSignerUpdated(opts *bind.FilterOpts, publickey [][32]byte, url []string) (*IntentOperatorsRegistrySignerUpdatedIterator, error) {
 
 	var publickeyRule []interface{}
 	for _, publickeyItem := range publickey {
@@ -775,17 +776,17 @@ func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) FilterSignedAdd
 		urlRule = append(urlRule, urlItem)
 	}
 
-	logs, sub, err := _IntentOperatorsRegistry.contract.FilterLogs(opts, "SignedAdded", publickeyRule, urlRule)
+	logs, sub, err := _IntentOperatorsRegistry.contract.FilterLogs(opts, "SignerUpdated", publickeyRule, urlRule)
 	if err != nil {
 		return nil, err
 	}
-	return &IntentOperatorsRegistrySignedAddedIterator{contract: _IntentOperatorsRegistry.contract, event: "SignedAdded", logs: logs, sub: sub}, nil
+	return &IntentOperatorsRegistrySignerUpdatedIterator{contract: _IntentOperatorsRegistry.contract, event: "SignerUpdated", logs: logs, sub: sub}, nil
 }
 
-// WatchSignedAdded is a free log subscription operation binding the contract event 0xd993cade8966730f67b2b2c9d7689b17c3b727d61bf30f122bb3dcc5325fbec5.
+// WatchSignerUpdated is a free log subscription operation binding the contract event 0x6eaf83ec4eec8fa4159f63480f8bc9e3f2e39f3fed2e5856d8d103268680e6f0.
 //
-// Solidity: event SignedAdded(bytes32 indexed publickey, string indexed url)
-func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) WatchSignedAdded(opts *bind.WatchOpts, sink chan<- *IntentOperatorsRegistrySignedAdded, publickey [][32]byte, url []string) (event.Subscription, error) {
+// Solidity: event SignerUpdated(bytes32 indexed publickey, string indexed url, bool added)
+func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) WatchSignerUpdated(opts *bind.WatchOpts, sink chan<- *IntentOperatorsRegistrySignerUpdated, publickey [][32]byte, url []string) (event.Subscription, error) {
 
 	var publickeyRule []interface{}
 	for _, publickeyItem := range publickey {
@@ -796,7 +797,7 @@ func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) WatchSignedAdde
 		urlRule = append(urlRule, urlItem)
 	}
 
-	logs, sub, err := _IntentOperatorsRegistry.contract.WatchLogs(opts, "SignedAdded", publickeyRule, urlRule)
+	logs, sub, err := _IntentOperatorsRegistry.contract.WatchLogs(opts, "SignerUpdated", publickeyRule, urlRule)
 	if err != nil {
 		return nil, err
 	}
@@ -806,8 +807,8 @@ func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) WatchSignedAdde
 			select {
 			case log := <-logs:
 				// New log arrived, parse the event and forward to the user
-				event := new(IntentOperatorsRegistrySignedAdded)
-				if err := _IntentOperatorsRegistry.contract.UnpackLog(event, "SignedAdded", log); err != nil {
+				event := new(IntentOperatorsRegistrySignerUpdated)
+				if err := _IntentOperatorsRegistry.contract.UnpackLog(event, "SignerUpdated", log); err != nil {
 					return err
 				}
 				event.Raw = log
@@ -828,156 +829,12 @@ func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) WatchSignedAdde
 	}), nil
 }
 
-// ParseSignedAdded is a log parse operation binding the contract event 0xd993cade8966730f67b2b2c9d7689b17c3b727d61bf30f122bb3dcc5325fbec5.
+// ParseSignerUpdated is a log parse operation binding the contract event 0x6eaf83ec4eec8fa4159f63480f8bc9e3f2e39f3fed2e5856d8d103268680e6f0.
 //
-// Solidity: event SignedAdded(bytes32 indexed publickey, string indexed url)
-func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) ParseSignedAdded(log types.Log) (*IntentOperatorsRegistrySignedAdded, error) {
-	event := new(IntentOperatorsRegistrySignedAdded)
-	if err := _IntentOperatorsRegistry.contract.UnpackLog(event, "SignedAdded", log); err != nil {
-		return nil, err
-	}
-	event.Raw = log
-	return event, nil
-}
-
-// IntentOperatorsRegistrySignedRemovedIterator is returned from FilterSignedRemoved and is used to iterate over the raw logs and unpacked data for SignedRemoved events raised by the IntentOperatorsRegistry contract.
-type IntentOperatorsRegistrySignedRemovedIterator struct {
-	Event *IntentOperatorsRegistrySignedRemoved // Event containing the contract specifics and raw log
-
-	contract *bind.BoundContract // Generic contract to use for unpacking event data
-	event    string              // Event name to use for unpacking event data
-
-	logs chan types.Log        // Log channel receiving the found contract events
-	sub  ethereum.Subscription // Subscription for errors, completion and termination
-	done bool                  // Whether the subscription completed delivering logs
-	fail error                 // Occurred error to stop iteration
-}
-
-// Next advances the iterator to the subsequent event, returning whether there
-// are any more events found. In case of a retrieval or parsing error, false is
-// returned and Error() can be queried for the exact failure.
-func (it *IntentOperatorsRegistrySignedRemovedIterator) Next() bool {
-	// If the iterator failed, stop iterating
-	if it.fail != nil {
-		return false
-	}
-	// If the iterator completed, deliver directly whatever's available
-	if it.done {
-		select {
-		case log := <-it.logs:
-			it.Event = new(IntentOperatorsRegistrySignedRemoved)
-			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-				it.fail = err
-				return false
-			}
-			it.Event.Raw = log
-			return true
-
-		default:
-			return false
-		}
-	}
-	// Iterator still in progress, wait for either a data or an error event
-	select {
-	case log := <-it.logs:
-		it.Event = new(IntentOperatorsRegistrySignedRemoved)
-		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-			it.fail = err
-			return false
-		}
-		it.Event.Raw = log
-		return true
-
-	case err := <-it.sub.Err():
-		it.done = true
-		it.fail = err
-		return it.Next()
-	}
-}
-
-// Error returns any retrieval or parsing error occurred during filtering.
-func (it *IntentOperatorsRegistrySignedRemovedIterator) Error() error {
-	return it.fail
-}
-
-// Close terminates the iteration process, releasing any pending underlying
-// resources.
-func (it *IntentOperatorsRegistrySignedRemovedIterator) Close() error {
-	it.sub.Unsubscribe()
-	return nil
-}
-
-// IntentOperatorsRegistrySignedRemoved represents a SignedRemoved event raised by the IntentOperatorsRegistry contract.
-type IntentOperatorsRegistrySignedRemoved struct {
-	Publickey [32]byte
-	Raw       types.Log // Blockchain specific contextual infos
-}
-
-// FilterSignedRemoved is a free log retrieval operation binding the contract event 0x202ba177372096a533cb0be65537787905a2c9a9b25538d8d9f578706b412cb3.
-//
-// Solidity: event SignedRemoved(bytes32 indexed publickey)
-func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) FilterSignedRemoved(opts *bind.FilterOpts, publickey [][32]byte) (*IntentOperatorsRegistrySignedRemovedIterator, error) {
-
-	var publickeyRule []interface{}
-	for _, publickeyItem := range publickey {
-		publickeyRule = append(publickeyRule, publickeyItem)
-	}
-
-	logs, sub, err := _IntentOperatorsRegistry.contract.FilterLogs(opts, "SignedRemoved", publickeyRule)
-	if err != nil {
-		return nil, err
-	}
-	return &IntentOperatorsRegistrySignedRemovedIterator{contract: _IntentOperatorsRegistry.contract, event: "SignedRemoved", logs: logs, sub: sub}, nil
-}
-
-// WatchSignedRemoved is a free log subscription operation binding the contract event 0x202ba177372096a533cb0be65537787905a2c9a9b25538d8d9f578706b412cb3.
-//
-// Solidity: event SignedRemoved(bytes32 indexed publickey)
-func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) WatchSignedRemoved(opts *bind.WatchOpts, sink chan<- *IntentOperatorsRegistrySignedRemoved, publickey [][32]byte) (event.Subscription, error) {
-
-	var publickeyRule []interface{}
-	for _, publickeyItem := range publickey {
-		publickeyRule = append(publickeyRule, publickeyItem)
-	}
-
-	logs, sub, err := _IntentOperatorsRegistry.contract.WatchLogs(opts, "SignedRemoved", publickeyRule)
-	if err != nil {
-		return nil, err
-	}
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
-				event := new(IntentOperatorsRegistrySignedRemoved)
-				if err := _IntentOperatorsRegistry.contract.UnpackLog(event, "SignedRemoved", log); err != nil {
-					return err
-				}
-				event.Raw = log
-
-				select {
-				case sink <- event:
-				case err := <-sub.Err():
-					return err
-				case <-quit:
-					return nil
-				}
-			case err := <-sub.Err():
-				return err
-			case <-quit:
-				return nil
-			}
-		}
-	}), nil
-}
-
-// ParseSignedRemoved is a log parse operation binding the contract event 0x202ba177372096a533cb0be65537787905a2c9a9b25538d8d9f578706b412cb3.
-//
-// Solidity: event SignedRemoved(bytes32 indexed publickey)
-func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) ParseSignedRemoved(log types.Log) (*IntentOperatorsRegistrySignedRemoved, error) {
-	event := new(IntentOperatorsRegistrySignedRemoved)
-	if err := _IntentOperatorsRegistry.contract.UnpackLog(event, "SignedRemoved", log); err != nil {
+// Solidity: event SignerUpdated(bytes32 indexed publickey, string indexed url, bool added)
+func (_IntentOperatorsRegistry *IntentOperatorsRegistryFilterer) ParseSignerUpdated(log types.Log) (*IntentOperatorsRegistrySignerUpdated, error) {
+	event := new(IntentOperatorsRegistrySignerUpdated)
+	if err := _IntentOperatorsRegistry.contract.UnpackLog(event, "SignerUpdated", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log

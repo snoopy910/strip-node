@@ -147,7 +147,7 @@ type SignatureResponse struct {
 
 func getSignature(data string, keyCurve string, identity string, identityCurve string) (string, error) {
 	// @TODO: get the signer URL based on the signer who is part of the TSS wallet
-	resp, err := http.Get(Signers[0].URL + "/signature?message=" + data + "&identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=" + keyCurve)
+	resp, err := http.Get(SignersList()[0].URL + "/signature?message=" + data + "&identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=" + keyCurve)
 	if err != nil {
 		return "", err
 	}

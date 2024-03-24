@@ -8,6 +8,7 @@ import (
 )
 
 var MaximumSigners int
+var RPC_URL, IntentOperatorsRegistryContractAddress string
 
 func StartSequencer(
 	httpPort string,
@@ -24,6 +25,9 @@ func StartSequencer(
 	for _, intent := range intents {
 		go ProcessIntent(intent.ID)
 	}
+
+	RPC_URL = rpcURL
+	IntentOperatorsRegistryContractAddress = intentOperatorsRegistryContractAddress
 
 	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(rpcURL, intentOperatorsRegistryContractAddress)
 	_maxSigners, err := instance.MAXIMUMSIGNERS(&bind.CallOpts{})

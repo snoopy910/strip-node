@@ -54,8 +54,6 @@ func SignersList() []Signer {
 		},
 	}
 
-	fmt.Println("Querying logs")
-
 	logs, err := client.FilterLogs(context.Background(), query)
 	if err != nil {
 		log.Fatal(err)
@@ -69,10 +67,12 @@ func SignersList() []Signer {
 			panic(err)
 		}
 
+		fmt.Println(data.Url)
+
 		if data.Added {
 			signers = append(signers, Signer{
 				PublicKey: hex.EncodeToString(data.Publickey[:]),
-				URL:       data.Url.String(),
+				URL:       data.Url,
 			})
 		} else {
 			for i, signer := range signers {
@@ -82,8 +82,6 @@ func SignersList() []Signer {
 			}
 		}
 	}
-
-	fmt.Println("Signers: ", signers)
 
 	return signers
 }

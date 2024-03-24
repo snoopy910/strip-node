@@ -63,12 +63,12 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 	TotalSigners := len(signers)
 
-	if TotalSigners > MaximumSigners && len(signers) > MaximumSigners {
+	if TotalSigners > MaximumSigners {
 		fmt.Println("too many signers for keygen generation")
 		return
 	}
 
-	if TotalSigners <= MaximumSigners && len(signers) != TotalSigners {
+	if TotalSigners == 0 {
 		fmt.Println("not enough signers for keygen generation")
 		return
 	}

@@ -2,6 +2,7 @@ package signer
 
 import (
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -32,7 +33,7 @@ func Start(
 	NodePublicKey = signerPublicKey
 
 	instance := getIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
-	_maxSigners, err := instance.MAXIMUMSIGNERS()
+	_maxSigners, err := instance.MAXIMUMSIGNERS(&bind.CallOpts{})
 	if err != nil {
 		panic(err)
 	}

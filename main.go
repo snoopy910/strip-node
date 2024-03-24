@@ -26,6 +26,7 @@ func main() {
 	httpPort := flag.String("httpPort", LookupEnvOrString("HTTP_PORT", "8080"), "http API port")
 	signerPublicKey := flag.String("signerPublicKey", LookupEnvOrString("SIGNER_PUBLIC_KEY", ""), "public key of the signer nodes")
 	signerPrivateKey := flag.String("signerPrivateKey", LookupEnvOrString("SIGNER_PRIVATE_KEY", ""), "private key of the signer nodes")
+	signerNodeURL := flag.String("signerNodeURL", LookupEnvOrString("SIGNER_NODE_URL", ""), "URL of the signer node")
 
 	//specific to network
 	intentOperatorsRegistryContractAddress := flag.String("intentOperatorsRegistryAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of IntentOperatorsRegistry contract")
@@ -50,7 +51,7 @@ func main() {
 	if *isDeployIntentOperatorsRegistry {
 		intentoperatorsregistry.DeployIntentOperatorsRegistryContract(*rpcURL, *privateKey)
 	} else if *isAddSigner {
-		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *signerPublicKey)
+		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *signerPublicKey, *signerNodeURL)
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else if *isSequencer {

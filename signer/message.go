@@ -2,7 +2,6 @@ package signer
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -75,16 +74,15 @@ func handleIncomingMessage(message []byte) {
 	compressedPubKey := crypto.CompressPubkey(pubKey)
 	compressedPubKeyStr := hexutil.Encode(compressedPubKey)
 
-	publicKeyStr := hex.EncodeToString(sigPublicKey)
 	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
 
 	signerExists, err := instance.Signers(&bind.CallOpts{}, common.PublicKeyStrToBytes32(compressedPubKeyStr))
 	if err != nil {
-		fmt.Println("message from not registered signer: ", "0x"+publicKeyStr)
+		fmt.Println("message from not registered signer: ", compressedPubKeyStr)
 		log.Fatal(err)
 	}
 
-	if !signerExists.Exists {
+	if !signerExists {
 		return
 	}
 

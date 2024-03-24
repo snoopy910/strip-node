@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signerPublicKey string) {
+func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signerPublicKey string, signerNodeURL string) {
 	time.Sleep(5 * time.Second)
 
 	client, err := ethclient.Dial(rpcURL)
@@ -58,16 +58,6 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 	auth.GasPrice = gasPrice
 	auth.GasLimit = 972978
 
-	tx, err := instance.WhitelistSigner(auth, tssCommon.PublicKeyStrToBytes32(signerPublicKey))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = bind.WaitMined(context.Background(), client, tx)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
 		log.Fatal(err)
@@ -75,7 +65,7 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 
 	auth.Nonce = big.NewInt(int64(nonce))
 
-	tx, err = instance.AddSigner(auth, tssCommon.PublicKeyStrToBytes32(signerPublicKey))
+	tx, err := instance.AddSigner(auth, tssCommon.PublicKeyStrToBytes32(signerPublicKey), signerNodeURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,5 +76,6 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 	}
 
 	time.Sleep(5 * time.Second)
+
 	fmt.Println("Signer", signerPublicKey, " added. Transaction hash: ", tx.Hash().String())
 }

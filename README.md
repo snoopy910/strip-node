@@ -34,9 +34,9 @@ go run main.go --isDeployIntentOperatorsRegistry=true --privateKey="76163f58a83f
 Then add two signers to the IntentOperatorsRegistry contract:
 
 ```
-go run main.go --isAddsigner=true --signerPublicKey="0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf" --privateKey="76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
+go run main.go --isAddsigner=true --signerPublicKey="0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf" --privateKey="76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a" --signerNodeURL="http://localhost:8080"
 
-go run main.go --isAddsigner=true --signerPublicKey="0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35" --privateKey="76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
+go run main.go --isAddsigner=true --signerPublicKey="0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35" --privateKey="76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a" --signerNodeURL="http://localhost:8081"
 ```
 
 Then run the bootnode:

@@ -31,8 +31,13 @@ func Start(
 	NodePrivateKey = signerPrivateKey
 	NodePublicKey = signerPublicKey
 
-	// this should come from contract
-	MaximumSigners = maximumSigners
+	instance := getIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	_maxSigners, err := instance.MAXIMUMSIGNERS()
+	if err != nil {
+		panic(err)
+	}
+
+	MaximumSigners = int(_maxSigners.Int64())
 
 	go startHTTPServer(httpPort)
 

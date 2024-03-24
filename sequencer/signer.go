@@ -7,7 +7,7 @@ type Signer struct {
 	URL       string
 }
 
-// This list will be fetched from SC by the sequencer
+// TODO: This list will be fetched from SC by the sequencer
 var Signers = []Signer{
 	{
 		PublicKey: "0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf",

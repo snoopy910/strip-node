@@ -115,7 +115,10 @@ func startHTTPServer(port string) {
 
 			publicKeyStr := base58.Encode(pk.Serialize())
 
-			err := json.NewEncoder(w).Encode("{\"address\":\"" + publicKeyStr + "\"}")
+			getAddressResponse := GetAddressResponse{
+				Address: publicKeyStr,
+			}
+			err := json.NewEncoder(w).Encode(getAddressResponse)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
@@ -126,11 +129,17 @@ func startHTTPServer(port string) {
 			y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 
 			publicKeyStr := "04" + x + y
-			fmt.Println("publicKeyStr", publicKeyStr)
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
 			address := publicKeyToAddress(publicKeyBytes)
 
-			err := json.NewEncoder(w).Encode("{\"address\":\"" + address + "\"}")
+			getAddressResponse := GetAddressResponse{
+				Address: address,
+			}
+			err := json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
+
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
@@ -188,4 +197,8 @@ func startHTTPServer(port string) {
 type SignatureReponse struct {
 	Signature string `json:"signature"`
 	Address   string `json:"address"`
+}
+
+type GetAddressResponse struct {
+	Address string `json:"address"`
 }

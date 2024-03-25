@@ -74,6 +74,9 @@ func handleIncomingMessage(message []byte) {
 	compressedPubKey := crypto.CompressPubkey(pubKey)
 	compressedPubKeyStr := hexutil.Encode(compressedPubKey)
 
+	compressedPubKeyStr = compressedPubKeyStr[4:]
+	compressedPubKeyStr = "0x" + compressedPubKeyStr
+
 	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
 
 	signerExists, err := instance.Signers(&bind.CallOpts{}, common.PublicKeyStrToBytes32(compressedPubKeyStr))

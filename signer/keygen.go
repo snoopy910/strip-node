@@ -54,6 +54,9 @@ func updateKeygen(identity string, identityCurve string, keyCurve string, from i
 }
 
 func generateKeygen(identity string, identityCurve string, keyCurve string, signers []string) {
+	fmt.Println(signers)
+	fmt.Println(NodePublicKey)
+
 	Index := SliceIndexOfString(signers, NodePublicKey)
 
 	if Index == -1 {

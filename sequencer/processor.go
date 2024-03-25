@@ -159,8 +159,6 @@ func getSignature(data string, keyCurve string, identity string, identityCurve s
 		return "", err
 	}
 
-	fmt.Println(string(body))
-
 	var signatureResponse SignatureResponse
 	err = json.Unmarshal(body, &signatureResponse)
 	if err != nil {
@@ -265,8 +263,6 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 		fmt.Println("Error decoding transaction data:", err)
 		return "", err
 	}
-
-	fmt.Println(decodedTransactionData)
 
 	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
 	if err != nil {

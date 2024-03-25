@@ -20,7 +20,7 @@ func FileExists(name string) (bool, error) {
 }
 
 func PublicKeyStrToBytes32(publicKey string) [32]byte {
-	pubkey := string([]rune(publicKey)[4:])
+	pubkey := string([]rune(publicKey)[2:])
 	signerPublicKeyBytes, err := hex.DecodeString(pubkey)
 	if err != nil {
 		log.Fatal(err)

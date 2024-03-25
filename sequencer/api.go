@@ -1,11 +1,16 @@
 package sequencer
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type Operation struct {
@@ -40,17 +45,198 @@ const (
 	OPERATION_STATUS_FAILED    = "failed"
 )
 
+type CreateWalletRequest struct {
+	Identity      string   `json:"identity"`
+	IdentityCurve string   `json:"identityCurve"`
+	KeyCurve      string   `json:"keyCurve"`
+	Signers       []string `json:"signers"`
+}
+
+type GetAddressResponse struct {
+	Address string `json:"address"`
+}
+
 func startHTTPServer(port string) {
 	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
 		// select a list of nodes.
 		// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
 		// If length of selected nodes is less than maximum nodes then use all nodes as signers.
 
-		// selectedSigners := []string{}
+		signers := SignersList()
 
-		// if len(Signers) > max
+		if len(signers) > MaximumSigners {
+			// select random number of max signers
+			rand.Seed(time.Now().UnixNano())
+			rand.Shuffle(len(signers), func(i, j int) { signers[i], signers[j] = signers[j], signers[i] })
+			signers = signers[:MaximumSigners]
+		}
+
+		signersPublicKeyList := make([]string, len(signers))
+		for i, signer := range signers {
+			signersPublicKeyList[i] = signer.PublicKey
+		}
 
 		// then store the wallet and it's list of signers in the db
+		identity := r.URL.Query().Get("identity")
+		identityCurve := r.URL.Query().Get("identityCurve")
+
+		createWallet := false
+
+		_, err := GetWallet(identity, identityCurve)
+		if err != nil {
+
+			if err.Error() == "pg: no rows in result set" {
+				createWallet = true
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		if !createWallet {
+			fmt.Fprintf(w, "wallet already exists")
+			return
+		}
+
+		// now create the wallet here
+		createWalletRequest := CreateWalletRequest{
+			Identity:      identity,
+			IdentityCurve: identityCurve,
+			KeyCurve:      "eddsa",
+			Signers:       signersPublicKeyList,
+		}
+		marshalled, err := json.Marshal(createWalletRequest)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		req, err := http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		client := http.Client{Timeout: 3 * time.Minute}
+		_, err = client.Do(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		createWalletRequest = CreateWalletRequest{
+			Identity:      identity,
+			IdentityCurve: identityCurve,
+			KeyCurve:      "ecdsa",
+			Signers:       signersPublicKeyList,
+		}
+		marshalled, err = json.Marshal(createWalletRequest)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		client = http.Client{Timeout: 3 * time.Minute}
+		_, err = client.Do(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		//get the wallets addresses
+		resp, err := http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=eddsa")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// bodyStr := strings.ReplaceAll(string(body), "\"", "")
+		// body = []byte(bodyStr[1 : len(bodyStr)-1])
+
+		// fmt.Println(string(body))
+
+		var getAddressResponse GetAddressResponse
+		err = json.Unmarshal(body, &getAddressResponse)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// fmt.Println("reached here")
+
+		eddsaAddress := getAddressResponse.Address
+
+		resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=ecdsa")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		defer resp.Body.Close()
+
+		body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+
+		}
+
+		// fmt.Println(string(body))
+
+		err = json.Unmarshal(body, &getAddressResponse)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		ecdsaAddress := getAddressResponse.Address
+
+		wallet := WalletSchema{
+			Identity:       r.URL.Query().Get("identity"),
+			IdentityCurve:  r.URL.Query().Get("identityCurve"),
+			Signers:        strings.Join(signersPublicKeyList, ","),
+			EDDSAPublicKey: eddsaAddress,
+			ECDSAPublicKey: ecdsaAddress,
+		}
+
+		_, err = AddWallet(&wallet)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	http.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
+		identity := r.URL.Query().Get("identity")
+		identityCurve := r.URL.Query().Get("identityCurve")
+
+		wallet, err := GetWallet(identity, identityCurve)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = json.NewEncoder(w).Encode(wallet)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {

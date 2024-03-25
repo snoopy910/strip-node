@@ -27,10 +27,20 @@ type OperationSchema struct {
 	TxnHash       string
 }
 
+type WalletSchema struct {
+	Id             int64  `json:"id"`
+	Identity       string `json:"identity"`
+	IdentityCurve  string `json:"identityCurve"`
+	EDDSAPublicKey string `json:"eddsaPublicKey"`
+	ECDSAPublicKey string `json:"ecdsaPublicKey"`
+	Signers        string `json:"signers"`
+}
+
 func createSchemas(db *pg.DB) error {
 	models := []interface{}{
 		(*IntentSchema)(nil),
 		(*OperationSchema)(nil),
+		(*WalletSchema)(nil),
 	}
 
 	for _, model := range models {
@@ -213,4 +223,23 @@ func UpdateIntentStatus(intentId int64, status string) error {
 	}
 
 	return nil
+}
+
+func GetWallet(identity string, identityCurve string) (*WalletSchema, error) {
+	var walletSchema WalletSchema
+	err := client.Model(&walletSchema).Where("identity = ? AND identity_curve = ?", identity, identityCurve).Select()
+	if err != nil {
+		return nil, err
+	}
+
+	return &walletSchema, nil
+}
+
+func AddWallet(wallet *WalletSchema) (int64, error) {
+	_, err := client.Model(wallet).Insert()
+	if err != nil {
+		return 0, err
+	}
+
+	return wallet.Id, nil
 }

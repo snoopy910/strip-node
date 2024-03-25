@@ -18,18 +18,6 @@ type Signer struct {
 	URL       string
 }
 
-// TODO: This list will be fetched from SC by the sequencer
-// var Signers = []Signer{
-// 	{
-// 		PublicKey: "0x0226d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf",
-// 		URL:       "http://localhost:8080",
-// 	},
-// 	{
-// 		PublicKey: "0x0354455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35",
-// 		URL:       "http://localhost:8081",
-// 	},
-// }
-
 func SignersList() []Signer {
 	client, err := ethclient.Dial(RPC_URL)
 	if err != nil {
@@ -67,8 +55,6 @@ func SignersList() []Signer {
 			panic(err)
 		}
 
-		fmt.Println(data.Url)
-
 		if data.Added {
 			signers = append(signers, Signer{
 				PublicKey: hex.EncodeToString(data.Publickey[:]),
@@ -81,6 +67,11 @@ func SignersList() []Signer {
 				}
 			}
 		}
+	}
+
+	// prefix public key with 0x
+	for i, signer := range signers {
+		signers[i].PublicKey = "0x" + signer.PublicKey
 	}
 
 	return signers

@@ -32,6 +32,18 @@ The goroutine that handles the intents, will loop through the operations and han
 
 # Sequener APIs
 
+### Create Wallet
+
+```
+curl http://localhost:8082/createWallet?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa
+```
+
+### Get Wallet
+
+```
+curl http://localhost:8082/getWallet?identity=0x40310390beF6D518f62Cc41a60a4E9b4a8b98730&identityCurve=ecdsa
+```
+
 ### Create Intent
 
 ```

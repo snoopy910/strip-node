@@ -31,6 +31,7 @@ func Start(
 	RPC_URL = rpcURL
 	IntentOperatorsRegistryContractAddress = intentOperatorsRegistryContractAddress
 	NodePrivateKey = signerPrivateKey
+
 	NodePublicKey = signerPublicKey
 
 	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)

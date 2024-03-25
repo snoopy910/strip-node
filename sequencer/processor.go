@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -146,8 +147,21 @@ type SignatureResponse struct {
 }
 
 func getSignature(data string, keyCurve string, identity string, identityCurve string) (string, error) {
-	// @TODO: get the signer URL based on the signer who is part of the TSS wallet
-	resp, err := http.Get(SignersList()[0].URL + "/signature?message=" + data + "&identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=" + keyCurve)
+	// get wallet
+	wallet, err := GetWallet(identity, identityCurve)
+	if err != nil {
+		return "", err
+	}
+
+	// get the signer
+	signers := strings.Split(wallet.Signers, ",")
+	signer, err := GetSigner(signers[0])
+
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.Get(signer.URL + "/signature?message=" + data + "&identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=" + keyCurve)
 	if err != nil {
 		return "", err
 	}

@@ -14,13 +14,16 @@ import (
 )
 
 type Operation struct {
-	ID            int64  `json:"id"`
-	SerializedTxn string `json:"serializedTxn"`
-	DataToSign    string `json:"dataToSign"`
-	ChainId       string `json:"chainId"`
-	KeyCurve      string `json:"keyCurve"`
-	Status        string `json:"status"`
-	TxnHash       string `json:"txnHash"`
+	ID             int64  `json:"id"`
+	SerializedTxn  string `json:"serializedTxn"`
+	DataToSign     string `json:"dataToSign"`
+	ChainId        string `json:"chainId"`
+	KeyCurve       string `json:"keyCurve"`
+	Status         string `json:"status"`
+	Result         string `json:"result"`
+	Type           string `json:"type"`
+	Solver         string `json:"solver"`
+	SolverMetadata string `json:"solverMetadata"`
 }
 
 type Intent struct {
@@ -43,6 +46,11 @@ const (
 	OPERATION_STATUS_WAITING   = "waiting"
 	OPERATION_STATUS_COMPLETED = "completed"
 	OPERATION_STATUS_FAILED    = "failed"
+)
+
+const (
+	OPERATION_TYPE_TRANSCTION = "transaction"
+	OPERATION_TYPE_SOLVER     = "solver"
 )
 
 type CreateWalletRequest struct {

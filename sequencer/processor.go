@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Silent-Protocol/go-sio/solver"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -48,41 +49,17 @@ func ProcessIntent(intentId int64) {
 			if operation.Status == OPERATION_STATUS_PENDING {
 				// sign and send the txn. Change status to waiting
 
-				if operation.KeyCurve == "ecdsa" {
-					signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
-					if err != nil {
-						fmt.Println(err)
-						break
-					}
+				if operation.Type == OPERATION_TYPE_TRANSCTION {
+					if operation.KeyCurve == "ecdsa" {
+						signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
 
-					txnHash, err := sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						txnHash, err := sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
-					// @TODO: For our infra errors, don't mark the intent and operation as failed
-					if err != nil {
-						fmt.Println(err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-						break
-					}
-
-					UpdateOperationTxnHash(operation.ID, OPERATION_STATUS_WAITING, txnHash)
-				} else if operation.KeyCurve == "eddsa" {
-					chain, err := GetChain(operation.ChainId)
-					if err != nil {
-						fmt.Println(err)
-						break
-					}
-
-					signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
-
-					if err != nil {
-						fmt.Println(err)
-						break
-					}
-
-					if chain.ChainType == "solana" {
-						txnHash, err := sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
-
+						// @TODO: For our infra errors, don't mark the intent and operation as failed
 						if err != nil {
 							fmt.Println(err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -90,8 +67,59 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationTxnHash(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+					} else if operation.KeyCurve == "eddsa" {
+						chain, err := GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
+
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						if chain.ChainType == "solana" {
+							txnHash, err := sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						}
 					}
+				} else if operation.Type == OPERATION_TYPE_SOLVER {
+					// get signature
+					// then pass the solver info to solver moduler with signature to handle the rest
+					signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					// pass the solver info to solver moduler with signature to handle the rest
+					id, err := solver.Solve(
+						operation.Solver,
+						operation.SolverMetadata,
+						operation.DataToSign,
+						signature,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, id)
 				}
 
 				break
@@ -100,25 +128,42 @@ func ProcessIntent(intentId int64) {
 			if operation.Status == OPERATION_STATUS_WAITING {
 				// check for confirmations and update the status to completed
 				confirmed := false
-				if operation.KeyCurve == "ecdsa" {
-					confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.TxnHash)
-					if err != nil {
-						fmt.Println(err)
-						break
+				if operation.Type == OPERATION_TYPE_TRANSCTION {
+					if operation.KeyCurve == "ecdsa" {
+						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+					} else if operation.KeyCurve == "eddsa" {
+						chain, err := GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						if chain.ChainType == "solana" {
+							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
 					}
-				} else if operation.KeyCurve == "eddsa" {
-					chain, err := GetChain(operation.ChainId)
+				} else if operation.Type == OPERATION_TYPE_SOLVER {
+					status, err := solver.CheckStatus(
+						operation.Solver,
+						operation.SolverMetadata,
+						operation.Result,
+					)
+
 					if err != nil {
 						fmt.Println(err)
 						break
 					}
 
-					if chain.ChainType == "solana" {
-						confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.TxnHash)
-						if err != nil {
-							fmt.Println(err)
-							break
-						}
+					if status == "completed" {
+						confirmed = true
 					}
 				}
 

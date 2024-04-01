@@ -24,7 +24,7 @@ type OperationSchema struct {
 	ChainId       string
 	KeyCurve      string
 	Status        string
-	TxnHash       string
+	Result        string
 }
 
 type WalletSchema struct {
@@ -92,7 +92,7 @@ func AddIntent(
 			ChainId:       operation.ChainId,
 			KeyCurve:      operation.KeyCurve,
 			Status:        OPERATION_STATUS_PENDING,
-			TxnHash:       "",
+			Result:        "",
 		}
 
 		_, err := client.Model(operationSchema).Insert()
@@ -126,7 +126,7 @@ func GetIntent(intentId int64) (*Intent, error) {
 			ChainId:       operationSchema.ChainId,
 			KeyCurve:      operationSchema.KeyCurve,
 			Status:        operationSchema.Status,
-			TxnHash:       operationSchema.TxnHash,
+			Result:        operationSchema.Result,
 		}
 	}
 
@@ -171,7 +171,7 @@ func GetIntents(status string) ([]*Intent, error) {
 				ChainId:       operationSchema.ChainId,
 				KeyCurve:      operationSchema.KeyCurve,
 				Status:        operationSchema.Status,
-				TxnHash:       operationSchema.TxnHash,
+				Result:        operationSchema.Result,
 			}
 		}
 
@@ -182,11 +182,11 @@ func GetIntents(status string) ([]*Intent, error) {
 	return intents, nil
 }
 
-func UpdateOperationTxnHash(operationId int64, status string, txnHash string) error {
+func UpdateOperationResult(operationId int64, status string, result string) error {
 	operationSchema := &OperationSchema{
-		Id:      operationId,
-		Status:  status,
-		TxnHash: txnHash,
+		Id:     operationId,
+		Status: status,
+		Result: result,
 	}
 
 	_, err := client.Model(operationSchema).Column("status", "txn_hash").WherePK().Update()

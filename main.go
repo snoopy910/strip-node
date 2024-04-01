@@ -62,7 +62,21 @@ func main() {
 			*intentOperatorsRegistryContractAddress,
 		)
 	} else if *isSolanaTest {
-		sequencer.TestBuildSolana()
+		// identity.VerifySignature(
+		// 	"GScvaHyfG3NMNm8AdPjjZt3xRiNtAwHy5z5yY1oaQA4Q",
+		// 	"eddsa",
+		// 	"The quick brown fox jumps over the lazy dog",
+		// 	"3XdzeBWMBCAhuTZ7237A6GZRW2N9ge5LjszPBycvkFdaspSwN8vn5kMN8cW9dvqJtur34Wef5rdn6uMFyUXBwsVJ",
+		// )
+
+		// identity.VerifySignature(
+		// 	"0x805B25e9246e1D80c399f05C4B515a0C22097457",
+		// 	"ecdsa",
+		// 	"The quick brown fox jumps over the lazy dog",
+		// 	"0x3835f5c4f8ccf5ab0c1b3d827ca72dd1953409fa971ca68c6f6dda7905acf59f1411f1e1d40495bf224c4744dcf9d63032ca96e5685f435b4781aabf685fd88a1c",
+		// )
+
+		// sequencer.TestBuildSolana()
 	} else {
 		signer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		signer.Start(

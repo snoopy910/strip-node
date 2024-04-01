@@ -1,6 +1,7 @@
 package sequencer
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,7 +53,7 @@ func ProcessIntent(intentId int64) {
 
 				if operation.Type == OPERATION_TYPE_TRANSCTION {
 					if operation.KeyCurve == "ecdsa" {
-						signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
+						signature, err := getSignature(intent, i)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -75,7 +77,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
+						signature, err := getSignature(intent, i)
 
 						if err != nil {
 							fmt.Println(err)
@@ -98,7 +100,7 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
 					// get signature
 					// then pass the solver info to solver moduler with signature to handle the rest
-					signature, err := getSignature(operation.DataToSign, operation.KeyCurve, intent.Identity, intent.IdentityCurve)
+					signature, err := getSignature(intent, i)
 					if err != nil {
 						fmt.Println(err)
 						break
@@ -191,9 +193,9 @@ type SignatureResponse struct {
 	Address   string `json:"address"`
 }
 
-func getSignature(data string, keyCurve string, identity string, identityCurve string) (string, error) {
+func getSignature(intent *Intent, operationIndex int) (string, error) {
 	// get wallet
-	wallet, err := GetWallet(identity, identityCurve)
+	wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 	if err != nil {
 		return "", err
 	}
@@ -206,7 +208,20 @@ func getSignature(data string, keyCurve string, identity string, identityCurve s
 		return "", err
 	}
 
-	resp, err := http.Get(signer.URL + "/signature?message=" + data + "&identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=" + keyCurve)
+	intentBytes, err := json.Marshal(intent)
+
+	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
+
+	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
+
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
 	if err != nil {
 		return "", err
 	}

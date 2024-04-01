@@ -16,15 +16,18 @@ type IntentSchema struct {
 }
 
 type OperationSchema struct {
-	Id            int64
-	IntentId      int64
-	Intent        *IntentSchema `pg:"rel:has-one"`
-	SerializedTxn string
-	DataToSign    string
-	ChainId       string
-	KeyCurve      string
-	Status        string
-	Result        string
+	Id             int64
+	IntentId       int64
+	Intent         *IntentSchema `pg:"rel:has-one"`
+	SerializedTxn  string
+	DataToSign     string
+	ChainId        string
+	KeyCurve       string
+	Status         string
+	Result         string
+	Type           string
+	Solver         string
+	SolverMetadata string
 }
 
 type WalletSchema struct {
@@ -86,13 +89,16 @@ func AddIntent(
 
 	for _, operation := range Intent.Operations {
 		operationSchema := &OperationSchema{
-			IntentId:      intentSchema.Id,
-			SerializedTxn: operation.SerializedTxn,
-			DataToSign:    operation.DataToSign,
-			ChainId:       operation.ChainId,
-			KeyCurve:      operation.KeyCurve,
-			Status:        OPERATION_STATUS_PENDING,
-			Result:        "",
+			IntentId:       intentSchema.Id,
+			SerializedTxn:  operation.SerializedTxn,
+			DataToSign:     operation.DataToSign,
+			ChainId:        operation.ChainId,
+			KeyCurve:       operation.KeyCurve,
+			Status:         OPERATION_STATUS_PENDING,
+			Result:         "",
+			Type:           operation.Type,
+			Solver:         operation.Solver,
+			SolverMetadata: operation.SolverMetadata,
 		}
 
 		_, err := client.Model(operationSchema).Insert()
@@ -120,13 +126,16 @@ func GetIntent(intentId int64) (*Intent, error) {
 	operations := make([]Operation, len(operationsSchema))
 	for i, operationSchema := range operationsSchema {
 		operations[i] = Operation{
-			ID:            operationSchema.Id,
-			SerializedTxn: operationSchema.SerializedTxn,
-			DataToSign:    operationSchema.DataToSign,
-			ChainId:       operationSchema.ChainId,
-			KeyCurve:      operationSchema.KeyCurve,
-			Status:        operationSchema.Status,
-			Result:        operationSchema.Result,
+			ID:             operationSchema.Id,
+			SerializedTxn:  operationSchema.SerializedTxn,
+			DataToSign:     operationSchema.DataToSign,
+			ChainId:        operationSchema.ChainId,
+			KeyCurve:       operationSchema.KeyCurve,
+			Status:         operationSchema.Status,
+			Result:         operationSchema.Result,
+			Type:           operationSchema.Type,
+			Solver:         operationSchema.Solver,
+			SolverMetadata: operationSchema.SolverMetadata,
 		}
 	}
 
@@ -166,12 +175,15 @@ func GetIntents(status string) ([]*Intent, error) {
 		operations := make([]Operation, len(operationsSchema))
 		for i, operationSchema := range operationsSchema {
 			operations[i] = Operation{
-				SerializedTxn: operationSchema.SerializedTxn,
-				DataToSign:    operationSchema.DataToSign,
-				ChainId:       operationSchema.ChainId,
-				KeyCurve:      operationSchema.KeyCurve,
-				Status:        operationSchema.Status,
-				Result:        operationSchema.Result,
+				SerializedTxn:  operationSchema.SerializedTxn,
+				DataToSign:     operationSchema.DataToSign,
+				ChainId:        operationSchema.ChainId,
+				KeyCurve:       operationSchema.KeyCurve,
+				Status:         operationSchema.Status,
+				Result:         operationSchema.Result,
+				Type:           operationSchema.Type,
+				Solver:         operationSchema.Solver,
+				SolverMetadata: operationSchema.SolverMetadata,
 			}
 		}
 

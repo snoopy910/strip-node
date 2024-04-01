@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
+	identityVerification "github.com/Silent-Protocol/go-sio/identity"
+	"github.com/Silent-Protocol/go-sio/sequencer"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -147,10 +150,48 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/signature", func(w http.ResponseWriter, r *http.Request) {
-		msg := r.URL.Query().Get("message")
-		identity := r.URL.Query().Get("identity")
-		identityCurve := r.URL.Query().Get("identityCurve")
-		keyCurve := r.URL.Query().Get("keyCurve")
+		// the owner of the wallet must have created an intent and signed it.
+		// we generate signature for an intent operation
+
+		var intent sequencer.Intent
+
+		err := json.NewDecoder(r.Body).Decode(&intent)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		operationIndex, _ := strconv.Atoi(r.URL.Query().Get("operationIndex"))
+		operationIndexInt := uint(operationIndex)
+
+		msg := intent.Operations[operationIndexInt].DataToSign
+		identity := intent.Identity
+		identityCurve := intent.IdentityCurve
+		keyCurve := intent.Operations[operationIndexInt].KeyCurve
+
+		// verify signature
+		intentStr, err := identityVerification.SanitiseIntent(intent)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		verified, err := identityVerification.VerifySignature(
+			intent.Identity,
+			intent.IdentityCurve,
+			intentStr,
+			intent.Signature,
+		)
+
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if !verified {
+			http.Error(w, "signature verification failed", http.StatusBadRequest)
+			return
+		}
 
 		if keyCurve == EDDSA_CURVE {
 			msgBytes, err := base58.Decode(msg)
@@ -183,7 +224,7 @@ func startHTTPServer(port string) {
 			signatureResponse.Address = sig.Address
 		}
 
-		err := json.NewEncoder(w).Encode(signatureResponse)
+		err = json.NewEncoder(w).Encode(signatureResponse)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 		}

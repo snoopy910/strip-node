@@ -59,12 +59,6 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						fmt.Println(signature)
-						fmt.Println(operation.SerializedTxn)
-						fmt.Println(operation.ChainId)
-						fmt.Println(operation.KeyCurve)
-						fmt.Println(operation.DataToSign)
-
 						txnHash, err := sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 						// @TODO: For our infra errors, don't mark the intent and operation as failed

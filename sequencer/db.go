@@ -209,7 +209,7 @@ func UpdateOperationResult(operationId int64, status string, result string) erro
 		Result: result,
 	}
 
-	_, err := client.Model(operationSchema).Column("status", "txn_hash").WherePK().Update()
+	_, err := client.Model(operationSchema).Column("status", "result").WherePK().Update()
 	if err != nil {
 		return err
 	}

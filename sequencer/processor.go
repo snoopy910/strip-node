@@ -51,13 +51,19 @@ func ProcessIntent(intentId int64) {
 			if operation.Status == OPERATION_STATUS_PENDING {
 				// sign and send the txn. Change status to waiting
 
-				if operation.Type == OPERATION_TYPE_TRANSCTION {
+				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					if operation.KeyCurve == "ecdsa" {
 						signature, err := getSignature(intent, i)
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
+
+						fmt.Println(signature)
+						fmt.Println(operation.SerializedTxn)
+						fmt.Println(operation.ChainId)
+						fmt.Println(operation.KeyCurve)
+						fmt.Println(operation.DataToSign)
 
 						txnHash, err := sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
@@ -130,7 +136,7 @@ func ProcessIntent(intentId int64) {
 			if operation.Status == OPERATION_STATUS_WAITING {
 				// check for confirmations and update the status to completed
 				confirmed := false
-				if operation.Type == OPERATION_TYPE_TRANSCTION {
+				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					if operation.KeyCurve == "ecdsa" {
 						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 						if err != nil {
@@ -209,6 +215,9 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	}
 
 	intentBytes, err := json.Marshal(intent)
+	if err != nil {
+		return "", err
+	}
 
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
 

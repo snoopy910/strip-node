@@ -1,6 +1,8 @@
 package sequencer
 
 import (
+	"sort"
+
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
 )
@@ -138,6 +140,12 @@ func GetIntent(intentId int64) (*Intent, error) {
 			SolverMetadata: operationSchema.SolverMetadata,
 		}
 	}
+
+	sort.Slice(operations, func(i, j int) bool {
+		a := operations[i]
+		b := operations[j]
+		return a.ID < b.ID
+	})
 
 	intent := &Intent{
 		ID:            intentSchema.Id,

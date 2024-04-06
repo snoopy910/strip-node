@@ -33,7 +33,6 @@ type IntentForSigning struct {
 	Operations    []OperationForSigning `json:"operations"`
 	Identity      string                `json:"identity"`
 	IdentityCurve string                `json:"identityCurve"`
-	Status        string                `json:"status"`
 }
 
 func VerifySignature(
@@ -42,6 +41,8 @@ func VerifySignature(
 	message string,
 	signature string,
 ) (bool, error) {
+
+	fmt.Println(message, signature)
 
 	if identityCurve == ECDSA_CURVE {
 		// Hash the unsigned message using EIP-191
@@ -95,7 +96,6 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 	intentForSigning := IntentForSigning{
 		Identity:      intent.Identity,
 		IdentityCurve: intent.IdentityCurve,
-		Status:        intent.Status,
 	}
 
 	for _, operation := range intent.Operations {

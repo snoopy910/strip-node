@@ -26,12 +26,7 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 	}
 
 	if signersString == "" {
-		fmt.Println("signers not found. stopping signing")
 		return
-	}
-
-	if signersString != "" {
-		fmt.Println("signers found. continuing to sign")
 	}
 
 	signers := []string{}

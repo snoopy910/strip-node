@@ -13,7 +13,7 @@ var Chains = []Chain{
 	{
 		ChainId:   "1337",
 		ChainType: "evm",
-		ChainUrl:  "http://localhost:8545",
+		ChainUrl:  "http://ganache:8545",
 		KeyCurve:  "ecdsa",
 	},
 	{

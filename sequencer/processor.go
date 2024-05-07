@@ -100,25 +100,29 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
 					// get signature
 					// then pass the solver info to solver moduler with signature to handle the rest
-					signature, err := getSignature(intent, i)
-					if err != nil {
-						fmt.Println(err)
-						break
-					}
+					id := ""
 
-					// pass the solver info to solver moduler with signature to handle the rest
-					id, err := solver.Solve(
-						operation.Solver,
-						operation.SolverMetadata,
-						operation.DataToSign,
-						signature,
-					)
+					if operation.DataToSign != "" {
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
 
-					if err != nil {
-						fmt.Println(err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-						break
+						// pass the solver info to solver moduler with signature to handle the rest
+						id, err = solver.Solve(
+							operation.Solver,
+							operation.SolverMetadata,
+							operation.DataToSign,
+							signature,
+						)
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
 					}
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, id)

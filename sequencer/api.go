@@ -64,8 +64,15 @@ type GetAddressResponse struct {
 	Address string `json:"address"`
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func startHTTPServer(port string) {
+
 	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
 		// select a list of nodes.
 		// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
 		// If length of selected nodes is less than maximum nodes then use all nodes as signers.
@@ -231,6 +238,8 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
 
@@ -248,6 +257,8 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
 		var intent Intent
 
 		err := json.NewDecoder(r.Body).Decode(&intent)
@@ -269,6 +280,8 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/getIntent", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
 		intentId := r.URL.Query().Get("id")
 		i, _ := strconv.ParseInt(intentId, 10, 64)
 
@@ -286,6 +299,8 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/getIntents", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
 		status := r.URL.Query().Get("status")
 
 		intents, err := GetIntents(status)
@@ -302,6 +317,8 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
 		fmt.Fprintf(w, "OK")
 	})
 

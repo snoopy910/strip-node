@@ -28,6 +28,24 @@ var Chains = []Chain{
 		ChainUrl:  "https://api.devnet.solana.com",
 		KeyCurve:  "eddsa",
 	},
+	{
+		ChainId:   "1",
+		ChainType: "evm",
+		ChainUrl:  "https://ethereum-rpc.publicnode.com",
+		KeyCurve:  "ecdsa",
+	},
+	{
+		ChainId:   "900",
+		ChainType: "solana",
+		ChainUrl:  "https://api.solana.com",
+		KeyCurve:  "eddsa",
+	},
+	{
+		ChainId:   "137",
+		ChainType: "evm",
+		ChainUrl:  "https://polygon-pokt.nodies.app",
+		KeyCurve:  "ecdsa",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

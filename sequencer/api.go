@@ -261,6 +261,11 @@ func startHTTPServer(port string) {
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		var intent Intent
 
 		err := json.NewDecoder(r.Body).Decode(&intent)

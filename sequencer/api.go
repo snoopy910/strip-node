@@ -72,6 +72,11 @@ func enableCors(w *http.ResponseWriter) {
 
 func startHTTPServer(port string) {
 
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+		return
+	})
+
 	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 

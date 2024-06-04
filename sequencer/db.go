@@ -15,6 +15,7 @@ type IntentSchema struct {
 	Identity      string
 	IdentityCurve string
 	Status        string
+	Exipry        uint64
 }
 
 type OperationSchema struct {

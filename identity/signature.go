@@ -33,6 +33,7 @@ type IntentForSigning struct {
 	Operations    []OperationForSigning `json:"operations"`
 	Identity      string                `json:"identity"`
 	IdentityCurve string                `json:"identityCurve"`
+	Expiry        uint64                `json:"expiry"`
 }
 
 func VerifySignature(

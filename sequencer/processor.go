@@ -38,8 +38,9 @@ func ProcessIntent(intentId int64) {
 			return
 		}
 
-		if err != nil {
-			log.Println(err)
+		if intent.Expiry < uint64(time.Now().Unix()) {
+			UpdateIntentStatus(intent.ID, INTENT_STATUS_EXPIRED)
+			return
 		}
 
 		// now process the operations of the intent

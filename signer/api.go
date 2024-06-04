@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	identityVerification "github.com/Silent-Protocol/go-sio/identity"
 	"github.com/Silent-Protocol/go-sio/sequencer"
@@ -163,6 +164,11 @@ func startHTTPServer(port string) {
 
 		operationIndex, _ := strconv.Atoi(r.URL.Query().Get("operationIndex"))
 		operationIndexInt := uint(operationIndex)
+
+		if intent.Expiry < uint64(time.Now().Unix()) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		msg := intent.Operations[operationIndexInt].DataToSign
 		identity := intent.Identity

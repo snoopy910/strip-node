@@ -33,12 +33,14 @@ type Intent struct {
 	Identity      string      `json:"identity"`
 	IdentityCurve string      `json:"identityCurve"`
 	Status        string      `json:"status"`
+	Expiry        uint64      `json:"expiry"`
 }
 
 const (
 	INTENT_STATUS_PROCESSING = "processing"
 	INTENT_STATUS_COMPLETED  = "completed"
 	INTENT_STATUS_FAILED     = "failed"
+	INTENT_STATUS_EXPIRED    = "expired"
 )
 
 const (

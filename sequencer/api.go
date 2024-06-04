@@ -315,9 +315,13 @@ func startHTTPServer(port string) {
 	http.HandleFunc("/getIntents", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
-		status := r.URL.Query().Get("status")
+		limit := r.URL.Query().Get("limit")
+		skip := r.URL.Query().Get("skip")
 
-		intents, err := GetIntents(status)
+		l, _ := strconv.Atoi(limit)
+		s, _ := strconv.Atoi(skip)
+
+		intents, err := GetIntentsWithPagination(l, s)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

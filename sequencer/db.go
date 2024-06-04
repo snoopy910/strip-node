@@ -1,6 +1,7 @@
 package sequencer
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/go-pg/pg/v10"
@@ -162,15 +163,9 @@ func GetIntent(intentId int64) (*Intent, error) {
 	return intent, nil
 }
 
-func GetIntents(status string) ([]*Intent, error) {
-	var intentSchemas []IntentSchema
-	err := client.Model(&intentSchemas).Where("status = ?", status).Select()
-	if err != nil {
-		return nil, err
-	}
-
-	intents := make([]*Intent, len(intentSchemas))
-	for i, intentSchema := range intentSchemas {
+func getIntents(intentSchemas *([]IntentSchema)) ([]*Intent, error) {
+	intents := make([]*Intent, len(*intentSchemas))
+	for i, intentSchema := range *intentSchemas {
 		intent, err := GetIntent(intentSchema.Id)
 		if err != nil {
 			return nil, err
@@ -203,6 +198,31 @@ func GetIntents(status string) ([]*Intent, error) {
 	}
 
 	return intents, nil
+}
+
+func GetIntentsWithPagination(limit, skip int) ([]*Intent, error) {
+	// max limit is 100
+	if limit > 100 {
+		return nil, errors.New("limit cannot be greater than 100")
+	}
+
+	var intentSchemas []IntentSchema
+	err := client.Model(&intentSchemas).Limit(limit).Offset(skip).Order("id DESC").Select()
+	if err != nil {
+		return nil, err
+	}
+
+	return getIntents(&intentSchemas)
+}
+
+func GetIntentsWithStatus(status string) ([]*Intent, error) {
+	var intentSchemas []IntentSchema
+	err := client.Model(&intentSchemas).Where("status = ?", status).Select()
+	if err != nil {
+		return nil, err
+	}
+
+	return getIntents(&intentSchemas)
 }
 
 func UpdateOperationResult(operationId int64, status string, result string) error {

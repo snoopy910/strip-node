@@ -83,6 +83,7 @@ func AddIntent(
 		Identity:      Intent.Identity,
 		IdentityCurve: Intent.IdentityCurve,
 		Status:        INTENT_STATUS_PROCESSING,
+		Exipry:        Intent.Expiry,
 	}
 
 	_, err := client.Model(intentSchema).Insert()
@@ -155,6 +156,7 @@ func GetIntent(intentId int64) (*Intent, error) {
 		Identity:      intentSchema.Identity,
 		IdentityCurve: intentSchema.IdentityCurve,
 		Status:        intentSchema.Status,
+		Expiry:        intentSchema.Exipry,
 	}
 
 	return intent, nil

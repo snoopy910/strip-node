@@ -97,6 +97,7 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 	intentForSigning := IntentForSigning{
 		Identity:      intent.Identity,
 		IdentityCurve: intent.IdentityCurve,
+		Expiry:        intent.Expiry,
 	}
 
 	for _, operation := range intent.Operations {

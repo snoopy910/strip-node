@@ -14,16 +14,18 @@ import (
 )
 
 type Operation struct {
-	ID             int64  `json:"id"`
-	SerializedTxn  string `json:"serializedTxn"`
-	DataToSign     string `json:"dataToSign"`
-	ChainId        string `json:"chainId"`
-	KeyCurve       string `json:"keyCurve"`
-	Status         string `json:"status"`
-	Result         string `json:"result"`
-	Type           string `json:"type"`
-	Solver         string `json:"solver"`
-	SolverMetadata string `json:"solverMetadata"`
+	ID               int64  `json:"id"`
+	SerializedTxn    string `json:"serializedTxn"`
+	DataToSign       string `json:"dataToSign"`
+	ChainId          string `json:"chainId"`
+	KeyCurve         string `json:"keyCurve"`
+	Status           string `json:"status"`
+	Result           string `json:"result"`
+	Type             string `json:"type"`
+	Solver           string `json:"solver"`
+	SolverMetadata   string `json:"solverMetadata"`
+	SolverDataToSign string `json:"solverDataToSign"`
+	SolverOutput     string `json:"solverOutput"`
 }
 
 type Intent struct {

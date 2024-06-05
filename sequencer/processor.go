@@ -33,6 +33,12 @@ func ProcessIntent(intentId int64) {
 			return
 		}
 
+		intentBytes, err := json.Marshal(intent)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
 		if intent.Status != INTENT_STATUS_PROCESSING {
 			log.Println("intent processed")
 			return
@@ -99,34 +105,40 @@ func ProcessIntent(intentId int64) {
 						}
 					}
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
-					// get signature
-					// then pass the solver info to solver moduler with signature to handle the rest
-					id := ""
+					// get data to sign from solver
+					dataToSign, err := solver.Construct(operation.Solver, &intentBytes, i)
 
-					if operation.DataToSign != "" {
-						signature, err := getSignature(intent, i)
-						if err != nil {
-							fmt.Println(err)
-							break
-						}
-
-						// pass the solver info to solver moduler with signature to handle the rest
-						id, err = solver.Solve(
-							operation.Solver,
-							operation.SolverMetadata,
-							operation.DataToSign,
-							signature,
-						)
-
-						if err != nil {
-							fmt.Println(err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-							break
-						}
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
 					}
 
-					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, id)
+					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+
+					// then get the data signed
+					signature, err := getSignature(intent, i)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					// then send the signature to solver
+					result, err := solver.Solve(
+						operation.Solver, &intentBytes,
+						i,
+						signature,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 				}
 
 				break
@@ -134,8 +146,8 @@ func ProcessIntent(intentId int64) {
 
 			if operation.Status == OPERATION_STATUS_WAITING {
 				// check for confirmations and update the status to completed
-				confirmed := false
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
+					confirmed := false
 					if operation.KeyCurve == "ecdsa" {
 						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 						if err != nil {
@@ -157,11 +169,22 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 					}
+
+					if !confirmed {
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
+
+					break
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
 					status, err := solver.CheckStatus(
-						operation.Solver,
-						operation.SolverMetadata,
-						operation.Result,
+						operation.Solver, &intentBytes, i,
 					)
 
 					if err != nil {
@@ -169,23 +192,30 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if status == "completed" {
-						confirmed = true
-					}
-				}
+					if status == solver.SOLVER_OPERATION_STATUS_SUCCESS {
+						output, err := solver.GetOutput(operation.Solver, &intentBytes, i)
 
-				if !confirmed {
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+						UpdateOperationSolverOutput(operation.ID, output)
+
+						if i+1 == len(intent.Operations) {
+							// update the intent status to completed
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						}
+					}
+
+					if status == solver.SOLVER_OPERATION_STATUS_FAILURE {
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+					}
+
 					break
 				}
-
-				UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
-
-				if i+1 == len(intent.Operations) {
-					// update the intent status to completed
-					UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
-				}
-
-				break
 			}
 		}
 

@@ -20,18 +20,20 @@ type IntentSchema struct {
 }
 
 type OperationSchema struct {
-	Id             int64
-	IntentId       int64
-	Intent         *IntentSchema `pg:"rel:has-one"`
-	SerializedTxn  string
-	DataToSign     string
-	ChainId        string
-	KeyCurve       string
-	Status         string
-	Result         string
-	Type           string
-	Solver         string
-	SolverMetadata string
+	Id               int64
+	IntentId         int64
+	Intent           *IntentSchema `pg:"rel:has-one"`
+	SerializedTxn    string
+	DataToSign       string
+	ChainId          string
+	KeyCurve         string
+	Status           string
+	Result           string
+	Type             string
+	Solver           string
+	SolverMetadata   string
+	SolverDataToSign string
+	SolverOutput     string
 }
 
 type WalletSchema struct {
@@ -131,16 +133,18 @@ func GetIntent(intentId int64) (*Intent, error) {
 	operations := make([]Operation, len(operationsSchema))
 	for i, operationSchema := range operationsSchema {
 		operations[i] = Operation{
-			ID:             operationSchema.Id,
-			SerializedTxn:  operationSchema.SerializedTxn,
-			DataToSign:     operationSchema.DataToSign,
-			ChainId:        operationSchema.ChainId,
-			KeyCurve:       operationSchema.KeyCurve,
-			Status:         operationSchema.Status,
-			Result:         operationSchema.Result,
-			Type:           operationSchema.Type,
-			Solver:         operationSchema.Solver,
-			SolverMetadata: operationSchema.SolverMetadata,
+			ID:               operationSchema.Id,
+			SerializedTxn:    operationSchema.SerializedTxn,
+			DataToSign:       operationSchema.DataToSign,
+			ChainId:          operationSchema.ChainId,
+			KeyCurve:         operationSchema.KeyCurve,
+			Status:           operationSchema.Status,
+			Result:           operationSchema.Result,
+			Type:             operationSchema.Type,
+			Solver:           operationSchema.Solver,
+			SolverMetadata:   operationSchema.SolverMetadata,
+			SolverDataToSign: operationSchema.SolverDataToSign,
+			SolverOutput:     operationSchema.SolverOutput,
 		}
 	}
 
@@ -181,15 +185,17 @@ func getIntents(intentSchemas *([]IntentSchema)) ([]*Intent, error) {
 		operations := make([]Operation, len(operationsSchema))
 		for i, operationSchema := range operationsSchema {
 			operations[i] = Operation{
-				SerializedTxn:  operationSchema.SerializedTxn,
-				DataToSign:     operationSchema.DataToSign,
-				ChainId:        operationSchema.ChainId,
-				KeyCurve:       operationSchema.KeyCurve,
-				Status:         operationSchema.Status,
-				Result:         operationSchema.Result,
-				Type:           operationSchema.Type,
-				Solver:         operationSchema.Solver,
-				SolverMetadata: operationSchema.SolverMetadata,
+				SerializedTxn:    operationSchema.SerializedTxn,
+				DataToSign:       operationSchema.DataToSign,
+				ChainId:          operationSchema.ChainId,
+				KeyCurve:         operationSchema.KeyCurve,
+				Status:           operationSchema.Status,
+				Result:           operationSchema.Result,
+				Type:             operationSchema.Type,
+				Solver:           operationSchema.Solver,
+				SolverMetadata:   operationSchema.SolverMetadata,
+				SolverDataToSign: operationSchema.SolverDataToSign,
+				SolverOutput:     operationSchema.SolverOutput,
 			}
 		}
 
@@ -247,6 +253,34 @@ func UpdateOperationStatus(operationId int64, status string) error {
 	}
 
 	_, err := client.Model(operationSchema).Column("status").WherePK().Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func UpdateOperationSolverOutput(operationId int64, result string) error {
+	operationSchema := &OperationSchema{
+		Id:           operationId,
+		SolverOutput: result,
+	}
+
+	_, err := client.Model(operationSchema).Column("solver_output").WherePK().Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func UpdateOperationSolverDataToSign(operationId int64, result string) error {
+	operationSchema := &OperationSchema{
+		Id:               operationId,
+		SolverDataToSign: result,
+	}
+
+	_, err := client.Model(operationSchema).Column("solver_data_to_sign").WherePK().Update()
 	if err != nil {
 		return err
 	}

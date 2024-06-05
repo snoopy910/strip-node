@@ -58,6 +58,16 @@ services:
     depends_on:
       add_signer_1:
         condition: service_completed_successfully
+  
+  add_solver:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: add_solver
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--solverDomain", "http://solver:8083", "--isAddSolver", "true"]
+    depends_on:
+      add_signer_2:
+        condition: service_completed_successfully
 
   bootnode:
     build: 
@@ -68,7 +78,7 @@ services:
       - '30303:30303'
     command: ["--port", "30303", "--keyPath", "/app/static-bootnode", "--isBootstrap", "true"]
     depends_on:
-      add_signer_2:
+      add_solver:
         condition: service_completed_successfully
 
   signer1postgres:
@@ -133,3 +143,14 @@ services:
       - '30306:30306'
       - '80:8082'
     command: ["--rpcURL", "http://ganache:8545", "--httpPort", "8082", "--postgresHost", "sequencerpostgres:5432", "--isSequencer", "true"]
+  
+  solver:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: solver
+    ports:
+      - '8083:8083'
+    command: ["--httpPort", "8083", "--isTestSolver", "true"]
+
+  

@@ -10,6 +10,7 @@ import (
 	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
 	"github.com/Silent-Protocol/go-sio/sequencer"
 	signer "github.com/Silent-Protocol/go-sio/signer"
+	"github.com/Silent-Protocol/go-sio/solver"
 	solversregistry "github.com/Silent-Protocol/go-sio/solversRegistry"
 )
 
@@ -19,9 +20,11 @@ func main() {
 	isDeployIntentOperatorsRegistry := flag.Bool("isDeployIntentOperatorsRegistry", LookupEnvOrBool("IS_DEPLOY_SIGNER_HUB", false), "deploy IntentOperatorsRegistry contract")
 	isDeploySolversRegistry := flag.Bool("isDeploySolversRegistry", LookupEnvOrBool("IS_DEPLOY_SOLVERS_REGISTRY", false), "deploy SolversRegistry contract")
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to IntentOperatorsRegistry")
+	isAddSolver := flag.Bool("isAddSolver", LookupEnvOrBool("IS_ADD_SOLVER", false), "add solver to SolversRegistry")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
 	isBootstrap := flag.Bool("isBootstrap", LookupEnvOrBool("IS_BOOTSTRAP", false), "is the process a signer")
 	isSequencer := flag.Bool("isSequencer", LookupEnvOrBool("IS_SEQUENCER", false), "is the process a sequencer")
+	isTestSolver := flag.Bool("isTestSolver", LookupEnvOrBool("IS_TEST_SOLVER", false), "is the process a solver")
 	listenHost := flag.String("host", LookupEnvOrString("LISTEN_HOST", "0.0.0.0"), "The bootstrap node host listen address\n")
 	port := flag.Int("port", LookupEnvOrInt("PORT", 4001), "The bootstrap node listen port")
 	bootnodeURL := flag.String("bootnode", LookupEnvOrString("BOOTNODE_URL", ""), "is the process a signer")
@@ -29,6 +32,7 @@ func main() {
 	signerPublicKey := flag.String("signerPublicKey", LookupEnvOrString("SIGNER_PUBLIC_KEY", ""), "public key of the signer nodes")
 	signerPrivateKey := flag.String("signerPrivateKey", LookupEnvOrString("SIGNER_PRIVATE_KEY", ""), "private key of the signer nodes")
 	signerNodeURL := flag.String("signerNodeURL", LookupEnvOrString("SIGNER_NODE_URL", ""), "URL of the signer node")
+	solverDomain := flag.String("solverDomain", LookupEnvOrString("SOLVER_DOMAIN", ""), "domain of the solver")
 
 	//specific to network
 	intentOperatorsRegistryContractAddress := flag.String("intentOperatorsRegistryAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of IntentOperatorsRegistry contract")
@@ -57,6 +61,8 @@ func main() {
 		solversregistry.DeploySolversRegistryContract(*rpcURL, *privateKey)
 	} else if *isAddSigner {
 		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *signerPublicKey, *signerNodeURL)
+	} else if *isAddSolver {
+		solversregistry.AddSolver(*rpcURL, *solversRegistryContractAddress, *privateKey, *solverDomain)
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else if *isSequencer {
@@ -66,6 +72,8 @@ func main() {
 			*rpcURL,
 			*intentOperatorsRegistryContractAddress,
 		)
+	} else if *isTestSolver {
+		solver.StartTestSolver(*httpPort)
 	} else if *isSolanaTest {
 		// identity.VerifySignature(
 		// 	"GScvaHyfG3NMNm8AdPjjZt3xRiNtAwHy5z5yY1oaQA4Q",

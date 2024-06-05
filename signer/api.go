@@ -11,6 +11,7 @@ import (
 
 	identityVerification "github.com/Silent-Protocol/go-sio/identity"
 	"github.com/Silent-Protocol/go-sio/sequencer"
+	"github.com/Silent-Protocol/go-sio/solver"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -170,7 +171,26 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		msg := intent.Operations[operationIndexInt].DataToSign
+		msg := ""
+
+		if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_TRANSACTION {
+			msg = intent.Operations[operationIndexInt].DataToSign
+		} else if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SOLVER {
+			intentBytes, err := json.Marshal(intent)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			res, err := solver.Construct(intent.Operations[operationIndexInt].Solver, &intentBytes, int(operationIndexInt))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			msg = res
+		}
+
 		identity := intent.Identity
 		identityCurve := intent.IdentityCurve
 		keyCurve := intent.Operations[operationIndexInt].KeyCurve

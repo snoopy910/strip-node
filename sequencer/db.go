@@ -206,6 +206,33 @@ func getIntents(intentSchemas *([]IntentSchema)) ([]*Intent, error) {
 	return intents, nil
 }
 
+func GetSolverIntents(solver string, limit, skip int) ([]*Intent, error) {
+	// max limit is 100
+	if limit > 100 {
+		return nil, errors.New("limit cannot be greater than 100")
+	}
+
+	var operationSchemas []OperationSchema
+	//
+	err := client.Model(&operationSchemas).Limit(limit).Offset(skip).Where("solver = ?", solver).Order("intent_id DESC").DistinctOn("intent_id").Select()
+	if err != nil {
+		return nil, err
+	}
+
+	var intents []*Intent
+
+	for _, operationSchema := range operationSchemas {
+		intent, err := GetIntent(operationSchema.IntentId)
+		if err != nil {
+			return nil, err
+		}
+
+		intents = append(intents, intent)
+	}
+
+	return intents, nil
+}
+
 func GetIntentsWithPagination(limit, skip int) ([]*Intent, error) {
 	// max limit is 100
 	if limit > 100 {

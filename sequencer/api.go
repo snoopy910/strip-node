@@ -336,6 +336,29 @@ func startHTTPServer(port string) {
 		}
 	})
 
+	http.HandleFunc("/getSolverIntents", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
+		limit := r.URL.Query().Get("limit")
+		skip := r.URL.Query().Get("skip")
+		solver := r.URL.Query().Get("solver")
+
+		l, _ := strconv.Atoi(limit)
+		s, _ := strconv.Atoi(skip)
+
+		intents, err := GetSolverIntents(solver, l, s)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = json.NewEncoder(w).Encode(intents)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 

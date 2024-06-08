@@ -68,6 +68,11 @@ type GetAddressResponse struct {
 	Address string `json:"address"`
 }
 
+type IntentsResult struct {
+	Intents []*Intent `json:"intents"`
+	Total   int       `json:"total"`
+}
+
 func enableCors(w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -323,13 +328,18 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, err := GetIntentsWithPagination(l, s)
+		intents, count, err := GetIntentsWithPagination(l, s)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(intents)
+		intentsResult := IntentsResult{
+			Intents: intents,
+			Total:   count,
+		}
+
+		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -346,13 +356,18 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, err := GetSolverIntents(solver, l, s)
+		intents, count, err := GetSolverIntents(solver, l, s)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(intents)
+		intentsResult := IntentsResult{
+			Intents: intents,
+			Total:   count,
+		}
+
+		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

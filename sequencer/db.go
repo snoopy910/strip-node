@@ -206,17 +206,21 @@ func getIntents(intentSchemas *([]IntentSchema)) ([]*Intent, error) {
 	return intents, nil
 }
 
-func GetSolverIntents(solver string, limit, skip int) ([]*Intent, error) {
+func GetSolverIntents(solver string, limit, skip int) ([]*Intent, int, error) {
 	// max limit is 100
 	if limit > 100 {
-		return nil, errors.New("limit cannot be greater than 100")
+		return nil, 0, errors.New("limit cannot be greater than 100")
 	}
 
 	var operationSchemas []OperationSchema
-	//
-	err := client.Model(&operationSchemas).Limit(limit).Offset(skip).Where("solver = ?", solver).Order("intent_id DESC").DistinctOn("intent_id").Select()
+	count, err := client.Model(&operationSchemas).Where("solver = ?", solver).DistinctOn("intent_id").Count()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+
+	err = client.Model(&operationSchemas).Limit(limit).Offset(skip).Where("solver = ?", solver).Order("intent_id DESC").DistinctOn("intent_id").Select()
+	if err != nil {
+		return nil, 0, err
 	}
 
 	var intents []*Intent
@@ -224,28 +228,39 @@ func GetSolverIntents(solver string, limit, skip int) ([]*Intent, error) {
 	for _, operationSchema := range operationSchemas {
 		intent, err := GetIntent(operationSchema.IntentId)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		intents = append(intents, intent)
 	}
 
-	return intents, nil
+	return intents, count, nil
 }
 
-func GetIntentsWithPagination(limit, skip int) ([]*Intent, error) {
+func GetIntentsWithPagination(limit, skip int) ([]*Intent, int, error) {
 	// max limit is 100
 	if limit > 100 {
-		return nil, errors.New("limit cannot be greater than 100")
+		return nil, 0, errors.New("limit cannot be greater than 100")
 	}
 
 	var intentSchemas []IntentSchema
-	err := client.Model(&intentSchemas).Limit(limit).Offset(skip).Order("id DESC").Select()
+	count, err := client.Model(&intentSchemas).Count()
+
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return getIntents(&intentSchemas)
+	err = client.Model(&intentSchemas).Limit(limit).Offset(skip).Order("id DESC").Select()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	intents, err := getIntents(&intentSchemas)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return intents, count, nil
 }
 
 func GetIntentsWithStatus(status string) ([]*Intent, error) {

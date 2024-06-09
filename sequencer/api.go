@@ -374,6 +374,34 @@ func startHTTPServer(port string) {
 		}
 	})
 
+	http.HandleFunc("/getIntentsOfAddress", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
+		limit := r.URL.Query().Get("limit")
+		skip := r.URL.Query().Get("skip")
+		address := r.URL.Query().Get("address")
+
+		l, _ := strconv.Atoi(limit)
+		s, _ := strconv.Atoi(skip)
+
+		intents, count, err := GetIntentsOfAddress(address, l, s)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		intentsResult := IntentsResult{
+			Intents: intents,
+			Total:   count,
+		}
+
+		err = json.NewEncoder(w).Encode(intentsResult)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 

@@ -237,6 +237,98 @@ func GetSolverIntents(solver string, limit, skip int) ([]*Intent, int, error) {
 	return intents, count, nil
 }
 
+func GetIntentsOfAddress(address string, limit, skip int) ([]*Intent, int, error) {
+	// max limit is 100
+	if limit > 100 {
+		return nil, 0, errors.New("limit cannot be greater than 100")
+	}
+
+	var intentSchemas []IntentSchema
+
+	// first search for identity. If length is 0, search for ecdsa, if length is 0, then search for eddsa
+	err := client.Model(&intentSchemas).Limit(limit).Offset(skip).Where("identity = ?", address).Order("id DESC").Select()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if len(intentSchemas) != 0 {
+		count, err := client.Model(&intentSchemas).Where("identity = ?", address).Count()
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		intents, err := getIntents(&intentSchemas)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return intents, count, nil
+	}
+
+	var walletSchemas []WalletSchema
+	err = client.Model(&walletSchemas).Where("eddsa_public_Key = ?", address).Select()
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if len(walletSchemas) != 0 {
+		err = client.Model(&intentSchemas).Limit(limit).Offset(skip).Where("identity = ?", walletSchemas[0].Identity).Order("id DESC").Select()
+		if err != nil {
+			return nil, 0, err
+		}
+
+		count, err := client.Model(&intentSchemas).Where("identity = ?", walletSchemas[0].Identity).Count()
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		intents, err := getIntents(&intentSchemas)
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return intents, count, nil
+	}
+
+	err = client.Model(&walletSchemas).Where("ecdsa_public_Key = ?", address).Select()
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if len(walletSchemas) != 0 {
+		err = client.Model(&intentSchemas).Limit(limit).Offset(skip).Where("identity = ?", walletSchemas[0].Identity).Order("id DESC").Select()
+		if err != nil {
+			return nil, 0, err
+		}
+
+		count, err := client.Model(&intentSchemas).Where("identity = ?", walletSchemas[0].Identity).Count()
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		intents, err := getIntents(&intentSchemas)
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return intents, count, nil
+	}
+
+	intents, err := getIntents(&intentSchemas)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return intents, 0, nil
+}
+
 func GetIntentsWithPagination(limit, skip int) ([]*Intent, int, error) {
 	// max limit is 100
 	if limit > 100 {

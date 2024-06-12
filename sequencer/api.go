@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	solversRegistry "github.com/Silent-Protocol/go-sio/solversRegistry"
 )
 
 type Operation struct {
@@ -71,6 +73,17 @@ type GetAddressResponse struct {
 type IntentsResult struct {
 	Intents []*Intent `json:"intents"`
 	Total   int       `json:"total"`
+}
+
+type SolverStatResult struct {
+	IsActive    bool   `json:"isActive"`
+	ActiveSince uint   `json:"activeSince"`
+	Chains      []uint `json:"chains"`
+}
+
+type TotalStats struct {
+	TotalSolvers uint `json:"totalSolvers"`
+	TotalIntents uint `json:"totalIntents"`
 }
 
 func enableCors(w *http.ResponseWriter) {
@@ -396,6 +409,68 @@ func startHTTPServer(port string) {
 		}
 
 		err = json.NewEncoder(w).Encode(intentsResult)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	http.HandleFunc("/getStatsOfSolver", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
+		solver := r.URL.Query().Get("solver")
+
+		isActive, activeSince, chains, err := solversRegistry.Stats(
+			RPC_URL,
+			SolversRegistryContractAddress,
+			solver,
+		)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		solverStatResult := SolverStatResult{
+			IsActive:    isActive,
+			ActiveSince: activeSince,
+			Chains:      chains,
+		}
+
+		err = json.NewEncoder(w).Encode(solverStatResult)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	http.HandleFunc("/getTotalStats", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
+		totalSolvers, err := solversRegistry.TotalSolvers(
+			RPC_URL,
+			SolversRegistryContractAddress,
+		)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+
+		}
+
+		totalIntents, err := GetTotalIntents()
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		totalStats := TotalStats{
+			TotalSolvers: totalSolvers,
+			TotalIntents: uint(totalIntents),
+		}
+
+		err = json.NewEncoder(w).Encode(totalStats)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

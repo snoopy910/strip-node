@@ -237,6 +237,15 @@ func GetSolverIntents(solver string, limit, skip int) ([]*Intent, int, error) {
 	return intents, count, nil
 }
 
+func GetTotalIntents() (int, error) {
+	count, err := client.Model(&IntentSchema{}).Count()
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
 func GetIntentsOfAddress(address string, limit, skip int) ([]*Intent, int, error) {
 	// max limit is 100
 	if limit > 100 {

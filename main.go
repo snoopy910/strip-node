@@ -71,6 +71,7 @@ func main() {
 			*httpPort,
 			*rpcURL,
 			*intentOperatorsRegistryContractAddress,
+			*solversRegistryContractAddress,
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)

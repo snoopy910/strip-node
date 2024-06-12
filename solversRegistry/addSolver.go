@@ -64,7 +64,12 @@ func AddSolver(rpcURL string, contractAddress string, privKey string, solverDoma
 
 	auth.Nonce = big.NewInt(int64(nonce))
 
-	tx, err := instance.UpdateSolver(auth, solverDomain, true)
+	// big.int array of chain ids
+	chains := make([]*big.Int, 0)
+	chains = append(chains, big.NewInt(1))
+	chains = append(chains, big.NewInt(3))
+
+	tx, err := instance.UpdateSolver(auth, solverDomain, true, chains)
 	if err != nil {
 		log.Fatal(err)
 	}

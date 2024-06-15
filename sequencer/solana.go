@@ -1,8 +1,12 @@
 package sequencer
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
@@ -85,4 +89,109 @@ func TestBuildSolana() {
 	} else {
 		fmt.Println("Signatures verified")
 	}
+}
+
+type NativeTransfer struct {
+	FromUserAccount string `json:"fromUserAccount"`
+	ToUserAccount   string `json:"toUserAccount"`
+	Amount          uint   `json:"amount"`
+}
+
+type TokenTransfer struct {
+	FromUserAccount  string `json:"fromUserAccount"`
+	ToUserAccount    string `json:"toUserAccount"`
+	FromTokenAccount string `json:"fromTokenAccount"`
+	ToTokenAccount   string `json:"toTokenAccount"`
+	TokenAmount      uint   `json:"tokenAmount"`
+	Mint             string `json:"mint"`
+	TokenStandard    string `json:"tokenStandard"`
+}
+
+type HeliusResponse struct {
+	NativeTransfers []NativeTransfer `json:"nativeTransfers"`
+	TokenTransfers  []TokenTransfer  `json:"tokenTransfers"`
+}
+
+type HeliusRequest struct {
+	Transactions []string `json:"transactions"`
+}
+
+func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transfer, error) {
+	var url string
+	fmt.Println(apiKey)
+	if chainId == "901" {
+		url = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
+	} else {
+		return nil, fmt.Errorf("unsupported chainId: %s", chainId)
+	}
+
+	chain, err := GetChain(chainId)
+	if err != nil {
+		return nil, err
+	}
+
+	requestBody := HeliusRequest{
+		Transactions: []string{txnHash},
+	}
+
+	requestBodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBodyBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// fmt.Println(string(body))
+
+	var heliusResponse []HeliusResponse
+	err = json.Unmarshal(body, &heliusResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+	}
+
+	var transfers []Transfer
+
+	for _, response := range heliusResponse {
+		for _, nativeTransfer := range response.NativeTransfers {
+			transfers = append(transfers, Transfer{
+				From:   nativeTransfer.FromUserAccount,
+				To:     nativeTransfer.ToUserAccount,
+				Amount: fmt.Sprintf("%d", nativeTransfer.Amount),
+				Token:  chain.TokenSymbol,
+			})
+		}
+
+		for _, tokenTransfer := range response.TokenTransfers {
+			if tokenTransfer.TokenStandard != "Fungible" {
+				continue
+			}
+
+			transfers = append(transfers, Transfer{
+				From:   tokenTransfer.FromUserAccount,
+				To:     tokenTransfer.ToUserAccount,
+				Amount: fmt.Sprintf("%d", tokenTransfer.TokenAmount),
+				Token:  tokenTransfer.Mint,
+			})
+		}
+	}
+
+	return transfers, nil
 }

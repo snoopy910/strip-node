@@ -18,7 +18,7 @@ type Transfer struct {
 	Token  string
 }
 
-func GetTransfers(chainId string, txnHash string, ecdsaAddr string) ([]Transfer, error) {
+func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]Transfer, error) {
 	chain, err := GetChain(chainId)
 	if err != nil {
 		return nil, err

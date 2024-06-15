@@ -34,6 +34,7 @@ func main() {
 	signerPrivateKey := flag.String("signerPrivateKey", LookupEnvOrString("SIGNER_PRIVATE_KEY", ""), "private key of the signer nodes")
 	signerNodeURL := flag.String("signerNodeURL", LookupEnvOrString("SIGNER_NODE_URL", ""), "URL of the signer node")
 	solverDomain := flag.String("solverDomain", LookupEnvOrString("SOLVER_DOMAIN", ""), "domain of the solver")
+	heliusApiKey := flag.String("heliusApiKey", LookupEnvOrString("HELIUS_API_KEY", "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"), "helius API key")
 
 	//specific to network
 	intentOperatorsRegistryContractAddress := flag.String("intentOperatorsRegistryAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of IntentOperatorsRegistry contract")
@@ -77,6 +78,11 @@ func main() {
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)
 	} else if *isSolanaTest {
+		sequencer.GetSolanaTransfers(
+			"901",
+			"243hStsqpngr2Dv4ktE9wCW6CZTbFYaRiXo1QAK1PTtyLZBL2xz17XTAuud3HN8YmpYhdSRJmP3Rx3pMHdu6Pxqi",
+			*heliusApiKey,
+		)
 		// identity.VerifySignature(
 		// 	"GScvaHyfG3NMNm8AdPjjZt3xRiNtAwHy5z5yY1oaQA4Q",
 		// 	"eddsa",
@@ -93,7 +99,7 @@ func main() {
 
 		// sequencer.TestBuildSolana()
 	} else if *isEthereumTest {
-		sequencer.GetTransfers("1", "0x1e96c4f5dc65ba33b4ea2a50e350f119d133d2b4c9f36ac79152198382a16375", "0x06Cd69B61900B426499ef0319Fae5CEC2acca4DE")
+		sequencer.GetEthereumTransfers("1", "0x1e96c4f5dc65ba33b4ea2a50e350f119d133d2b4c9f36ac79152198382a16375", "0x06Cd69B61900B426499ef0319Fae5CEC2acca4DE")
 	} else {
 		signer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		signer.Start(

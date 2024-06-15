@@ -16,6 +16,7 @@ import (
 
 func main() {
 	isSolanaTest := flag.Bool("isSolanaTest", LookupEnvOrBool("IS_SOLANA_TEST", false), "is the process a signer")
+	isEthereumTest := flag.Bool("isEthereumTest", LookupEnvOrBool("IS_SOLANA_TEST", false), "is the process a signer")
 
 	isDeployIntentOperatorsRegistry := flag.Bool("isDeployIntentOperatorsRegistry", LookupEnvOrBool("IS_DEPLOY_SIGNER_HUB", false), "deploy IntentOperatorsRegistry contract")
 	isDeploySolversRegistry := flag.Bool("isDeploySolversRegistry", LookupEnvOrBool("IS_DEPLOY_SOLVERS_REGISTRY", false), "deploy SolversRegistry contract")
@@ -91,6 +92,8 @@ func main() {
 		// )
 
 		// sequencer.TestBuildSolana()
+	} else if *isEthereumTest {
+		sequencer.GetTransfers("1", "0x1e96c4f5dc65ba33b4ea2a50e350f119d133d2b4c9f36ac79152198382a16375", "0x06Cd69B61900B426499ef0319Fae5CEC2acca4DE")
 	} else {
 		signer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		signer.Start(

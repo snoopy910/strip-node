@@ -167,6 +167,46 @@ func GetIntent(intentId int64) (*Intent, error) {
 	return intent, nil
 }
 
+func GetOperation(intentId int64, operationIndex int64) (*Operation, error) {
+	var intentSchema IntentSchema
+	err := client.Model(&intentSchema).Where("id = ?", intentId).Select()
+	if err != nil {
+		return nil, err
+	}
+
+	var operationsSchema []OperationSchema
+	err = client.Model(&operationsSchema).Where("intent_id = ?", intentSchema.Id).Select()
+	if err != nil {
+		return nil, err
+	}
+
+	operations := make([]Operation, len(operationsSchema))
+	for i, operationSchema := range operationsSchema {
+		operations[i] = Operation{
+			ID:               operationSchema.Id,
+			SerializedTxn:    operationSchema.SerializedTxn,
+			DataToSign:       operationSchema.DataToSign,
+			ChainId:          operationSchema.ChainId,
+			KeyCurve:         operationSchema.KeyCurve,
+			Status:           operationSchema.Status,
+			Result:           operationSchema.Result,
+			Type:             operationSchema.Type,
+			Solver:           operationSchema.Solver,
+			SolverMetadata:   operationSchema.SolverMetadata,
+			SolverDataToSign: operationSchema.SolverDataToSign,
+			SolverOutput:     operationSchema.SolverOutput,
+		}
+	}
+
+	sort.Slice(operations, func(i, j int) bool {
+		a := operations[i]
+		b := operations[j]
+		return a.ID < b.ID
+	})
+
+	return &operations[operationIndex], nil
+}
+
 func getIntents(intentSchemas *([]IntentSchema)) ([]*Intent, error) {
 	intents := make([]*Intent, len(*intentSchemas))
 	for i, intentSchema := range *intentSchemas {

@@ -74,6 +74,7 @@ func main() {
 			*rpcURL,
 			*intentOperatorsRegistryContractAddress,
 			*solversRegistryContractAddress,
+			*heliusApiKey,
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)

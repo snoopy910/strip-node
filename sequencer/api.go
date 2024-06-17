@@ -477,6 +477,67 @@ func startHTTPServer(port string) {
 		}
 	})
 
+	http.HandleFunc("/parseOperation", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
+		operationId := r.URL.Query().Get("operationId")
+		intentId := r.URL.Query().Get("intentId")
+		i, _ := strconv.ParseInt(operationId, 10, 64)
+		j, _ := strconv.ParseInt(intentId, 10, 64)
+
+		operation, err := GetOperation(j, i)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		intent, err := GetIntent(j)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if operation.Result == "" || operation.Status != OPERATION_STATUS_COMPLETED {
+			http.Error(w, "operation not completed", http.StatusInternalServerError)
+			return
+		}
+
+		if operation.KeyCurve == "ecdsa" {
+			transfers, err := GetEthereumTransfers(operation.ChainId, operation.Result, wallet.ECDSAPublicKey)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			transfers, err := GetSolanaTransfers(operation.ChainId, operation.Result, HeliusApiKey)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+	})
+
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 

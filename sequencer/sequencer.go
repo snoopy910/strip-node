@@ -9,14 +9,18 @@ import (
 
 var MaximumSigners int
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress string
+var HeliusApiKey string
 
 func StartSequencer(
 	httpPort string,
 	rpcURL string,
 	intentOperatorsRegistryContractAddress string,
 	solversRegistryContractAddress string,
+	heliusApiKey string,
 ) {
 	keepAlive := make(chan string)
+
+	HeliusApiKey = heliusApiKey
 
 	intents, err := GetIntentsWithStatus(INTENT_STATUS_PROCESSING)
 	if err != nil {

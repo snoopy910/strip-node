@@ -2,16 +2,22 @@ package sequencer
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 
+	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
+	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/mr-tron/base58"
+
+	"github.com/gagliardetto/solana-go/rpc"
 )
 
 func TestBuildSolana() {
@@ -65,8 +71,6 @@ func TestBuildSolana() {
 	_msgBytes, _ := base64.StdEncoding.DecodeString(_msg)
 	_msgBase58 := base58.Encode(_msgBytes)
 
-	fmt.Println(_msgBase58)
-
 	decodedTransactionData, err := base58.Decode(_msgBase58)
 	if err != nil {
 		fmt.Println("Error decoding transaction data:", err)
@@ -118,7 +122,6 @@ type HeliusRequest struct {
 
 func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transfer, error) {
 	var url string
-	fmt.Println(apiKey)
 	if chainId == "901" {
 		url = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
 	} else {
@@ -159,8 +162,6 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	// fmt.Println(string(body))
-
 	var heliusResponse []HeliusResponse
 	err = json.Unmarshal(body, &heliusResponse)
 	if err != nil {
@@ -171,10 +172,14 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 
 	for _, response := range heliusResponse {
 		for _, nativeTransfer := range response.NativeTransfers {
+
+			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", nativeTransfer.Amount), 10)
+			formattedAmount, _ := FormatUnits(num, 9)
+
 			transfers = append(transfers, Transfer{
 				From:   nativeTransfer.FromUserAccount,
 				To:     nativeTransfer.ToUserAccount,
-				Amount: fmt.Sprintf("%d", nativeTransfer.Amount),
+				Amount: formattedAmount,
 				Token:  chain.TokenSymbol,
 			})
 		}
@@ -184,14 +189,43 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 				continue
 			}
 
+			c := rpc.New(chain.ChainUrl)
+
+			accountAddress := solana.MustPublicKeyFromBase58(tokenTransfer.Mint)
+			accountInfo, err := c.GetAccountInfo(context.Background(), accountAddress)
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to get account info: %v", err)
+			}
+
+			spew.Dump(accountInfo)
+
+			var mint token.Mint
+			// Account{}.Data.GetBinary() returns the *decoded* binary data
+			// regardless the original encoding (it can handle them all).
+			err = bin.NewBinDecoder(accountInfo.GetBinary()).Decode(&mint)
+			if err != nil {
+				panic(err)
+			}
+			spew.Dump(mint)
+
+			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", tokenTransfer.TokenAmount), 10)
+			formattedAmount, err := FormatUnits(num, int(mint.Decimals))
+
+			if err != nil {
+				return nil, err
+			}
+
 			transfers = append(transfers, Transfer{
 				From:   tokenTransfer.FromUserAccount,
 				To:     tokenTransfer.ToUserAccount,
-				Amount: fmt.Sprintf("%d", tokenTransfer.TokenAmount),
+				Amount: formattedAmount,
 				Token:  tokenTransfer.Mint,
 			})
 		}
 	}
+
+	fmt.Println(transfers)
 
 	return transfers, nil
 }

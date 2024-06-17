@@ -12,10 +12,10 @@ import (
 )
 
 type Transfer struct {
-	From   string
-	To     string
-	Amount string
-	Token  string
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Amount string `json:"amount"`
+	Token  string `json:"token"`
 }
 
 func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]Transfer, error) {

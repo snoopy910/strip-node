@@ -193,15 +193,15 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if status == solver.SOLVER_OPERATION_STATUS_SUCCESS {
-						output, err := solver.GetOutput(operation.Solver, &intentBytes, i)
+						output, result, err := solver.GetOutput(operation.Solver, &intentBytes, i)
 
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
 
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
 						UpdateOperationSolverOutput(operation.ID, output)
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, result)
 
 						if i+1 == len(intent.Operations) {
 							// update the intent status to completed

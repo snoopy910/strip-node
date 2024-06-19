@@ -56,7 +56,6 @@ func startHTTPServer(port string) {
 	http.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) {
 		res := OutputResponse{
 			Output: "87789783467823",
-			Result: "3h98c428-3c4b-4b4b-8b4b-4b4b4b4b4b4b",
 		}
 		err := json.NewEncoder(w).Encode(res)
 		if err != nil {

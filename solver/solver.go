@@ -153,19 +153,18 @@ func CheckStatus(
 
 type OutputResponse struct {
 	Output string `json:"output"`
-	Result string `json:"result"`
 }
 
 func GetOutput(
 	solver string,
 	intent *([]byte),
 	operationIndex int,
-) (string, string, error) {
+) (string, error) {
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
 	req, err := http.NewRequest("POST", solver+"/output?operationIndex="+operationIndexStr, bytes.NewBuffer(*intent))
 
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -173,25 +172,25 @@ func GetOutput(
 	resp, err := client.Do(req)
 
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	if !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
-		return "", "", errors.New(string(body))
+		return "", errors.New(string(body))
 	}
 
 	var response OutputResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	return response.Output, response.Result, nil
+	return response.Output, nil
 }

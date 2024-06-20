@@ -33,7 +33,7 @@ func startHTTPServer(port string) {
 
 	http.HandleFunc("/solve", func(w http.ResponseWriter, r *http.Request) {
 		res := SolveResponse{
-			Result: "3h98c428-3c4b-4b4b-8b4b-4b4b4b4b4b4b",
+			Result: "0x65bd0e037280d8584202ce028f57359e11219df51ba8da4ad4acf5ee5f340420",
 		}
 		err := json.NewEncoder(w).Encode(res)
 		if err != nil {

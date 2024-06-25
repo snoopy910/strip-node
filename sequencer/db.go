@@ -3,6 +3,7 @@ package sequencer
 import (
 	"errors"
 	"sort"
+	"time"
 
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
@@ -17,6 +18,7 @@ type IntentSchema struct {
 	IdentityCurve string
 	Status        string
 	Exipry        uint64
+	CreatedAt     uint64
 }
 
 type OperationSchema struct {
@@ -87,6 +89,7 @@ func AddIntent(
 		IdentityCurve: Intent.IdentityCurve,
 		Status:        INTENT_STATUS_PROCESSING,
 		Exipry:        Intent.Expiry,
+		CreatedAt:     uint64(time.Now().Unix()),
 	}
 
 	_, err := client.Model(intentSchema).Insert()
@@ -162,6 +165,7 @@ func GetIntent(intentId int64) (*Intent, error) {
 		IdentityCurve: intentSchema.IdentityCurve,
 		Status:        intentSchema.Status,
 		Expiry:        intentSchema.Exipry,
+		CreatedAt:     intentSchema.CreatedAt,
 	}
 
 	return intent, nil

@@ -38,6 +38,7 @@ type Intent struct {
 	IdentityCurve string      `json:"identityCurve"`
 	Status        string      `json:"status"`
 	Expiry        uint64      `json:"expiry"`
+	CreatedAt     uint64      `json:"createdAt"`
 }
 
 const (

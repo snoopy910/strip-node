@@ -3,7 +3,7 @@ package sequencer
 import (
 	"log"
 
-	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
+	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 )
 

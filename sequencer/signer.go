@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
+	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"

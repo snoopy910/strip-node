@@ -1,7 +1,7 @@
 package signer
 
 import (
-	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
+	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/multiformats/go-multiaddr"

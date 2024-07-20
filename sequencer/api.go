@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	solversRegistry "github.com/Silent-Protocol/go-sio/solversRegistry"
+	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 )
 
 type Operation struct {

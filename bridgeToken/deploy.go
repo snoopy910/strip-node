@@ -1,4 +1,4 @@
-package intentoperatorsregistry
+package bridgeToken
 
 import (
 	"context"
@@ -8,14 +8,13 @@ import (
 	"math/big"
 	"time"
 
-	tssCommon "github.com/StripChain/strip-node/common"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signerPublicKey string, signerNodeURL string) {
+func DeployBridgeTokenContract(rpcURL string, privKey string, name string, symbol string, decimals uint, mintAuthority string) {
 	time.Sleep(5 * time.Second)
 
 	client, err := ethclient.Dial(rpcURL)
@@ -34,14 +33,7 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 		log.Fatal("error casting public key to ECDSA")
 	}
 
-	instance, err := NewIntentOperatorsRegistry(common.HexToAddress(contractAddress), client)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
 		log.Fatal(err)
@@ -56,16 +48,8 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
 
-	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	auth.Nonce = big.NewInt(int64(nonce))
-
-	tx, err := instance.AddSigner(auth, tssCommon.PublicKeyStrToBytes32(signerPublicKey), signerNodeURL)
+	address, tx, instance, err := DeployBridgeToken(auth, client)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,7 +59,25 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 		log.Fatal(err)
 	}
 
-	time.Sleep(5 * time.Second)
+	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+	auth.Nonce = big.NewInt(int64(nonce))
+	auth.Value = big.NewInt(0) // in wei
+	auth.GasPrice = gasPrice
 
-	fmt.Println("Signer", signerPublicKey, " added. Transaction hash: ", tx.Hash().String())
+	tx, err = instance.Initialize(auth, name, symbol, uint8(decimals), common.HexToAddress(mintAuthority))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = bind.WaitMined(context.Background(), client, tx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("BridgeToken contract deployed successfully")
+	fmt.Println("Deployment transaction: ", tx.Hash().String())
+	fmt.Println("Address of BridgeToken: ", address)
 }

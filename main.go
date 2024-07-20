@@ -6,12 +6,14 @@ import (
 	"os"
 	"strconv"
 
-	bootnode "github.com/Silent-Protocol/go-sio/bootnode"
-	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
-	"github.com/Silent-Protocol/go-sio/sequencer"
-	signer "github.com/Silent-Protocol/go-sio/signer"
-	"github.com/Silent-Protocol/go-sio/solver"
-	solversregistry "github.com/Silent-Protocol/go-sio/solversRegistry"
+	bootnode "github.com/StripChain/strip-node/bootnode"
+	"github.com/StripChain/strip-node/bridge"
+	"github.com/StripChain/strip-node/bridgeToken"
+	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/sequencer"
+	signer "github.com/StripChain/strip-node/signer"
+	"github.com/StripChain/strip-node/solver"
+	solversregistry "github.com/StripChain/strip-node/solversRegistry"
 )
 
 func main() {
@@ -20,6 +22,8 @@ func main() {
 
 	isDeployIntentOperatorsRegistry := flag.Bool("isDeployIntentOperatorsRegistry", LookupEnvOrBool("IS_DEPLOY_SIGNER_HUB", false), "deploy IntentOperatorsRegistry contract")
 	isDeploySolversRegistry := flag.Bool("isDeploySolversRegistry", LookupEnvOrBool("IS_DEPLOY_SOLVERS_REGISTRY", false), "deploy SolversRegistry contract")
+	isDeployBridge := flag.Bool("isDeployBridge", LookupEnvOrBool("IS_DEPLOY_BRIDGE", false), "deploy Bridge contract")
+	isDeployBridgeToken := flag.Bool("isDeployBridgeToken", LookupEnvOrBool("IS_DEPLOY_BRIDGE_TOKEN", false), "deploy BridgeToken contract")
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to IntentOperatorsRegistry")
 	isAddSolver := flag.Bool("isAddSolver", LookupEnvOrBool("IS_ADD_SOLVER", false), "add solver to SolversRegistry")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
@@ -36,11 +40,14 @@ func main() {
 	solverDomain := flag.String("solverDomain", LookupEnvOrString("SOLVER_DOMAIN", ""), "domain of the solver")
 	heliusApiKey := flag.String("heliusApiKey", LookupEnvOrString("HELIUS_API_KEY", "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"), "helius API key")
 
-	//specific to network
 	intentOperatorsRegistryContractAddress := flag.String("intentOperatorsRegistryAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of IntentOperatorsRegistry contract")
 	solversRegistryContractAddress := flag.String("solversRegistryAddress", LookupEnvOrString("SOLVERS_REGISTRY_CONTRACT_ADDRESS", "0x56A9bCddF533Af1859842074B46B0daD07b7686a"), "address of SolversRegistry contract")
+	bridgeContractAddress := flag.String("bridgeContractAddress", LookupEnvOrString("BRIDGE_CONTRACT_ADDRESS", "0x79E3A2B39e77dfB5C9C6a370D4a8a4fa42c482c0"), "address of Bridge contract")
 	rpcURL := flag.String("rpcURL", LookupEnvOrString("RPC_URL", "http://localhost:8545"), "ethereum node RPC URL")
 	maximumSigners := flag.Int("maximumSigners", LookupEnvOrInt("MAXIMUM_SIGNERS", 3), "maximum number of signers for an account")
+	tokenName := flag.String("tokenName", LookupEnvOrString("TOKEN_NAME", "Strip"), "name of the token")
+	tokenSymbol := flag.String("tokenSymbol", LookupEnvOrString("TOKEN_SYMBOL", "STRP"), "symbol of the token")
+	tokenDecimals := flag.Int("tokenDecimals", LookupEnvOrInt("TOKEN_DECIMALS", 18), "decimals of the token")
 
 	// postgres
 	postgresHost := flag.String("postgresHost", LookupEnvOrString("POSTGRES_HOST", "localhost:5432"), "postgres host")
@@ -65,6 +72,10 @@ func main() {
 		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *signerPublicKey, *signerNodeURL)
 	} else if *isAddSolver {
 		solversregistry.AddSolver(*rpcURL, *solversRegistryContractAddress, *privateKey, *solverDomain)
+	} else if *isDeployBridge {
+		bridge.DeployBridgeContract(*rpcURL, *privateKey)
+	} else if *isDeployBridgeToken {
+		bridgeToken.DeployBridgeTokenContract(*rpcURL, *privateKey, *tokenName, *tokenSymbol, uint(*tokenDecimals), *bridgeContractAddress)
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else if *isSequencer {

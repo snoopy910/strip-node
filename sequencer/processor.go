@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Silent-Protocol/go-sio/solver"
+	"github.com/StripChain/strip-node/solver"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"

@@ -7,8 +7,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Silent-Protocol/go-sio/common"
-	intentoperatorsregistry "github.com/Silent-Protocol/go-sio/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/common"
+	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"

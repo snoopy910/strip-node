@@ -1,4 +1,4 @@
-module github.com/Silent-Protocol/go-sio
+module github.com/StripChain/strip-node
 
 go 1.19
 

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	identityVerification "github.com/Silent-Protocol/go-sio/identity"
-	"github.com/Silent-Protocol/go-sio/sequencer"
-	"github.com/Silent-Protocol/go-sio/solver"
+	identityVerification "github.com/StripChain/strip-node/identity"
+	"github.com/StripChain/strip-node/sequencer"
+	"github.com/StripChain/strip-node/solver"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"

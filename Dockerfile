@@ -12,4 +12,4 @@ RUN go build
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/go-sio"]
+ENTRYPOINT ["/app/strip-node"]

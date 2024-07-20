@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	mrand "math/rand"
 
-	"github.com/Silent-Protocol/go-sio/common"
+	"github.com/StripChain/strip-node/common"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	dht "github.com/libp2p/go-libp2p-kad-dht"

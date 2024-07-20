@@ -39,6 +39,46 @@ services:
       deploy_intentoperatorsregistry:
           condition: service_completed_successfully
 
+  deploy_bridge:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: deploy_bridge
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridge", "true"]
+    depends_on:
+      deploy_solversregistry:
+          condition: service_completed_successfully
+
+  deploy_eth_token:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: deploy_eth_token
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridgeToken", "true", "--tokenName", "Strip ETH", "--tokenSymbol", "sETH", "--tokenDecimals", "18"]
+    depends_on:
+      deploy_bridge:
+          condition: service_completed_successfully
+
+  deploy_usdc_token:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: deploy_usdc_token
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridgeToken", "true", "--tokenName", "Strip USDC", "--tokenSymbol", "sUSDC", "--tokenDecimals", "6"]
+    depends_on:
+      deploy_eth_token:
+          condition: service_completed_successfully
+
+  deploy_sol_token:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: deploy_sol_token
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridgeToken", "true", "--tokenName", "Strip SOL", "--tokenSymbol", "sSOL", "--tokenDecimals", "9"]
+    depends_on:
+      deploy_usdc_token:
+          condition: service_completed_successfully
+
   add_signer_1:
     build: 
       context: .
@@ -46,7 +86,7 @@ services:
     container_name: add_signer_1
     command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--signerNodeURL", "http://signer1:8080", "--signerPublicKey", "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--isAddsigner", "true"]
     depends_on:
-      deploy_solversregistry:
+      deploy_sol_token:
         condition: service_completed_successfully
 
   add_signer_2:

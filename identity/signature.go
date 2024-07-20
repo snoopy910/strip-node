@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Silent-Protocol/go-sio/sequencer"
+	"github.com/StripChain/strip-node/sequencer"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"

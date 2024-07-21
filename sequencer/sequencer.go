@@ -48,7 +48,7 @@ func StartSequencer(
 
 	MaximumSigners = int(_maxSigners.Int64())
 
-	initiaiseBridge(bridgeContractAddress, rpcURL, privateKey)
+	initiaiseBridge()
 
 	go startHTTPServer(httpPort)
 

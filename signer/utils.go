@@ -10,8 +10,6 @@ import (
 	"github.com/insight-chain/inb-go/crypto/sha3"
 )
 
-var zeroAddress = "0x0000000000000000000000000000000000000000"
-
 func getParties(totalSigners int) (tss.SortedPartyIDs, []*tss.PartyID) {
 	partiesIds := []*tss.PartyID{}
 

@@ -189,6 +189,9 @@ func startHTTPServer(port string) {
 			}
 
 			msg = res
+		} else if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT {
+			// validate if the DataToSign is actually correct by decoding the previous operation
+			msg = intent.Operations[operationIndexInt].DataToSign
 		}
 
 		identity := intent.Identity

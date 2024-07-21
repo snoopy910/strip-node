@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/StripChain/strip-node/util"
 	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
@@ -177,10 +178,12 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 			formattedAmount, _ := FormatUnits(num, 9)
 
 			transfers = append(transfers, Transfer{
-				From:   nativeTransfer.FromUserAccount,
-				To:     nativeTransfer.ToUserAccount,
-				Amount: formattedAmount,
-				Token:  chain.TokenSymbol,
+				From:         nativeTransfer.FromUserAccount,
+				To:           nativeTransfer.ToUserAccount,
+				Amount:       formattedAmount,
+				Token:        chain.TokenSymbol,
+				IsNative:     true,
+				TokenAddress: util.ZERO_ADDRESS,
 			})
 		}
 
@@ -217,10 +220,12 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 			}
 
 			transfers = append(transfers, Transfer{
-				From:   tokenTransfer.FromUserAccount,
-				To:     tokenTransfer.ToUserAccount,
-				Amount: formattedAmount,
-				Token:  tokenTransfer.Mint,
+				From:         tokenTransfer.FromUserAccount,
+				To:           tokenTransfer.ToUserAccount,
+				Amount:       formattedAmount,
+				Token:        tokenTransfer.Mint,
+				IsNative:     false,
+				TokenAddress: tokenTransfer.Mint,
 			})
 		}
 	}

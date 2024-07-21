@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/StripChain/strip-node/util"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,10 +13,12 @@ import (
 )
 
 type Transfer struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
-	Amount string `json:"amount"`
-	Token  string `json:"token"`
+	From         string `json:"from"`
+	To           string `json:"to"`
+	Amount       string `json:"amount"`
+	Token        string `json:"token"`
+	IsNative     bool   `json:"isNative"`
+	TokenAddress string `json:"tokenAddress"`
 }
 
 func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]Transfer, error) {
@@ -54,10 +57,12 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 			}
 
 			transfers = append(transfers, Transfer{
-				From:   from,
-				To:     to,
-				Amount: formattedAmount,
-				Token:  symbol,
+				From:         from,
+				To:           to,
+				Amount:       formattedAmount,
+				Token:        symbol,
+				IsNative:     false,
+				TokenAddress: log.Address.Hex(),
 			})
 		}
 	}
@@ -71,10 +76,12 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 
 	if wei.Cmp(big.NewInt(0)) != 0 {
 		transfers = append(transfers, Transfer{
-			From:   ecdsaAddr,
-			To:     tx.To().String(),
-			Amount: WeiToEther(wei).String(),
-			Token:  chain.TokenSymbol,
+			From:         ecdsaAddr,
+			To:           tx.To().String(),
+			Amount:       WeiToEther(wei).String(),
+			Token:        chain.TokenSymbol,
+			IsNative:     true,
+			TokenAddress: util.ZERO_ADDRESS,
 		})
 	}
 

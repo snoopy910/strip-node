@@ -31,8 +31,8 @@ var (
 
 // BridgeMetaData contains all meta data concerning the Bridge contract.
 var BridgeMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"InvalidInitialization\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotInitializing\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"OwnableInvalidOwner\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"OwnableUnauthorizedAccount\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"authority\",\"type\":\"address\"}],\"name\":\"AuthorityChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"version\",\"type\":\"uint64\"}],\"name\":\"Initialized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"token\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"}],\"name\":\"TokenMinted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"token\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"bool\",\"name\":\"status\",\"type\":\"bool\"}],\"name\":\"TokenStatusChanges\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"authority\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_authority\",\"type\":\"address\"}],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"contractBridgeToken\",\"name\":\"token\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"}],\"name\":\"mint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"mintNonces\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_authority\",\"type\":\"address\"}],\"name\":\"setAuthority\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"token\",\"type\":\"address\"},{\"internalType\":\"bool\",\"name\":\"status\",\"type\":\"bool\"}],\"name\":\"setTokenStatus\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"tokenExists\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-	Bin: "0x6080604052348015600e575f80fd5b506110398061001c5f395ff3fe608060405234801561000f575f80fd5b506004361061009c575f3560e01c80639540bce8116100645780639540bce81461011c578063b33f78ca1461014c578063bf7e214f1461017c578063c4d66de81461019a578063f2fde38b146101b65761009c565b8063074ee446146100a05780634cd73548146100bc578063715018a6146100d85780637a9e5e4b146100e25780638da5cb5b146100fe575b5f80fd5b6100ba60048036038101906100b59190610bce565b6101d2565b005b6100d660048036038101906100d19190610c67565b610464565b005b6100e06104fd565b005b6100fc60048036038101906100f79190610ca5565b610510565b005b610106610591565b6040516101139190610cdf565b60405180910390f35b61013660048036038101906101319190610ca5565b6105c6565b6040516101439190610d07565b60405180910390f35b61016660048036038101906101619190610ca5565b6105db565b6040516101739190610d2f565b60405180910390f35b6101846105f8565b6040516101919190610cdf565b60405180910390f35b6101b460048036038101906101af9190610ca5565b61061b565b005b6101d060048036038101906101cb9190610ca5565b6107db565b005b60025f8473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205f9054906101000a900460ff1661025b576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161025290610da2565b60405180910390fd5b5f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16146102e8576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016102df90610e0a565b60405180910390fd5b8060015f8473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205414610367576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161035e90610e72565b60405180910390fd5b8273ffffffffffffffffffffffffffffffffffffffff166340c10f1983866040518363ffffffff1660e01b81526004016103a2929190610e90565b5f604051808303815f87803b1580156103b9575f80fd5b505af11580156103cb573d5f803e3d5ffd5b5050505060015f8373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205f81548092919061041c90610ee4565b91905055507f747bd6dbfd6ceb446b50b008eeade0e74f807993dd969546d7efd6008554b1d0838386846040516104569493929190610f2b565b60405180910390a150505050565b61046c61085f565b8060025f8473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205f6101000a81548160ff0219169083151502179055507f5fed5b84a03d5e06426016c488278d810bf74a86eedd32bb2a60771b6ca0759982826040516104f1929190610f6e565b60405180910390a15050565b61050561085f565b61050e5f6108e6565b565b61051861085f565b805f806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055507f3430ad8dbed7c32bf49006f0d79d2ab70785ea13ebd4ef7d1b87e487ef08928c816040516105869190610cdf565b60405180910390a150565b5f8061059b6109b7565b9050805f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1691505090565b6001602052805f5260405f205f915090505481565b6002602052805f5260405f205f915054906101000a900460ff1681565b5f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f6106246109de565b90505f815f0160089054906101000a900460ff161590505f825f015f9054906101000a900467ffffffffffffffff1690505f808267ffffffffffffffff1614801561066c5750825b90505f60018367ffffffffffffffff1614801561069f57505f3073ffffffffffffffffffffffffffffffffffffffff163b145b9050811580156106ad575080155b156106e4576040517ff92ee8a900000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b6001855f015f6101000a81548167ffffffffffffffff021916908367ffffffffffffffff1602179055508315610731576001855f0160086101000a81548160ff0219169083151502179055505b61073a33610a05565b855f806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555083156107d3575f855f0160086101000a81548160ff0219169083151502179055507fc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d260016040516107ca9190610fea565b60405180910390a15b505050505050565b6107e361085f565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff1603610853575f6040517f1e4fbdf700000000000000000000000000000000000000000000000000000000815260040161084a9190610cdf565b60405180910390fd5b61085c816108e6565b50565b610867610a19565b73ffffffffffffffffffffffffffffffffffffffff16610885610591565b73ffffffffffffffffffffffffffffffffffffffff16146108e4576108a8610a19565b6040517f118cdaa70000000000000000000000000000000000000000000000000000000081526004016108db9190610cdf565b60405180910390fd5b565b5f6108ef6109b7565b90505f815f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905082825f015f6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055508273ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e060405160405180910390a3505050565b5f7f9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300905090565b5f7ff0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00905090565b610a0d610a20565b610a1681610a60565b50565b5f33905090565b610a28610ae4565b610a5e576040517fd7e6bcf800000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b565b610a68610a20565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff1603610ad8575f6040517f1e4fbdf7000000000000000000000000000000000000000000000000000000008152600401610acf9190610cdf565b60405180910390fd5b610ae1816108e6565b50565b5f610aed6109de565b5f0160089054906101000a900460ff16905090565b5f80fd5b5f819050919050565b610b1881610b06565b8114610b22575f80fd5b50565b5f81359050610b3381610b0f565b92915050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f610b6282610b39565b9050919050565b5f610b7382610b58565b9050919050565b610b8381610b69565b8114610b8d575f80fd5b50565b5f81359050610b9e81610b7a565b92915050565b610bad81610b58565b8114610bb7575f80fd5b50565b5f81359050610bc881610ba4565b92915050565b5f805f8060808587031215610be657610be5610b02565b5b5f610bf387828801610b25565b9450506020610c0487828801610b90565b9350506040610c1587828801610bba565b9250506060610c2687828801610b25565b91505092959194509250565b5f8115159050919050565b610c4681610c32565b8114610c50575f80fd5b50565b5f81359050610c6181610c3d565b92915050565b5f8060408385031215610c7d57610c7c610b02565b5b5f610c8a85828601610bba565b9250506020610c9b85828601610c53565b9150509250929050565b5f60208284031215610cba57610cb9610b02565b5b5f610cc784828501610bba565b91505092915050565b610cd981610b58565b82525050565b5f602082019050610cf25f830184610cd0565b92915050565b610d0181610b06565b82525050565b5f602082019050610d1a5f830184610cf8565b92915050565b610d2981610c32565b82525050565b5f602082019050610d425f830184610d20565b92915050565b5f82825260208201905092915050565b7f4272696467653a20746f6b656e20646f6573206e6f74206578697374000000005f82015250565b5f610d8c601c83610d48565b9150610d9782610d58565b602082019050919050565b5f6020820190508181035f830152610db981610d80565b9050919050565b7f4272696467653a20617574686f726974790000000000000000000000000000005f82015250565b5f610df4601183610d48565b9150610dff82610dc0565b602082019050919050565b5f6020820190508181035f830152610e2181610de8565b9050919050565b7f4272696467653a206e6f6e6365000000000000000000000000000000000000005f82015250565b5f610e5c600d83610d48565b9150610e6782610e28565b602082019050919050565b5f6020820190508181035f830152610e8981610e50565b9050919050565b5f604082019050610ea35f830185610cd0565b610eb06020830184610cf8565b9392505050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f610eee82610b06565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8203610f2057610f1f610eb7565b5b600182019050919050565b5f608082019050610f3e5f830187610cd0565b610f4b6020830186610cd0565b610f586040830185610cf8565b610f656060830184610cf8565b95945050505050565b5f604082019050610f815f830185610cd0565b610f8e6020830184610d20565b9392505050565b5f819050919050565b5f67ffffffffffffffff82169050919050565b5f819050919050565b5f610fd4610fcf610fca84610f95565b610fb1565b610f9e565b9050919050565b610fe481610fba565b82525050565b5f602082019050610ffd5f830184610fdb565b9291505056fea2646970667358221220ed101ba4e52298932fa4f5ff93d6d09c049ea989649c362d57290d0ce5321ef364736f6c63430008190033",
+	ABI: "[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"InvalidInitialization\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotInitializing\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"OwnableInvalidOwner\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"OwnableUnauthorizedAccount\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"authority\",\"type\":\"address\"}],\"name\":\"AuthorityChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"version\",\"type\":\"uint64\"}],\"name\":\"Initialized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"string\",\"name\":\"chainId\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"srcToken\",\"type\":\"string\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"peggedToken\",\"type\":\"address\"}],\"name\":\"TokenAdded\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"token\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"}],\"name\":\"TokenMinted\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"chainId\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"srcToken\",\"type\":\"string\"},{\"internalType\":\"address\",\"name\":\"peggedToken\",\"type\":\"address\"}],\"name\":\"addToken\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"authority\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"_messageHash\",\"type\":\"bytes32\"}],\"name\":\"getEthSignedMessageHash\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"contractBridgeToken\",\"name\":\"token\",\"type\":\"address\"}],\"name\":\"getMessageHash\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_authority\",\"type\":\"address\"}],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"contractBridgeToken\",\"name\":\"token\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"},{\"internalType\":\"bytes\",\"name\":\"signature\",\"type\":\"bytes\"}],\"name\":\"mint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"mintNonces\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"},{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"name\":\"peggedTokens\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"_ethSignedMessageHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes\",\"name\":\"_signature\",\"type\":\"bytes\"}],\"name\":\"recoverSigner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_authority\",\"type\":\"address\"}],\"name\":\"setAuthority\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"sig\",\"type\":\"bytes\"}],\"name\":\"splitSignature\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"r\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"s\",\"type\":\"bytes32\"},{\"internalType\":\"uint8\",\"name\":\"v\",\"type\":\"uint8\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	Bin: "0x6080604052348015600e575f80fd5b506119f18061001c5f395ff3fe608060405234801561000f575f80fd5b50600436106100e8575f3560e01c8063bf7e214f1161008a578063c4d66de811610064578063c4d66de81461025c578063f2fde38b14610278578063fa3d24f214610294578063fa540801146102b0576100e8565b8063bf7e214f146101de578063bfa4bf9a146101fc578063bfb4ad0c1461022c576100e8565b80638da5cb5b116100c65780638da5cb5b1461012e5780639540bce81461014c57806397aba7f91461017c578063a7bb5803146101ac576100e8565b80632adfefeb146100ec578063715018a6146101085780637a9e5e4b14610112575b5f80fd5b61010660048036038101906101019190610f94565b6102e0565b005b610110610515565b005b61012c60048036038101906101279190611027565b610528565b005b6101366105a9565b6040516101439190611061565b60405180910390f35b61016660048036038101906101619190611027565b6105de565b6040516101739190611089565b60405180910390f35b610196600480360381019061019191906110d5565b6105f3565b6040516101a39190611061565b60405180910390f35b6101c660048036038101906101c1919061112f565b61065d565b6040516101d5939291906111a0565b60405180910390f35b6101e66106c2565b6040516101f39190611061565b60405180910390f35b610216600480360381019061021191906111d5565b6106e5565b6040516102239190611239565b60405180910390f35b610246600480360381019061024191906112f0565b610726565b6040516102539190611061565b60405180910390f35b61027660048036038101906102719190611027565b610793565b005b610292600480360381019061028d9190611027565b610953565b005b6102ae60048036038101906102a991906113c3565b6109d7565b005b6102ca60048036038101906102c59190611454565b610aa1565b6040516102d79190611239565b60405180910390f35b8160015f8573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f20541461035f576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401610356906114d9565b60405180910390fd5b5f61036c848488886106e5565b90505f61037882610aa1565b90505f61038582856105f3565b90505f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff1614610414576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161040b90611541565b60405180910390fd5b8673ffffffffffffffffffffffffffffffffffffffff166340c10f19878a6040518363ffffffff1660e01b815260040161044f92919061155f565b5f604051808303815f87803b158015610466575f80fd5b505af1158015610478573d5f803e3d5ffd5b5050505060015f8773ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020015f205f8154809291906104c9906115b3565b91905055507f747bd6dbfd6ceb446b50b008eeade0e74f807993dd969546d7efd6008554b1d087878a8860405161050394939291906115fa565b60405180910390a15050505050505050565b61051d610ad0565b6105265f610b57565b565b610530610ad0565b805f806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055507f3430ad8dbed7c32bf49006f0d79d2ab70785ea13ebd4ef7d1b87e487ef08928c8160405161059e9190611061565b60405180910390a150565b5f806105b3610c28565b9050805f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1691505090565b6001602052805f5260405f205f915090505481565b5f805f806106008561065d565b9250925092506001868285856040515f8152602001604052604051610628949392919061163d565b6020604051602081039080840390855afa158015610648573d5f803e3d5ffd5b50505060206040510351935050505092915050565b5f805f60418451146106a4576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161069b906116ca565b60405180910390fd5b602084015192506040840151915060608401515f1a90509193909250565b5f8054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f848484846106f2610c4f565b6040516020016107069594939291906117b0565b604051602081830303815290604052805190602001209050949350505050565b600282805160208101820180518482526020830160208501208183528095505050505050818051602081018201805184825260208301602085012081835280955050505050505f915091509054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f61079c610c5b565b90505f815f0160089054906101000a900460ff161590505f825f015f9054906101000a900467ffffffffffffffff1690505f808267ffffffffffffffff161480156107e45750825b90505f60018367ffffffffffffffff1614801561081757505f3073ffffffffffffffffffffffffffffffffffffffff163b145b905081158015610825575080155b1561085c576040517ff92ee8a900000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b6001855f015f6101000a81548167ffffffffffffffff021916908367ffffffffffffffff16021790555083156108a9576001855f0160086101000a81548160ff0219169083151502179055505b6108b233610c82565b855f806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550831561094b575f855f0160086101000a81548160ff0219169083151502179055507fc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d26001604051610942919061185a565b60405180910390a15b505050505050565b61095b610ad0565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff16036109cb575f6040517f1e4fbdf70000000000000000000000000000000000000000000000000000000081526004016109c29190611061565b60405180910390fd5b6109d481610b57565b50565b6109df610ad0565b80600286866040516109f29291906118a1565b90815260200160405180910390208484604051610a109291906118a1565b90815260200160405180910390205f6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055507f7ab7074f7826dda120af25c3924584f012f6cc3108c1185301c5461ac75f80078585858585604051610a929594939291906118e5565b60405180910390a15050505050565b5f81604051602001610ab39190611996565b604051602081830303815290604052805190602001209050919050565b610ad8610c96565b73ffffffffffffffffffffffffffffffffffffffff16610af66105a9565b73ffffffffffffffffffffffffffffffffffffffff1614610b5557610b19610c96565b6040517f118cdaa7000000000000000000000000000000000000000000000000000000008152600401610b4c9190611061565b60405180910390fd5b565b5f610b60610c28565b90505f815f015f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff16905082825f015f6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055508273ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e060405160405180910390a3505050565b5f7f9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300905090565b5f804690508091505090565b5f7ff0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00905090565b610c8a610c9d565b610c9381610cdd565b50565b5f33905090565b610ca5610d61565b610cdb576040517fd7e6bcf800000000000000000000000000000000000000000000000000000000815260040160405180910390fd5b565b610ce5610c9d565b5f73ffffffffffffffffffffffffffffffffffffffff168173ffffffffffffffffffffffffffffffffffffffff1603610d55575f6040517f1e4fbdf7000000000000000000000000000000000000000000000000000000008152600401610d4c9190611061565b60405180910390fd5b610d5e81610b57565b50565b5f610d6a610c5b565b5f0160089054906101000a900460ff16905090565b5f604051905090565b5f80fd5b5f80fd5b5f819050919050565b610da281610d90565b8114610dac575f80fd5b50565b5f81359050610dbd81610d99565b92915050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f610dec82610dc3565b9050919050565b5f610dfd82610de2565b9050919050565b610e0d81610df3565b8114610e17575f80fd5b50565b5f81359050610e2881610e04565b92915050565b610e3781610de2565b8114610e41575f80fd5b50565b5f81359050610e5281610e2e565b92915050565b5f80fd5b5f80fd5b5f601f19601f8301169050919050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b610ea682610e60565b810181811067ffffffffffffffff82111715610ec557610ec4610e70565b5b80604052505050565b5f610ed7610d7f565b9050610ee38282610e9d565b919050565b5f67ffffffffffffffff821115610f0257610f01610e70565b5b610f0b82610e60565b9050602081019050919050565b828183375f83830152505050565b5f610f38610f3384610ee8565b610ece565b905082815260208101848484011115610f5457610f53610e5c565b5b610f5f848285610f18565b509392505050565b5f82601f830112610f7b57610f7a610e58565b5b8135610f8b848260208601610f26565b91505092915050565b5f805f805f60a08688031215610fad57610fac610d88565b5b5f610fba88828901610daf565b9550506020610fcb88828901610e1a565b9450506040610fdc88828901610e44565b9350506060610fed88828901610daf565b925050608086013567ffffffffffffffff81111561100e5761100d610d8c565b5b61101a88828901610f67565b9150509295509295909350565b5f6020828403121561103c5761103b610d88565b5b5f61104984828501610e44565b91505092915050565b61105b81610de2565b82525050565b5f6020820190506110745f830184611052565b92915050565b61108381610d90565b82525050565b5f60208201905061109c5f83018461107a565b92915050565b5f819050919050565b6110b4816110a2565b81146110be575f80fd5b50565b5f813590506110cf816110ab565b92915050565b5f80604083850312156110eb576110ea610d88565b5b5f6110f8858286016110c1565b925050602083013567ffffffffffffffff81111561111957611118610d8c565b5b61112585828601610f67565b9150509250929050565b5f6020828403121561114457611143610d88565b5b5f82013567ffffffffffffffff81111561116157611160610d8c565b5b61116d84828501610f67565b91505092915050565b61117f816110a2565b82525050565b5f60ff82169050919050565b61119a81611185565b82525050565b5f6060820190506111b35f830186611176565b6111c06020830185611176565b6111cd6040830184611191565b949350505050565b5f805f80608085870312156111ed576111ec610d88565b5b5f6111fa87828801610e44565b945050602061120b87828801610daf565b935050604061121c87828801610daf565b925050606061122d87828801610e1a565b91505092959194509250565b5f60208201905061124c5f830184611176565b92915050565b5f67ffffffffffffffff82111561126c5761126b610e70565b5b61127582610e60565b9050602081019050919050565b5f61129461128f84611252565b610ece565b9050828152602081018484840111156112b0576112af610e5c565b5b6112bb848285610f18565b509392505050565b5f82601f8301126112d7576112d6610e58565b5b81356112e7848260208601611282565b91505092915050565b5f806040838503121561130657611305610d88565b5b5f83013567ffffffffffffffff81111561132357611322610d8c565b5b61132f858286016112c3565b925050602083013567ffffffffffffffff8111156113505761134f610d8c565b5b61135c858286016112c3565b9150509250929050565b5f80fd5b5f80fd5b5f8083601f84011261138357611382610e58565b5b8235905067ffffffffffffffff8111156113a05761139f611366565b5b6020830191508360018202830111156113bc576113bb61136a565b5b9250929050565b5f805f805f606086880312156113dc576113db610d88565b5b5f86013567ffffffffffffffff8111156113f9576113f8610d8c565b5b6114058882890161136e565b9550955050602086013567ffffffffffffffff81111561142857611427610d8c565b5b6114348882890161136e565b9350935050604061144788828901610e44565b9150509295509295909350565b5f6020828403121561146957611468610d88565b5b5f611476848285016110c1565b91505092915050565b5f82825260208201905092915050565b7f4272696467653a206e6f6e6365000000000000000000000000000000000000005f82015250565b5f6114c3600d8361147f565b91506114ce8261148f565b602082019050919050565b5f6020820190508181035f8301526114f0816114b7565b9050919050565b7f4272696467653a20696e76616c6964207369676e6174757265000000000000005f82015250565b5f61152b60198361147f565b9150611536826114f7565b602082019050919050565b5f6020820190508181035f8301526115588161151f565b9050919050565b5f6040820190506115725f830185611052565b61157f602083018461107a565b9392505050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f6115bd82610d90565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff82036115ef576115ee611586565b5b600182019050919050565b5f60808201905061160d5f830187611052565b61161a6020830186611052565b611627604083018561107a565b611634606083018461107a565b95945050505050565b5f6080820190506116505f830187611176565b61165d6020830186611191565b61166a6040830185611176565b6116776060830184611176565b95945050505050565b7f696e76616c6964207369676e6174757265206c656e67746800000000000000005f82015250565b5f6116b460188361147f565b91506116bf82611680565b602082019050919050565b5f6020820190508181035f8301526116e1816116a8565b9050919050565b5f8160601b9050919050565b5f6116fe826116e8565b9050919050565b5f61170f826116f4565b9050919050565b61172761172282610de2565b611705565b82525050565b5f819050919050565b61174761174282610d90565b61172d565b82525050565b5f819050919050565b5f61177061176b61176684610dc3565b61174d565b610dc3565b9050919050565b5f61178182611756565b9050919050565b5f61179282611777565b9050919050565b6117aa6117a582611788565b611705565b82525050565b5f6117bb8288611716565b6014820191506117cb8287611736565b6020820191506117db8286611736565b6020820191506117eb8285611799565b6014820191506117fb8284611736565b6020820191508190509695505050505050565b5f819050919050565b5f67ffffffffffffffff82169050919050565b5f61184461183f61183a8461180e565b61174d565b611817565b9050919050565b6118548161182a565b82525050565b5f60208201905061186d5f83018461184b565b92915050565b5f81905092915050565b5f6118888385611873565b9350611895838584610f18565b82840190509392505050565b5f6118ad82848661187d565b91508190509392505050565b5f6118c4838561147f565b93506118d1838584610f18565b6118da83610e60565b840190509392505050565b5f6060820190508181035f8301526118fe8187896118b9565b905081810360208301526119138185876118b9565b90506119226040830184611052565b9695505050505050565b7f19457468657265756d205369676e6564204d6573736167653a0a3332000000005f82015250565b5f611960601c83611873565b915061196b8261192c565b601c82019050919050565b5f819050919050565b61199061198b826110a2565b611976565b82525050565b5f6119a082611954565b91506119ac828461197f565b6020820191508190509291505056fea2646970667358221220458e63f5bcfbfc1db8acc2b5ad7f887529be94b853a7b1cb1a36ac2ca891f8d964736f6c63430008190033",
 }
 
 // BridgeABI is the input ABI used to generate the binding from.
@@ -233,6 +233,68 @@ func (_Bridge *BridgeCallerSession) Authority() (common.Address, error) {
 	return _Bridge.Contract.Authority(&_Bridge.CallOpts)
 }
 
+// GetEthSignedMessageHash is a free data retrieval call binding the contract method 0xfa540801.
+//
+// Solidity: function getEthSignedMessageHash(bytes32 _messageHash) pure returns(bytes32)
+func (_Bridge *BridgeCaller) GetEthSignedMessageHash(opts *bind.CallOpts, _messageHash [32]byte) ([32]byte, error) {
+	var out []interface{}
+	err := _Bridge.contract.Call(opts, &out, "getEthSignedMessageHash", _messageHash)
+
+	if err != nil {
+		return *new([32]byte), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([32]byte)).(*[32]byte)
+
+	return out0, err
+
+}
+
+// GetEthSignedMessageHash is a free data retrieval call binding the contract method 0xfa540801.
+//
+// Solidity: function getEthSignedMessageHash(bytes32 _messageHash) pure returns(bytes32)
+func (_Bridge *BridgeSession) GetEthSignedMessageHash(_messageHash [32]byte) ([32]byte, error) {
+	return _Bridge.Contract.GetEthSignedMessageHash(&_Bridge.CallOpts, _messageHash)
+}
+
+// GetEthSignedMessageHash is a free data retrieval call binding the contract method 0xfa540801.
+//
+// Solidity: function getEthSignedMessageHash(bytes32 _messageHash) pure returns(bytes32)
+func (_Bridge *BridgeCallerSession) GetEthSignedMessageHash(_messageHash [32]byte) ([32]byte, error) {
+	return _Bridge.Contract.GetEthSignedMessageHash(&_Bridge.CallOpts, _messageHash)
+}
+
+// GetMessageHash is a free data retrieval call binding the contract method 0xbfa4bf9a.
+//
+// Solidity: function getMessageHash(address account, uint256 nonce, uint256 amount, address token) view returns(bytes32)
+func (_Bridge *BridgeCaller) GetMessageHash(opts *bind.CallOpts, account common.Address, nonce *big.Int, amount *big.Int, token common.Address) ([32]byte, error) {
+	var out []interface{}
+	err := _Bridge.contract.Call(opts, &out, "getMessageHash", account, nonce, amount, token)
+
+	if err != nil {
+		return *new([32]byte), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([32]byte)).(*[32]byte)
+
+	return out0, err
+
+}
+
+// GetMessageHash is a free data retrieval call binding the contract method 0xbfa4bf9a.
+//
+// Solidity: function getMessageHash(address account, uint256 nonce, uint256 amount, address token) view returns(bytes32)
+func (_Bridge *BridgeSession) GetMessageHash(account common.Address, nonce *big.Int, amount *big.Int, token common.Address) ([32]byte, error) {
+	return _Bridge.Contract.GetMessageHash(&_Bridge.CallOpts, account, nonce, amount, token)
+}
+
+// GetMessageHash is a free data retrieval call binding the contract method 0xbfa4bf9a.
+//
+// Solidity: function getMessageHash(address account, uint256 nonce, uint256 amount, address token) view returns(bytes32)
+func (_Bridge *BridgeCallerSession) GetMessageHash(account common.Address, nonce *big.Int, amount *big.Int, token common.Address) ([32]byte, error) {
+	return _Bridge.Contract.GetMessageHash(&_Bridge.CallOpts, account, nonce, amount, token)
+}
+
 // MintNonces is a free data retrieval call binding the contract method 0x9540bce8.
 //
 // Solidity: function mintNonces(address ) view returns(uint256)
@@ -295,35 +357,137 @@ func (_Bridge *BridgeCallerSession) Owner() (common.Address, error) {
 	return _Bridge.Contract.Owner(&_Bridge.CallOpts)
 }
 
-// TokenExists is a free data retrieval call binding the contract method 0xb33f78ca.
+// PeggedTokens is a free data retrieval call binding the contract method 0xbfb4ad0c.
 //
-// Solidity: function tokenExists(address ) view returns(bool)
-func (_Bridge *BridgeCaller) TokenExists(opts *bind.CallOpts, arg0 common.Address) (bool, error) {
+// Solidity: function peggedTokens(string , string ) view returns(address)
+func (_Bridge *BridgeCaller) PeggedTokens(opts *bind.CallOpts, arg0 string, arg1 string) (common.Address, error) {
 	var out []interface{}
-	err := _Bridge.contract.Call(opts, &out, "tokenExists", arg0)
+	err := _Bridge.contract.Call(opts, &out, "peggedTokens", arg0, arg1)
 
 	if err != nil {
-		return *new(bool), err
+		return *new(common.Address), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
 
 	return out0, err
 
 }
 
-// TokenExists is a free data retrieval call binding the contract method 0xb33f78ca.
+// PeggedTokens is a free data retrieval call binding the contract method 0xbfb4ad0c.
 //
-// Solidity: function tokenExists(address ) view returns(bool)
-func (_Bridge *BridgeSession) TokenExists(arg0 common.Address) (bool, error) {
-	return _Bridge.Contract.TokenExists(&_Bridge.CallOpts, arg0)
+// Solidity: function peggedTokens(string , string ) view returns(address)
+func (_Bridge *BridgeSession) PeggedTokens(arg0 string, arg1 string) (common.Address, error) {
+	return _Bridge.Contract.PeggedTokens(&_Bridge.CallOpts, arg0, arg1)
 }
 
-// TokenExists is a free data retrieval call binding the contract method 0xb33f78ca.
+// PeggedTokens is a free data retrieval call binding the contract method 0xbfb4ad0c.
 //
-// Solidity: function tokenExists(address ) view returns(bool)
-func (_Bridge *BridgeCallerSession) TokenExists(arg0 common.Address) (bool, error) {
-	return _Bridge.Contract.TokenExists(&_Bridge.CallOpts, arg0)
+// Solidity: function peggedTokens(string , string ) view returns(address)
+func (_Bridge *BridgeCallerSession) PeggedTokens(arg0 string, arg1 string) (common.Address, error) {
+	return _Bridge.Contract.PeggedTokens(&_Bridge.CallOpts, arg0, arg1)
+}
+
+// RecoverSigner is a free data retrieval call binding the contract method 0x97aba7f9.
+//
+// Solidity: function recoverSigner(bytes32 _ethSignedMessageHash, bytes _signature) pure returns(address)
+func (_Bridge *BridgeCaller) RecoverSigner(opts *bind.CallOpts, _ethSignedMessageHash [32]byte, _signature []byte) (common.Address, error) {
+	var out []interface{}
+	err := _Bridge.contract.Call(opts, &out, "recoverSigner", _ethSignedMessageHash, _signature)
+
+	if err != nil {
+		return *new(common.Address), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+
+	return out0, err
+
+}
+
+// RecoverSigner is a free data retrieval call binding the contract method 0x97aba7f9.
+//
+// Solidity: function recoverSigner(bytes32 _ethSignedMessageHash, bytes _signature) pure returns(address)
+func (_Bridge *BridgeSession) RecoverSigner(_ethSignedMessageHash [32]byte, _signature []byte) (common.Address, error) {
+	return _Bridge.Contract.RecoverSigner(&_Bridge.CallOpts, _ethSignedMessageHash, _signature)
+}
+
+// RecoverSigner is a free data retrieval call binding the contract method 0x97aba7f9.
+//
+// Solidity: function recoverSigner(bytes32 _ethSignedMessageHash, bytes _signature) pure returns(address)
+func (_Bridge *BridgeCallerSession) RecoverSigner(_ethSignedMessageHash [32]byte, _signature []byte) (common.Address, error) {
+	return _Bridge.Contract.RecoverSigner(&_Bridge.CallOpts, _ethSignedMessageHash, _signature)
+}
+
+// SplitSignature is a free data retrieval call binding the contract method 0xa7bb5803.
+//
+// Solidity: function splitSignature(bytes sig) pure returns(bytes32 r, bytes32 s, uint8 v)
+func (_Bridge *BridgeCaller) SplitSignature(opts *bind.CallOpts, sig []byte) (struct {
+	R [32]byte
+	S [32]byte
+	V uint8
+}, error) {
+	var out []interface{}
+	err := _Bridge.contract.Call(opts, &out, "splitSignature", sig)
+
+	outstruct := new(struct {
+		R [32]byte
+		S [32]byte
+		V uint8
+	})
+	if err != nil {
+		return *outstruct, err
+	}
+
+	outstruct.R = *abi.ConvertType(out[0], new([32]byte)).(*[32]byte)
+	outstruct.S = *abi.ConvertType(out[1], new([32]byte)).(*[32]byte)
+	outstruct.V = *abi.ConvertType(out[2], new(uint8)).(*uint8)
+
+	return *outstruct, err
+
+}
+
+// SplitSignature is a free data retrieval call binding the contract method 0xa7bb5803.
+//
+// Solidity: function splitSignature(bytes sig) pure returns(bytes32 r, bytes32 s, uint8 v)
+func (_Bridge *BridgeSession) SplitSignature(sig []byte) (struct {
+	R [32]byte
+	S [32]byte
+	V uint8
+}, error) {
+	return _Bridge.Contract.SplitSignature(&_Bridge.CallOpts, sig)
+}
+
+// SplitSignature is a free data retrieval call binding the contract method 0xa7bb5803.
+//
+// Solidity: function splitSignature(bytes sig) pure returns(bytes32 r, bytes32 s, uint8 v)
+func (_Bridge *BridgeCallerSession) SplitSignature(sig []byte) (struct {
+	R [32]byte
+	S [32]byte
+	V uint8
+}, error) {
+	return _Bridge.Contract.SplitSignature(&_Bridge.CallOpts, sig)
+}
+
+// AddToken is a paid mutator transaction binding the contract method 0xfa3d24f2.
+//
+// Solidity: function addToken(string chainId, string srcToken, address peggedToken) returns()
+func (_Bridge *BridgeTransactor) AddToken(opts *bind.TransactOpts, chainId string, srcToken string, peggedToken common.Address) (*types.Transaction, error) {
+	return _Bridge.contract.Transact(opts, "addToken", chainId, srcToken, peggedToken)
+}
+
+// AddToken is a paid mutator transaction binding the contract method 0xfa3d24f2.
+//
+// Solidity: function addToken(string chainId, string srcToken, address peggedToken) returns()
+func (_Bridge *BridgeSession) AddToken(chainId string, srcToken string, peggedToken common.Address) (*types.Transaction, error) {
+	return _Bridge.Contract.AddToken(&_Bridge.TransactOpts, chainId, srcToken, peggedToken)
+}
+
+// AddToken is a paid mutator transaction binding the contract method 0xfa3d24f2.
+//
+// Solidity: function addToken(string chainId, string srcToken, address peggedToken) returns()
+func (_Bridge *BridgeTransactorSession) AddToken(chainId string, srcToken string, peggedToken common.Address) (*types.Transaction, error) {
+	return _Bridge.Contract.AddToken(&_Bridge.TransactOpts, chainId, srcToken, peggedToken)
 }
 
 // Initialize is a paid mutator transaction binding the contract method 0xc4d66de8.
@@ -347,25 +511,25 @@ func (_Bridge *BridgeTransactorSession) Initialize(_authority common.Address) (*
 	return _Bridge.Contract.Initialize(&_Bridge.TransactOpts, _authority)
 }
 
-// Mint is a paid mutator transaction binding the contract method 0x074ee446.
+// Mint is a paid mutator transaction binding the contract method 0x2adfefeb.
 //
-// Solidity: function mint(uint256 amount, address token, address to, uint256 nonce) returns()
-func (_Bridge *BridgeTransactor) Mint(opts *bind.TransactOpts, amount *big.Int, token common.Address, to common.Address, nonce *big.Int) (*types.Transaction, error) {
-	return _Bridge.contract.Transact(opts, "mint", amount, token, to, nonce)
+// Solidity: function mint(uint256 amount, address token, address to, uint256 nonce, bytes signature) returns()
+func (_Bridge *BridgeTransactor) Mint(opts *bind.TransactOpts, amount *big.Int, token common.Address, to common.Address, nonce *big.Int, signature []byte) (*types.Transaction, error) {
+	return _Bridge.contract.Transact(opts, "mint", amount, token, to, nonce, signature)
 }
 
-// Mint is a paid mutator transaction binding the contract method 0x074ee446.
+// Mint is a paid mutator transaction binding the contract method 0x2adfefeb.
 //
-// Solidity: function mint(uint256 amount, address token, address to, uint256 nonce) returns()
-func (_Bridge *BridgeSession) Mint(amount *big.Int, token common.Address, to common.Address, nonce *big.Int) (*types.Transaction, error) {
-	return _Bridge.Contract.Mint(&_Bridge.TransactOpts, amount, token, to, nonce)
+// Solidity: function mint(uint256 amount, address token, address to, uint256 nonce, bytes signature) returns()
+func (_Bridge *BridgeSession) Mint(amount *big.Int, token common.Address, to common.Address, nonce *big.Int, signature []byte) (*types.Transaction, error) {
+	return _Bridge.Contract.Mint(&_Bridge.TransactOpts, amount, token, to, nonce, signature)
 }
 
-// Mint is a paid mutator transaction binding the contract method 0x074ee446.
+// Mint is a paid mutator transaction binding the contract method 0x2adfefeb.
 //
-// Solidity: function mint(uint256 amount, address token, address to, uint256 nonce) returns()
-func (_Bridge *BridgeTransactorSession) Mint(amount *big.Int, token common.Address, to common.Address, nonce *big.Int) (*types.Transaction, error) {
-	return _Bridge.Contract.Mint(&_Bridge.TransactOpts, amount, token, to, nonce)
+// Solidity: function mint(uint256 amount, address token, address to, uint256 nonce, bytes signature) returns()
+func (_Bridge *BridgeTransactorSession) Mint(amount *big.Int, token common.Address, to common.Address, nonce *big.Int, signature []byte) (*types.Transaction, error) {
+	return _Bridge.Contract.Mint(&_Bridge.TransactOpts, amount, token, to, nonce, signature)
 }
 
 // RenounceOwnership is a paid mutator transaction binding the contract method 0x715018a6.
@@ -408,27 +572,6 @@ func (_Bridge *BridgeSession) SetAuthority(_authority common.Address) (*types.Tr
 // Solidity: function setAuthority(address _authority) returns()
 func (_Bridge *BridgeTransactorSession) SetAuthority(_authority common.Address) (*types.Transaction, error) {
 	return _Bridge.Contract.SetAuthority(&_Bridge.TransactOpts, _authority)
-}
-
-// SetTokenStatus is a paid mutator transaction binding the contract method 0x4cd73548.
-//
-// Solidity: function setTokenStatus(address token, bool status) returns()
-func (_Bridge *BridgeTransactor) SetTokenStatus(opts *bind.TransactOpts, token common.Address, status bool) (*types.Transaction, error) {
-	return _Bridge.contract.Transact(opts, "setTokenStatus", token, status)
-}
-
-// SetTokenStatus is a paid mutator transaction binding the contract method 0x4cd73548.
-//
-// Solidity: function setTokenStatus(address token, bool status) returns()
-func (_Bridge *BridgeSession) SetTokenStatus(token common.Address, status bool) (*types.Transaction, error) {
-	return _Bridge.Contract.SetTokenStatus(&_Bridge.TransactOpts, token, status)
-}
-
-// SetTokenStatus is a paid mutator transaction binding the contract method 0x4cd73548.
-//
-// Solidity: function setTokenStatus(address token, bool status) returns()
-func (_Bridge *BridgeTransactorSession) SetTokenStatus(token common.Address, status bool) (*types.Transaction, error) {
-	return _Bridge.Contract.SetTokenStatus(&_Bridge.TransactOpts, token, status)
 }
 
 // TransferOwnership is a paid mutator transaction binding the contract method 0xf2fde38b.
@@ -873,6 +1016,142 @@ func (_Bridge *BridgeFilterer) ParseOwnershipTransferred(log types.Log) (*Bridge
 	return event, nil
 }
 
+// BridgeTokenAddedIterator is returned from FilterTokenAdded and is used to iterate over the raw logs and unpacked data for TokenAdded events raised by the Bridge contract.
+type BridgeTokenAddedIterator struct {
+	Event *BridgeTokenAdded // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *BridgeTokenAddedIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(BridgeTokenAdded)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(BridgeTokenAdded)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *BridgeTokenAddedIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *BridgeTokenAddedIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// BridgeTokenAdded represents a TokenAdded event raised by the Bridge contract.
+type BridgeTokenAdded struct {
+	ChainId     string
+	SrcToken    string
+	PeggedToken common.Address
+	Raw         types.Log // Blockchain specific contextual infos
+}
+
+// FilterTokenAdded is a free log retrieval operation binding the contract event 0x7ab7074f7826dda120af25c3924584f012f6cc3108c1185301c5461ac75f8007.
+//
+// Solidity: event TokenAdded(string chainId, string srcToken, address peggedToken)
+func (_Bridge *BridgeFilterer) FilterTokenAdded(opts *bind.FilterOpts) (*BridgeTokenAddedIterator, error) {
+
+	logs, sub, err := _Bridge.contract.FilterLogs(opts, "TokenAdded")
+	if err != nil {
+		return nil, err
+	}
+	return &BridgeTokenAddedIterator{contract: _Bridge.contract, event: "TokenAdded", logs: logs, sub: sub}, nil
+}
+
+// WatchTokenAdded is a free log subscription operation binding the contract event 0x7ab7074f7826dda120af25c3924584f012f6cc3108c1185301c5461ac75f8007.
+//
+// Solidity: event TokenAdded(string chainId, string srcToken, address peggedToken)
+func (_Bridge *BridgeFilterer) WatchTokenAdded(opts *bind.WatchOpts, sink chan<- *BridgeTokenAdded) (event.Subscription, error) {
+
+	logs, sub, err := _Bridge.contract.WatchLogs(opts, "TokenAdded")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(BridgeTokenAdded)
+				if err := _Bridge.contract.UnpackLog(event, "TokenAdded", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseTokenAdded is a log parse operation binding the contract event 0x7ab7074f7826dda120af25c3924584f012f6cc3108c1185301c5461ac75f8007.
+//
+// Solidity: event TokenAdded(string chainId, string srcToken, address peggedToken)
+func (_Bridge *BridgeFilterer) ParseTokenAdded(log types.Log) (*BridgeTokenAdded, error) {
+	event := new(BridgeTokenAdded)
+	if err := _Bridge.contract.UnpackLog(event, "TokenAdded", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
 // BridgeTokenMintedIterator is returned from FilterTokenMinted and is used to iterate over the raw logs and unpacked data for TokenMinted events raised by the Bridge contract.
 type BridgeTokenMintedIterator struct {
 	Event *BridgeTokenMinted // Event containing the contract specifics and raw log
@@ -1004,141 +1283,6 @@ func (_Bridge *BridgeFilterer) WatchTokenMinted(opts *bind.WatchOpts, sink chan<
 func (_Bridge *BridgeFilterer) ParseTokenMinted(log types.Log) (*BridgeTokenMinted, error) {
 	event := new(BridgeTokenMinted)
 	if err := _Bridge.contract.UnpackLog(event, "TokenMinted", log); err != nil {
-		return nil, err
-	}
-	event.Raw = log
-	return event, nil
-}
-
-// BridgeTokenStatusChangesIterator is returned from FilterTokenStatusChanges and is used to iterate over the raw logs and unpacked data for TokenStatusChanges events raised by the Bridge contract.
-type BridgeTokenStatusChangesIterator struct {
-	Event *BridgeTokenStatusChanges // Event containing the contract specifics and raw log
-
-	contract *bind.BoundContract // Generic contract to use for unpacking event data
-	event    string              // Event name to use for unpacking event data
-
-	logs chan types.Log        // Log channel receiving the found contract events
-	sub  ethereum.Subscription // Subscription for errors, completion and termination
-	done bool                  // Whether the subscription completed delivering logs
-	fail error                 // Occurred error to stop iteration
-}
-
-// Next advances the iterator to the subsequent event, returning whether there
-// are any more events found. In case of a retrieval or parsing error, false is
-// returned and Error() can be queried for the exact failure.
-func (it *BridgeTokenStatusChangesIterator) Next() bool {
-	// If the iterator failed, stop iterating
-	if it.fail != nil {
-		return false
-	}
-	// If the iterator completed, deliver directly whatever's available
-	if it.done {
-		select {
-		case log := <-it.logs:
-			it.Event = new(BridgeTokenStatusChanges)
-			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-				it.fail = err
-				return false
-			}
-			it.Event.Raw = log
-			return true
-
-		default:
-			return false
-		}
-	}
-	// Iterator still in progress, wait for either a data or an error event
-	select {
-	case log := <-it.logs:
-		it.Event = new(BridgeTokenStatusChanges)
-		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-			it.fail = err
-			return false
-		}
-		it.Event.Raw = log
-		return true
-
-	case err := <-it.sub.Err():
-		it.done = true
-		it.fail = err
-		return it.Next()
-	}
-}
-
-// Error returns any retrieval or parsing error occurred during filtering.
-func (it *BridgeTokenStatusChangesIterator) Error() error {
-	return it.fail
-}
-
-// Close terminates the iteration process, releasing any pending underlying
-// resources.
-func (it *BridgeTokenStatusChangesIterator) Close() error {
-	it.sub.Unsubscribe()
-	return nil
-}
-
-// BridgeTokenStatusChanges represents a TokenStatusChanges event raised by the Bridge contract.
-type BridgeTokenStatusChanges struct {
-	Token  common.Address
-	Status bool
-	Raw    types.Log // Blockchain specific contextual infos
-}
-
-// FilterTokenStatusChanges is a free log retrieval operation binding the contract event 0x5fed5b84a03d5e06426016c488278d810bf74a86eedd32bb2a60771b6ca07599.
-//
-// Solidity: event TokenStatusChanges(address token, bool status)
-func (_Bridge *BridgeFilterer) FilterTokenStatusChanges(opts *bind.FilterOpts) (*BridgeTokenStatusChangesIterator, error) {
-
-	logs, sub, err := _Bridge.contract.FilterLogs(opts, "TokenStatusChanges")
-	if err != nil {
-		return nil, err
-	}
-	return &BridgeTokenStatusChangesIterator{contract: _Bridge.contract, event: "TokenStatusChanges", logs: logs, sub: sub}, nil
-}
-
-// WatchTokenStatusChanges is a free log subscription operation binding the contract event 0x5fed5b84a03d5e06426016c488278d810bf74a86eedd32bb2a60771b6ca07599.
-//
-// Solidity: event TokenStatusChanges(address token, bool status)
-func (_Bridge *BridgeFilterer) WatchTokenStatusChanges(opts *bind.WatchOpts, sink chan<- *BridgeTokenStatusChanges) (event.Subscription, error) {
-
-	logs, sub, err := _Bridge.contract.WatchLogs(opts, "TokenStatusChanges")
-	if err != nil {
-		return nil, err
-	}
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
-				event := new(BridgeTokenStatusChanges)
-				if err := _Bridge.contract.UnpackLog(event, "TokenStatusChanges", log); err != nil {
-					return err
-				}
-				event.Raw = log
-
-				select {
-				case sink <- event:
-				case err := <-sub.Err():
-					return err
-				case <-quit:
-					return nil
-				}
-			case err := <-sub.Err():
-				return err
-			case <-quit:
-				return nil
-			}
-		}
-	}), nil
-}
-
-// ParseTokenStatusChanges is a log parse operation binding the contract event 0x5fed5b84a03d5e06426016c488278d810bf74a86eedd32bb2a60771b6ca07599.
-//
-// Solidity: event TokenStatusChanges(address token, bool status)
-func (_Bridge *BridgeFilterer) ParseTokenStatusChanges(log types.Log) (*BridgeTokenStatusChanges, error) {
-	event := new(BridgeTokenStatusChanges)
-	if err := _Bridge.contract.UnpackLog(event, "TokenStatusChanges", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log

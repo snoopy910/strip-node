@@ -127,6 +127,7 @@ func main() {
 			*intentOperatorsRegistryContractAddress,
 			*solversRegistryContractAddress,
 			*maximumSigners,
+			*bridgeContractAddress,
 		)
 	}
 }

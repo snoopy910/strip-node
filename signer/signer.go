@@ -7,7 +7,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, NodePrivateKey, NodePublicKey string
+var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress, NodePrivateKey, NodePublicKey string
 var MaximumSigners int
 
 type PartyProcess struct {
@@ -28,11 +28,13 @@ func Start(
 	intentOperatorsRegistryContractAddress string,
 	solversRegistryContractAddress string,
 	maximumSigners int,
+	bridgeContractAddress string,
 ) {
 	RPC_URL = rpcURL
 	IntentOperatorsRegistryContractAddress = intentOperatorsRegistryContractAddress
 	SolversRegistryContractAddress = solversRegistryContractAddress
 	NodePrivateKey = signerPrivateKey
+	BridgeContractAddress = bridgeContractAddress
 
 	NodePublicKey = signerPublicKey
 

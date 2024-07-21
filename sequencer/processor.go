@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -139,6 +140,81 @@ func ProcessIntent(intentId int64) {
 					}
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
+					if i == 0 || (operation.Type != OPERATION_TYPE_TRANSACTION && operation.Type != OPERATION_TYPE_SOLVER) {
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+					depositOperation := intent.Operations[i-1]
+
+					if depositOperation.KeyCurve == "ecdsa" {
+						// find token transfer events and check if first transfer is a valid token
+						transfers, err := GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						if len(transfers) == 0 {
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						// check if the token exists
+						transfer := transfers[0]
+						srcAddress := transfer.TokenAddress
+						amount := transfer.Amount
+
+						exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, depositOperation.ChainId, srcAddress)
+
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						if !exists {
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						wallet, err := GetWallet(intent.Identity, "ecdsa")
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						dataToSign, err := bridge.BridgeDepositDataToSign(RPC_URL, BridgeContractAddress, amount, wallet.ECDSAPublicKey, destAddress)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						result, err := mintBridge(
+							amount, wallet.ECDSAPublicKey, destAddress, signature)
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+
+					} else if depositOperation.KeyCurve == "eddsa" {
+						// TODO
+					}
 				}
 
 				break
@@ -147,6 +223,42 @@ func ProcessIntent(intentId int64) {
 			if operation.Status == OPERATION_STATUS_WAITING {
 				// check for confirmations and update the status to completed
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
+					confirmed := false
+					if operation.KeyCurve == "ecdsa" {
+						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+					} else if operation.KeyCurve == "eddsa" {
+						chain, err := GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						if chain.ChainType == "solana" {
+							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+					}
+
+					if !confirmed {
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
+
+					break
+				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" {
 						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)

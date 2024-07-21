@@ -26,6 +26,7 @@ func main() {
 	isDeployBridgeToken := flag.Bool("isDeployBridgeToken", LookupEnvOrBool("IS_DEPLOY_BRIDGE_TOKEN", false), "deploy BridgeToken contract")
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to IntentOperatorsRegistry")
 	isAddSolver := flag.Bool("isAddSolver", LookupEnvOrBool("IS_ADD_SOLVER", false), "add solver to SolversRegistry")
+	isAddToken := flag.Bool("isAddToken", LookupEnvOrBool("IS_ADD_TOKEN", false), "add token to Bridge")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
 	isBootstrap := flag.Bool("isBootstrap", LookupEnvOrBool("IS_BOOTSTRAP", false), "is the process a signer")
 	isSequencer := flag.Bool("isSequencer", LookupEnvOrBool("IS_SEQUENCER", false), "is the process a sequencer")
@@ -48,6 +49,9 @@ func main() {
 	tokenName := flag.String("tokenName", LookupEnvOrString("TOKEN_NAME", "Strip"), "name of the token")
 	tokenSymbol := flag.String("tokenSymbol", LookupEnvOrString("TOKEN_SYMBOL", "STRP"), "symbol of the token")
 	tokenDecimals := flag.Int("tokenDecimals", LookupEnvOrInt("TOKEN_DECIMALS", 18), "decimals of the token")
+	chainId := flag.String("chainId", LookupEnvOrString("CHAIN_ID", "1"), "chain id of the token")
+	tokenAddress := flag.String("tokenAddress", LookupEnvOrString("TOKEN_ADDRESS", ""), "address of the token")
+	peggedToken := flag.String("peggedToken", LookupEnvOrString("PEGGED_TOKEN", ""), "address of the pegged token")
 
 	// postgres
 	postgresHost := flag.String("postgresHost", LookupEnvOrString("POSTGRES_HOST", "localhost:5432"), "postgres host")
@@ -72,6 +76,8 @@ func main() {
 		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *signerPublicKey, *signerNodeURL)
 	} else if *isAddSolver {
 		solversregistry.AddSolver(*rpcURL, *solversRegistryContractAddress, *privateKey, *solverDomain)
+	} else if *isAddToken {
+		bridge.AddToken(*rpcURL, *bridgeContractAddress, *privateKey, *chainId, *tokenAddress, *peggedToken)
 	} else if *isDeployBridge {
 		bridge.DeployBridgeContract(*rpcURL, *privateKey)
 	} else if *isDeployBridgeToken {

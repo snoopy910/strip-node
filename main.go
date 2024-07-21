@@ -86,6 +86,8 @@ func main() {
 			*intentOperatorsRegistryContractAddress,
 			*solversRegistryContractAddress,
 			*heliusApiKey,
+			*bridgeContractAddress,
+			*privateKey,
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)

@@ -171,18 +171,30 @@ services:
     ports:
       - '5434:5432'
 
+  sequencer_wait:
+    image: alpine
+    depends_on:
+      - signer2
+      - signer1
+    command:
+      - /bin/sh
+      - -c
+      - |
+          echo "sleep for 60sec"
+          sleep 60 
+
   sequencer:
     build: 
       context: .
       dockerfile: ./Dockerfile
     container_name: sequencer
     depends_on:
-      - signer2
-      - signer1
+      sequencer_wait:
+        condition: service_completed_successfully
     ports:
       - '30306:30306'
       - '80:8082'
-    command: ["--rpcURL", "http://ganache:8545", "--httpPort", "8082", "--postgresHost", "sequencerpostgres:5432", "--isSequencer", "true"]
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--httpPort", "8082", "--postgresHost", "sequencerpostgres:5432", "--isSequencer", "true"]
   
   solver:
     build: 

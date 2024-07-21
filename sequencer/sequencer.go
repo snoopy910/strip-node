@@ -8,8 +8,9 @@ import (
 )
 
 var MaximumSigners int
-var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress string
+var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress string
 var HeliusApiKey string
+var PrivateKey string
 
 func StartSequencer(
 	httpPort string,
@@ -17,6 +18,8 @@ func StartSequencer(
 	intentOperatorsRegistryContractAddress string,
 	solversRegistryContractAddress string,
 	heliusApiKey string,
+	bridgeContractAddress string,
+	privateKey string,
 ) {
 	keepAlive := make(chan string)
 
@@ -34,6 +37,8 @@ func StartSequencer(
 	RPC_URL = rpcURL
 	IntentOperatorsRegistryContractAddress = intentOperatorsRegistryContractAddress
 	SolversRegistryContractAddress = solversRegistryContractAddress
+	BridgeContractAddress = bridgeContractAddress
+	PrivateKey = privateKey
 
 	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(rpcURL, intentOperatorsRegistryContractAddress)
 	_maxSigners, err := instance.MAXIMUMSIGNERS(&bind.CallOpts{})
@@ -42,6 +47,8 @@ func StartSequencer(
 	}
 
 	MaximumSigners = int(_maxSigners.Int64())
+
+	initiaiseBridge(bridgeContractAddress, rpcURL, privateKey)
 
 	go startHTTPServer(httpPort)
 

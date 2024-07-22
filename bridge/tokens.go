@@ -25,15 +25,11 @@ func TokenExists(rpcURL string, bridgeContractAddress string, chainId string, sr
 		return false, "", err
 	}
 
-	fmt.Println("Checking if token exists...", bridgeContractAddress, chainId, srcToken)
-
 	peggedToken, err := instance.PeggedTokens(&bind.CallOpts{}, chainId, srcToken)
 
 	if err != nil {
 		return false, "", err
 	}
-
-	fmt.Println("Pegged token addr...", peggedToken.Hex())
 
 	if peggedToken != common.HexToAddress(util.ZERO_ADDRESS) {
 		return true, peggedToken.Hex(), nil

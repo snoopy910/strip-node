@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -129,7 +131,7 @@ func mintBridge(amount string, account string, token string, signature string) (
 		return "", err
 	}
 
-	amountBigInt, _ := big.NewInt(0).SetString(amount, 10)
+	amountBigInt, _ := new(big.Int).SetString(amount, 10)
 	signatureBytes, err := hex.DecodeString(signature)
 	if err != nil {
 		return "", err
@@ -170,13 +172,30 @@ func mintBridge(amount string, account string, token string, signature string) (
 
 	auth.Nonce = big.NewInt(int64(txnNonce))
 
+	ethSigHex := hexutil.Encode(signatureBytes[:])
+	recoveryParam := ethSigHex[len(ethSigHex)-2:]
+	ethSigHex = ethSigHex[:len(ethSigHex)-2]
+
+	if recoveryParam == "00" {
+		ethSigHex = ethSigHex + "1b"
+	} else {
+		ethSigHex = ethSigHex + "1c"
+	}
+
+	ethSigHex = strings.Replace(ethSigHex, "0x", "", -1)
+
+	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	tx, err := instance.Mint(
 		auth,
 		amountBigInt,
-		common.HexToAddress(account),
 		common.HexToAddress(token),
+		common.HexToAddress(account),
 		nonce,
-		signatureBytes,
+		ethSigHexBytes,
 	)
 
 	if err != nil {

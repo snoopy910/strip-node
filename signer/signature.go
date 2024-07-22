@@ -223,7 +223,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					KeyCurve:      keyCurve,
 				}
 
-				fmt.Println(publicKeyToAddress(pubkey))
+				fmt.Println("Address of the generated signature: ", publicKeyToAddress(pubkey))
 
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 

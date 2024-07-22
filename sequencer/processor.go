@@ -206,6 +206,8 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
+						fmt.Println("Minting bridge", amount, wallet.ECDSAPublicKey, destAddress, signature)
+
 						result, err := mintBridge(
 							amount, wallet.ECDSAPublicKey, destAddress, signature)
 

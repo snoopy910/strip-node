@@ -184,6 +184,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 				Token:        chain.TokenSymbol,
 				IsNative:     true,
 				TokenAddress: util.ZERO_ADDRESS,
+				ScaledAmount: num.String(),
 			})
 		}
 
@@ -226,6 +227,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 				Token:        tokenTransfer.Mint,
 				IsNative:     false,
 				TokenAddress: tokenTransfer.Mint,
+				ScaledAmount: num.String(),
 			})
 		}
 	}

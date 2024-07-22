@@ -141,12 +141,14 @@ func ProcessIntent(intentId int64) {
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
-					if i == 0 || (operation.Type != OPERATION_TYPE_TRANSACTION && operation.Type != OPERATION_TYPE_SOLVER) {
+					depositOperation := intent.Operations[i-1]
+
+					if i == 0 || !(depositOperation.Type == OPERATION_TYPE_TRANSACTION || depositOperation.Type == OPERATION_TYPE_SOLVER) {
+						fmt.Println("Invalid operation type for bridge deposit")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
-					depositOperation := intent.Operations[i-1]
 
 					if depositOperation.KeyCurve == "ecdsa" {
 						// find token transfer events and check if first transfer is a valid token
@@ -157,6 +159,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if len(transfers) == 0 {
+							fmt.Println("No transfers found", depositOperation.Result, intent.Identity)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -165,7 +168,7 @@ func ProcessIntent(intentId int64) {
 						// check if the token exists
 						transfer := transfers[0]
 						srcAddress := transfer.TokenAddress
-						amount := transfer.Amount
+						amount := transfer.ScaledAmount
 
 						exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, depositOperation.ChainId, srcAddress)
 
@@ -175,6 +178,8 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if !exists {
+							fmt.Println("Token does not exist", srcAddress, depositOperation.ChainId)
+
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -193,6 +198,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						intent.Operations[i].SolverDataToSign = dataToSign
 
 						signature, err := getSignature(intent, i)
 						if err != nil {

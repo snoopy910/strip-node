@@ -19,6 +19,7 @@ type Transfer struct {
 	Token        string `json:"token"`
 	IsNative     bool   `json:"isNative"`
 	TokenAddress string `json:"tokenAddress"`
+	ScaledAmount string `json:"scaledAmount"`
 }
 
 func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]Transfer, error) {
@@ -63,6 +64,7 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 				Token:        symbol,
 				IsNative:     false,
 				TokenAddress: log.Address.Hex(),
+				ScaledAmount: new(big.Int).SetBytes(log.Data).String(),
 			})
 		}
 	}
@@ -82,6 +84,7 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 			Token:        chain.TokenSymbol,
 			IsNative:     true,
 			TokenAddress: util.ZERO_ADDRESS,
+			ScaledAmount: wei.String(),
 		})
 	}
 

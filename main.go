@@ -49,8 +49,8 @@ func main() {
 	tokenName := flag.String("tokenName", LookupEnvOrString("TOKEN_NAME", "Strip"), "name of the token")
 	tokenSymbol := flag.String("tokenSymbol", LookupEnvOrString("TOKEN_SYMBOL", "STRP"), "symbol of the token")
 	tokenDecimals := flag.Int("tokenDecimals", LookupEnvOrInt("TOKEN_DECIMALS", 18), "decimals of the token")
-	chainId := flag.String("chainId", LookupEnvOrString("CHAIN_ID", "1"), "chain id of the token")
-	tokenAddress := flag.String("tokenAddress", LookupEnvOrString("TOKEN_ADDRESS", ""), "address of the token")
+	chainId := flag.String("chainId", LookupEnvOrString("CHAIN_ID", "1337"), "chain id of the token")
+	tokenAddress := flag.String("tokenAddress", LookupEnvOrString("TOKEN_ADDRESS", "0x0000000000000000000000000000000000000000"), "address of the token")
 	peggedToken := flag.String("peggedToken", LookupEnvOrString("PEGGED_TOKEN", ""), "address of the pegged token")
 
 	// postgres

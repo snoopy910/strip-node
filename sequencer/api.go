@@ -147,6 +147,22 @@ func startHTTPServer(port string) {
 		}
 	})
 
+	http.HandleFunc("/getBridgeAddress", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
+		wallet, err := GetWallet(BridgeContractAddress, "ecdsa")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = json.NewEncoder(w).Encode(wallet)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 

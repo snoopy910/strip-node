@@ -74,7 +74,7 @@ services:
       context: .
       dockerfile: ./Dockerfile
     container_name: deploy_eth_pegged_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isAddToken", "true", "--chainId", "1337", "--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x37AA3eF8aB0CD9E22D4Cfce5355ec2cd07e9E36B"]
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--chainId", "1337","--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x37AA3eF8aB0CD9E22D4Cfce5355ec2cd07e9E36B","--isAddToken", "true",  ]
     depends_on:
       deploy_sol_token:
           condition: service_completed_successfully
@@ -84,7 +84,7 @@ services:
       context: .
       dockerfile: ./Dockerfile
     container_name: deploy_sol_pegged_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isAddToken", "true", "--chainId", "901", "--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x45ff1aD4D8BdDC5c9573f8e30f725D3FF12A0a3e"]
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545",  "--chainId", "901","--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x45ff1aD4D8BdDC5c9573f8e30f725D3FF12A0a3e","--isAddToken", "true"]
     depends_on:
       deploy_eth_pegged_token:
           condition: service_completed_successfully

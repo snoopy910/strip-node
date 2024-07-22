@@ -191,7 +191,7 @@ func startHTTPServer(port string) {
 			msg = res
 		} else if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT {
 			// validate if the DataToSign is actually correct by decoding the previous operation
-			msg = intent.Operations[operationIndexInt].DataToSign
+			msg = intent.Operations[operationIndexInt].SolverDataToSign
 		}
 
 		identity := intent.Identity
@@ -231,7 +231,11 @@ func startHTTPServer(port string) {
 
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else if keyCurve == ECDSA_CURVE {
-			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
+			if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT {
+				go generateSignatureMessage(BridgeContractAddress, "ecdsa", "ecdsa", []byte(msg))
+			} else {
+				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
+			}
 		} else {
 			http.Error(w, "invalid key curve", http.StatusBadRequest)
 			return

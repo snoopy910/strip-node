@@ -20,7 +20,7 @@ func BridgeDepositDataToSign(rpcURL string, bridgeContractAddress string, amount
 		return "", err
 	}
 
-	amountBigInt, _ := big.NewInt(0).SetString(amount, 10)
+	amountBigInt, _ := new(big.Int).SetString(amount, 10)
 	nonce, err := instance.MintNonces(&bind.CallOpts{}, common.HexToAddress(account))
 	if err != nil {
 		return "", err

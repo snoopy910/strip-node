@@ -1,4 +1,4 @@
-package bridgeToken
+package bridgeTokenMock
 
 import (
 	"context"
@@ -49,7 +49,7 @@ func DeployBridgeTokenContract(rpcURL string, privKey string, name string, symbo
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
 
-	address, tx, instance, err := DeployBridgeToken(auth, client)
+	address, tx, instance, err := DeployBridgeTokenMock(auth, client)
 	if err != nil {
 		log.Fatal(err)
 	}

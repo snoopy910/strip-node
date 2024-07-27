@@ -137,7 +137,7 @@ func mintBridge(amount string, account string, token string, signature string) (
 		return "", err
 	}
 
-	nonce, err := instance.MintNonces(&bind.CallOpts{}, common.HexToAddress(account))
+	nonce, err := instance.Nonces(&bind.CallOpts{}, common.HexToAddress(account))
 	if err != nil {
 		return "", err
 	}

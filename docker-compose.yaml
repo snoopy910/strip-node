@@ -69,24 +69,54 @@ services:
       deploy_eth_token:
           condition: service_completed_successfully
 
-  deploy_eth_pegged_token:
+  deploy_usdc_token:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: deploy_usdc_token
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridgeToken", "true", "--tokenName", "Strip USDC", "--tokenSymbol", "sUSDC", "--tokenDecimals", "6"]
+    depends_on:
+      deploy_sol_token:
+          condition: service_completed_successfully
+  
+  deploy_original_usdc_token:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: deploy_original_usdc_token
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployERC20Token", "true", "--tokenName", "USD Coin", "--tokenSymbol", "USDC", "--tokenDecimals", "6"]
+    depends_on:
+      deploy_usdc_token:
+          condition: service_completed_successfully
+
+  add_eth_pegged_token:
     build: 
       context: .
       dockerfile: ./Dockerfile
     container_name: deploy_eth_pegged_token
     command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--chainId", "1337","--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x37AA3eF8aB0CD9E22D4Cfce5355ec2cd07e9E36B","--isAddToken", "true",  ]
     depends_on:
-      deploy_sol_token:
+      deploy_original_usdc_token:
+          condition: service_completed_successfully
+
+  add_usdc_pegged_token:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: add_usdc_pegged_token
+    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--chainId", "1337","--tokenAddress", "0x0c3729964A75870f9c692833A18AFE315be700e1", "--peggedToken", "0x9af0e87FBA28e20863488bda3CfA012d1c7863d9","--isAddToken", "true",  ]
+    depends_on:
+      add_eth_pegged_token:
           condition: service_completed_successfully
   
-  deploy_sol_pegged_token:
+  add_sol_pegged_token:
     build: 
       context: .
       dockerfile: ./Dockerfile
     container_name: deploy_sol_pegged_token
     command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545",  "--chainId", "901","--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x45ff1aD4D8BdDC5c9573f8e30f725D3FF12A0a3e","--isAddToken", "true"]
     depends_on:
-      deploy_eth_pegged_token:
+      add_usdc_pegged_token:
           condition: service_completed_successfully
 
   add_signer_1:
@@ -96,7 +126,7 @@ services:
     container_name: add_signer_1
     command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--signerNodeURL", "http://signer1:8080", "--signerPublicKey", "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--isAddsigner", "true"]
     depends_on:
-      deploy_sol_pegged_token:
+      add_sol_pegged_token:
         condition: service_completed_successfully
 
   add_signer_2:

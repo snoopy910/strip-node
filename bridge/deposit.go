@@ -21,12 +21,12 @@ func BridgeDepositDataToSign(rpcURL string, bridgeContractAddress string, amount
 	}
 
 	amountBigInt, _ := new(big.Int).SetString(amount, 10)
-	nonce, err := instance.MintNonces(&bind.CallOpts{}, common.HexToAddress(account))
+	nonce, err := instance.Nonces(&bind.CallOpts{}, common.HexToAddress(account))
 	if err != nil {
 		return "", err
 	}
 
-	messageHash, err := instance.GetMessageHash(
+	messageHash, err := instance.GetMintMessageHash(
 		&bind.CallOpts{},
 		common.HexToAddress(account),
 		nonce,

@@ -6,9 +6,10 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/StripChain/strip-node/ERC20"
 	bootnode "github.com/StripChain/strip-node/bootnode"
 	"github.com/StripChain/strip-node/bridge"
-	"github.com/StripChain/strip-node/bridgeToken"
+	"github.com/StripChain/strip-node/bridgeTokenMock"
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/StripChain/strip-node/sequencer"
 	signer "github.com/StripChain/strip-node/signer"
@@ -24,6 +25,7 @@ func main() {
 	isDeploySolversRegistry := flag.Bool("isDeploySolversRegistry", LookupEnvOrBool("IS_DEPLOY_SOLVERS_REGISTRY", false), "deploy SolversRegistry contract")
 	isDeployBridge := flag.Bool("isDeployBridge", LookupEnvOrBool("IS_DEPLOY_BRIDGE", false), "deploy Bridge contract")
 	isDeployBridgeToken := flag.Bool("isDeployBridgeToken", LookupEnvOrBool("IS_DEPLOY_BRIDGE_TOKEN", false), "deploy BridgeToken contract")
+	isDeployERC20Token := flag.Bool("isDeployERC20Token", LookupEnvOrBool("IS_DEPLOY_ERC20_TOKEN", false), "deploy ERC20 token contract")
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to IntentOperatorsRegistry")
 	isAddSolver := flag.Bool("isAddSolver", LookupEnvOrBool("IS_ADD_SOLVER", false), "add solver to SolversRegistry")
 	isAddToken := flag.Bool("isAddToken", LookupEnvOrBool("IS_ADD_TOKEN", false), "add token to Bridge")
@@ -81,7 +83,9 @@ func main() {
 	} else if *isDeployBridge {
 		bridge.DeployBridgeContract(*rpcURL, *privateKey)
 	} else if *isDeployBridgeToken {
-		bridgeToken.DeployBridgeTokenContract(*rpcURL, *privateKey, *tokenName, *tokenSymbol, uint(*tokenDecimals), *bridgeContractAddress)
+		bridgeTokenMock.DeployBridgeTokenContract(*rpcURL, *privateKey, *tokenName, *tokenSymbol, uint(*tokenDecimals), *bridgeContractAddress)
+	} else if *isDeployERC20Token {
+		ERC20.DeployERC20Token(*rpcURL, *privateKey, *tokenName, *tokenSymbol, uint(*tokenDecimals))
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else if *isSequencer {

@@ -26,6 +26,11 @@ import (
 	"github.com/mr-tron/base58"
 )
 
+type MintOutput struct {
+	Token  string `json:"token"`
+	Amount string `json:"amount"`
+}
+
 func ProcessIntent(intentId int64) {
 	for {
 		intent, err := GetIntent(intentId)
@@ -218,6 +223,19 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
+						mintOutput := MintOutput{
+							Token:  destAddress,
+							Amount: amount,
+						}
+
+						mintOutputBytes, err := json.Marshal(mintOutput)
+
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						UpdateOperationSolverOutput(operation.ID, string(mintOutputBytes))
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" {
@@ -337,6 +355,20 @@ func ProcessIntent(intentId int64) {
 						if err != nil {
 							fmt.Println(err)
 							break
+						}
+					} else if operation.KeyCurve == "eddsa" {
+						chain, err := GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						if chain.ChainType == "solana" {
+							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
 						}
 					}
 

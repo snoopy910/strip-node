@@ -31,6 +31,10 @@ type MintOutput struct {
 	Amount string `json:"amount"`
 }
 
+type SwapMetadata struct {
+	Token string `json:"token"`
+}
+
 func ProcessIntent(intentId int64) {
 	for {
 		intent, err := GetIntent(intentId)
@@ -305,6 +309,86 @@ func ProcessIntent(intentId int64) {
 
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 					}
+				} else if operation.Type == OPERATION_TYPE_SWAP {
+					bridgeDeposit := intent.Operations[i-1]
+
+					if i == 0 || !(bridgeDeposit.Type == OPERATION_TYPE_BRIDGE_DEPOSIT) {
+						fmt.Println("Invalid operation type for swap")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					fmt.Println(1)
+
+					var bridgeDepositData MintOutput
+					var swapMetadata SwapMetadata
+					json.Unmarshal([]byte(bridgeDeposit.SolverOutput), &bridgeDepositData)
+					json.Unmarshal([]byte(operation.SolverMetadata), &swapMetadata)
+
+					fmt.Println(2)
+					fmt.Println(bridgeDepositData, swapMetadata)
+
+					tokenIn := bridgeDepositData.Token
+					tokenOut := swapMetadata.Token
+					amountIn := bridgeDepositData.Amount
+					deadline := time.Now().Add(time.Hour).Unix()
+
+					fmt.Println(3)
+					fmt.Println(tokenIn, tokenOut, amountIn, deadline)
+
+					wallet, err := GetWallet(intent.Identity, "ecdsa")
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					dataToSign, err := bridge.BridgeSwapDataToSign(
+						RPC_URL,
+						BridgeContractAddress,
+						wallet.ECDSAPublicKey,
+						tokenIn,
+						tokenOut,
+						amountIn,
+						deadline,
+					)
+
+					fmt.Println(4)
+					fmt.Println(dataToSign)
+
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					intent.Operations[i].SolverDataToSign = dataToSign
+
+					signature, err := getSignature(intent, i)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					fmt.Println("Swapping bridge", wallet.ECDSAPublicKey, tokenIn, tokenOut, amountIn, deadline, signature)
+
+					result, err := swapBridge(
+						wallet.ECDSAPublicKey,
+						tokenIn,
+						tokenOut,
+						amountIn,
+						deadline,
+						signature,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 				}
 
 				break
@@ -417,6 +501,36 @@ func ProcessIntent(intentId int64) {
 					}
 
 					break
+				} else if operation.Type == OPERATION_TYPE_SWAP {
+					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if !confirmed {
+						break
+					}
+
+					swapOutput, err := bridge.GetSwapOutput(
+						RPC_URL,
+						operation.Result,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					UpdateOperationSolverOutput(operation.ID, swapOutput)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
 				}
 			}
 		}

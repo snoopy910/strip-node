@@ -204,3 +204,106 @@ func mintBridge(amount string, account string, token string, signature string) (
 
 	return tx.Hash().Hex(), nil
 }
+
+func swapBridge(
+	account string,
+	tokenIn string,
+	tokenOut string,
+	amountIn string,
+	deadline int64,
+	signature string,
+) (string, error) {
+	client, err := ethclient.Dial(RPC_URL)
+	if err != nil {
+		return "", err
+	}
+
+	instance, err := bridge.NewBridge(common.HexToAddress(BridgeContractAddress), client)
+	if err != nil {
+		return "", err
+	}
+
+	signatureBytes, err := hex.DecodeString(signature)
+	if err != nil {
+		return "", err
+	}
+
+	nonce, err := instance.Nonces(&bind.CallOpts{}, common.HexToAddress(account))
+	if err != nil {
+		return "", err
+	}
+
+	privateKey, err := crypto.HexToECDSA(PrivateKey)
+	if err != nil {
+		return "", err
+	}
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return "", err
+	}
+
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Value = big.NewInt(0) // in wei
+	auth.GasPrice = gasPrice
+	auth.GasLimit = 972978
+
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
+	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return "", err
+	}
+
+	auth.Nonce = big.NewInt(int64(txnNonce))
+
+	ethSigHex := hexutil.Encode(signatureBytes[:])
+	recoveryParam := ethSigHex[len(ethSigHex)-2:]
+	ethSigHex = ethSigHex[:len(ethSigHex)-2]
+
+	if recoveryParam == "00" {
+		ethSigHex = ethSigHex + "1b"
+	} else {
+		ethSigHex = ethSigHex + "1c"
+	}
+
+	ethSigHex = strings.Replace(ethSigHex, "0x", "", -1)
+
+	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_amountIn, _ := new(big.Int).SetString(amountIn, 10)
+
+	params := bridge.ISwapRouterExactInputSingleParams{
+		AmountIn:          _amountIn,
+		AmountOutMinimum:  big.NewInt(0),
+		TokenIn:           common.HexToAddress(tokenIn),
+		TokenOut:          common.HexToAddress(tokenOut),
+		Fee:               big.NewInt(500),
+		Recipient:         common.HexToAddress(account),
+		Deadline:          big.NewInt(0).SetInt64(deadline),
+		SqrtPriceLimitX96: big.NewInt(0),
+	}
+
+	tx, err := instance.Swap(
+		auth,
+		params,
+		common.HexToAddress(account),
+		nonce,
+		ethSigHexBytes,
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	return tx.Hash().Hex(), nil
+}

@@ -29,6 +29,7 @@ func main() {
 	isAddSigner := flag.Bool("isAddsigner", LookupEnvOrBool("IS_ADD_SIGNER", false), "add signer to IntentOperatorsRegistry")
 	isAddSolver := flag.Bool("isAddSolver", LookupEnvOrBool("IS_ADD_SOLVER", false), "add solver to SolversRegistry")
 	isAddToken := flag.Bool("isAddToken", LookupEnvOrBool("IS_ADD_TOKEN", false), "add token to Bridge")
+	isSetSwapRouter := flag.Bool("isSetSwapRouter", LookupEnvOrBool("IS_SET_SWAP_ROUTER", false), "set swap router in Bridge")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
 	isBootstrap := flag.Bool("isBootstrap", LookupEnvOrBool("IS_BOOTSTRAP", false), "is the process a signer")
 	isSequencer := flag.Bool("isSequencer", LookupEnvOrBool("IS_SEQUENCER", false), "is the process a sequencer")
@@ -54,6 +55,7 @@ func main() {
 	chainId := flag.String("chainId", LookupEnvOrString("CHAIN_ID", "1337"), "chain id of the token")
 	tokenAddress := flag.String("tokenAddress", LookupEnvOrString("TOKEN_ADDRESS", "0x0000000000000000000000000000000000000000"), "address of the token")
 	peggedToken := flag.String("peggedToken", LookupEnvOrString("PEGGED_TOKEN", ""), "address of the pegged token")
+	swapRouter := flag.String("swapRouter", LookupEnvOrString("SWAP_ROUTER", "0x3466c635Bdf084DA32CD5bc16c00C1CA1A459011"), "address of the swap router")
 
 	// postgres
 	postgresHost := flag.String("postgresHost", LookupEnvOrString("POSTGRES_HOST", "localhost:5432"), "postgres host")
@@ -86,6 +88,8 @@ func main() {
 		bridgeTokenMock.DeployBridgeTokenContract(*rpcURL, *privateKey, *tokenName, *tokenSymbol, uint(*tokenDecimals), *bridgeContractAddress)
 	} else if *isDeployERC20Token {
 		ERC20.DeployERC20Token(*rpcURL, *privateKey, *tokenName, *tokenSymbol, uint(*tokenDecimals))
+	} else if *isSetSwapRouter {
+		bridge.SetSwapRouter(*rpcURL, *privateKey, *bridgeContractAddress, *swapRouter)
 	} else if *isBootstrap {
 		bootnode.Start(*listenHost, *port, *path)
 	} else if *isSequencer {

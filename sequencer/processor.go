@@ -319,23 +319,15 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					fmt.Println(1)
-
 					var bridgeDepositData MintOutput
 					var swapMetadata SwapMetadata
 					json.Unmarshal([]byte(bridgeDeposit.SolverOutput), &bridgeDepositData)
 					json.Unmarshal([]byte(operation.SolverMetadata), &swapMetadata)
 
-					fmt.Println(2)
-					fmt.Println(bridgeDepositData, swapMetadata)
-
 					tokenIn := bridgeDepositData.Token
 					tokenOut := swapMetadata.Token
 					amountIn := bridgeDepositData.Amount
 					deadline := time.Now().Add(time.Hour).Unix()
-
-					fmt.Println(3)
-					fmt.Println(tokenIn, tokenOut, amountIn, deadline)
 
 					wallet, err := GetWallet(intent.Identity, "ecdsa")
 					if err != nil {
@@ -352,9 +344,6 @@ func ProcessIntent(intentId int64) {
 						amountIn,
 						deadline,
 					)
-
-					fmt.Println(4)
-					fmt.Println(dataToSign)
 
 					if err != nil {
 						fmt.Println(err)

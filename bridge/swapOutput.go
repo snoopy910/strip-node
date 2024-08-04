@@ -3,12 +3,12 @@ package bridge
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -27,6 +27,9 @@ func GetSwapOutput(
 		return "", err
 	}
 
+	eventSig := []byte("TokenSwapped(address,address,address,uint256,uint256)")
+	eventSigHash := crypto.Keccak256Hash(eventSig)
+
 	contractABI := `[
 		{
 			"anonymous": false,
@@ -42,33 +45,22 @@ func GetSwapOutput(
 		}
 	]`
 
-	type TokenSwappedEvent struct {
-		User      common.Address
-		TokenIn   common.Address
-		TokenOut  common.Address
-		AmountIn  *big.Int
-		AmountOut *big.Int
-	}
-
 	contractAbi, err := abi.JSON(strings.NewReader(contractABI))
 	if err != nil {
 		return "", err
 	}
 
 	for _, vLog := range receipt.Logs {
-		event := new(TokenSwappedEvent)
-		err := contractAbi.UnpackIntoInterface(event, "TokenSwapped", vLog.Data)
-		if err != nil {
-			continue
+		if vLog.Topics[0].Hex() == eventSigHash.Hex() {
+			event, err := contractAbi.Unpack("TokenSwapped", vLog.Data)
+			if err != nil {
+				return "", err
+			}
+
+			value := event[4].(*big.Int)
+
+			return value.String(), nil
 		}
-
-		fmt.Printf("User: %s\n", event.User.Hex())
-		fmt.Printf("TokenIn: %s\n", event.TokenIn.Hex())
-		fmt.Printf("TokenOut: %s\n", event.TokenOut.Hex())
-		fmt.Printf("AmountIn: %s\n", event.AmountIn.String())
-		fmt.Printf("AmountOut: %s\n", event.AmountOut.String())
-
-		return event.AmountOut.String(), nil
 	}
 
 	return "", errors.New("TokenSwapped event not found")

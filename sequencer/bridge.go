@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/StripChain/strip-node/bridge"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -433,7 +434,7 @@ func withdrawEVMNativeGetSignature(
 	return txHash.Bytes(), tx, nil
 }
 
-func withdrawEVMNativeSendTxn(
+func withdrawEVMTxn(
 	rpcURL string,
 	signature string,
 	tx *types.Transaction,
@@ -488,4 +489,51 @@ func withdrawEVMNativeSendTxn(
 	}
 
 	return signedTx.Hash().Hex(), nil
+}
+
+func withdrawERC20GetSignature(
+	rpcURL string,
+	account string,
+	amount string,
+	recipient string,
+	chainId string,
+	token string,
+) (string, *types.Transaction, error) {
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return "", nil, err
+	}
+
+	const erc20ABI = `[{"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
+
+	nonce, err := client.PendingNonceAt(context.Background(), common.HexToAddress(account))
+	if err != nil {
+		return "", nil, err
+	}
+
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", nil, err
+	}
+
+	gasLimit := uint64(60000)
+
+	amountBigInt, _ := new(big.Int).SetString(amount, 10)
+
+	parsedABI, err := abi.JSON(strings.NewReader(erc20ABI))
+	if err != nil {
+		return "", nil, err
+	}
+
+	data, err := parsedABI.Pack("transfer", common.HexToAddress(recipient), amountBigInt)
+	if err != nil {
+		return "", nil, err
+	}
+
+	tx := types.NewTransaction(nonce, common.HexToAddress(token), big.NewInt(0), gasLimit, gasPrice, data)
+	chainIdBigInt, _ := new(big.Int).SetString(chainId, 10)
+	signer := types.NewEIP155Signer(chainIdBigInt)
+	txHash := signer.Hash(tx)
+
+	return hex.EncodeToString(txHash.Bytes()), tx, nil
 }

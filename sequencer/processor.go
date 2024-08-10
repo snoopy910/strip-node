@@ -16,6 +16,7 @@ import (
 
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/solver"
+	"github.com/StripChain/strip-node/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -387,6 +388,8 @@ func ProcessIntent(intentId int64) {
 					}
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+
+					break
 				} else if operation.Type == OPERATION_TYPE_BURN {
 					bridgeSwap := intent.Operations[i-1]
 
@@ -396,6 +399,8 @@ func ProcessIntent(intentId int64) {
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
+
+					fmt.Println("Burning tokens", bridgeSwap)
 
 					burnAmount := bridgeSwap.SolverOutput
 					burnMetadata := BurnMetadata{}
@@ -447,6 +452,7 @@ func ProcessIntent(intentId int64) {
 					}
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					burn := intent.Operations[i-1]
 
@@ -496,7 +502,64 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
+					bridgeWallet, err := GetWallet(BridgeContractAddress, "ecdsa")
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					user, err := GetWallet(intent.Identity, intent.IdentityCurve)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
 					if withdrawalChain.KeyCurve == "ecdsa" {
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// handle native token
+						} else {
+							dataToSign, tx, err := withdrawERC20GetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.Identity,
+								burn.SolverOutput,
+								user.ECDSAPublicKey,
+								chainIdToWithdrawTo,
+								tokenToWithdraw,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := withdrawEVMTxn(
+								withdrawalChain.ChainUrl,
+								signature,
+								tx,
+								chainIdToWithdrawTo,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+
+						}
+
+						break
 					} else if withdrawalChain.KeyCurve == "eddsa" {
 					}
 				}
@@ -641,6 +704,8 @@ func ProcessIntent(intentId int64) {
 						// update the intent status to completed
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
 					}
+
+					break
 				} else if operation.Type == OPERATION_TYPE_BURN {
 					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					if err != nil {
@@ -671,6 +736,44 @@ func ProcessIntent(intentId int64) {
 						// update the intent status to completed
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
 					}
+
+					break
+				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
+					confirmed := false
+					if operation.KeyCurve == "ecdsa" {
+						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+					} else if operation.KeyCurve == "eddsa" {
+						chain, err := GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						if chain.ChainType == "solana" {
+							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+					}
+
+					if !confirmed {
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
+
+					break
 				}
 			}
 		}

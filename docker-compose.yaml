@@ -169,7 +169,7 @@ services:
         condition: service_completed_successfully
 
   signer1postgres:
-    image: postgres:latest
+    image: postgres:14.13
     container_name: signer1postgres
     environment:
       POSTGRES_PASSWORD: password
@@ -177,7 +177,7 @@ services:
       - '5432:5432'
   
   signer2postgres:
-    image: postgres:latest
+    image: postgres:14.13
     container_name: signer2postgres
     environment:
       POSTGRES_PASSWORD: password
@@ -211,7 +211,7 @@ services:
     command: ["--signerPublicKey", "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35", "--signerPrivateKey", "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de", "--rpcURL", "http://ganache:8545", "--httpPort", "8081", "--port", "30305", "--postgresHost", "signer2postgres:5432", "--bootnode", "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"]
 
   sequencerpostgres:
-    image: postgres:latest
+    image: postgres:14.13
     container_name: sequencerpostgres
     environment:
       POSTGRES_PASSWORD: password

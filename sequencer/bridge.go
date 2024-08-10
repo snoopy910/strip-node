@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -306,4 +307,185 @@ func swapBridge(
 	}
 
 	return tx.Hash().Hex(), nil
+}
+
+func burnTokens(
+	account string,
+	amount string,
+	token string,
+	signature string,
+) (string, error) {
+	client, err := ethclient.Dial(RPC_URL)
+	if err != nil {
+		return "", err
+	}
+
+	instance, err := bridge.NewBridge(common.HexToAddress(BridgeContractAddress), client)
+	if err != nil {
+		return "", err
+	}
+
+	amountBigInt, _ := new(big.Int).SetString(amount, 10)
+	signatureBytes, err := hex.DecodeString(signature)
+	if err != nil {
+		return "", err
+	}
+
+	nonce, err := instance.Nonces(&bind.CallOpts{}, common.HexToAddress(account))
+	if err != nil {
+		return "", err
+	}
+
+	privateKey, err := crypto.HexToECDSA(PrivateKey)
+	if err != nil {
+		return "", err
+	}
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return "", err
+	}
+
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Value = big.NewInt(0) // in wei
+	auth.GasPrice = gasPrice
+	auth.GasLimit = 972978
+
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
+	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return "", err
+	}
+
+	auth.Nonce = big.NewInt(int64(txnNonce))
+
+	ethSigHex := hexutil.Encode(signatureBytes[:])
+	recoveryParam := ethSigHex[len(ethSigHex)-2:]
+	ethSigHex = ethSigHex[:len(ethSigHex)-2]
+
+	if recoveryParam == "00" {
+		ethSigHex = ethSigHex + "1b"
+	} else {
+		ethSigHex = ethSigHex + "1c"
+	}
+
+	ethSigHex = strings.Replace(ethSigHex, "0x", "", -1)
+
+	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tx, err := instance.Burn(
+		auth,
+		common.HexToAddress(account),
+		amountBigInt,
+		common.HexToAddress(token),
+		nonce,
+		ethSigHexBytes,
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	return tx.Hash().Hex(), nil
+}
+
+func withdrawEVMNativeGetSignature(
+	rpcURL string,
+	account string,
+	amount string,
+	recipient string,
+	chainId string,
+) ([]byte, *types.Transaction, error) {
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), common.HexToAddress(account))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	gasLimit := uint64(60000)
+
+	amountBigInt, _ := new(big.Int).SetString(amount, 10)
+
+	tx := types.NewTransaction(nonce, common.HexToAddress(recipient), amountBigInt, gasLimit, gasPrice, nil)
+	chainIdBigInt, _ := new(big.Int).SetString(chainId, 10)
+	signer := types.NewEIP155Signer(chainIdBigInt)
+	txHash := signer.Hash(tx)
+
+	return txHash.Bytes(), tx, nil
+}
+
+func withdrawEVMNativeSendTxn(
+	rpcURL string,
+	signature string,
+	tx *types.Transaction,
+	chainId string,
+) (string, error) {
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return "", err
+	}
+
+	chainIdBigInt, _ := new(big.Int).SetString(chainId, 10)
+	signer := types.NewEIP155Signer(chainIdBigInt)
+
+	signatureBytes, err := hex.DecodeString(signature)
+	if err != nil {
+		return "", err
+	}
+
+	ethSigHex := hexutil.Encode(signatureBytes[:])
+	recoveryParam := ethSigHex[len(ethSigHex)-2:]
+	ethSigHex = ethSigHex[:len(ethSigHex)-2]
+
+	if recoveryParam == "00" {
+		ethSigHex = ethSigHex + "1b"
+	} else {
+		ethSigHex = ethSigHex + "1c"
+	}
+
+	ethSigHex = strings.Replace(ethSigHex, "0x", "", -1)
+
+	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
+	if err != nil {
+		return "", err
+	}
+
+	signedTx, err := tx.WithSignature(signer, ethSigHexBytes)
+	if err != nil {
+		return "", err
+	}
+
+	signedTxBytes, err := signedTx.MarshalBinary()
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Printf("Signed transaction: 0x%x\n", signedTxBytes)
+
+	// Optionally, send the transaction
+	err = client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		return "", err
+	}
+
+	return signedTx.Hash().Hex(), nil
 }

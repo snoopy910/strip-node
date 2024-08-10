@@ -55,6 +55,8 @@ const (
 	OPERATION_TYPE_SOLVER         = "solver"
 	OPERATION_TYPE_BRIDGE_DEPOSIT = "bridgeDeposit"
 	OPERATION_TYPE_SWAP           = "swap"
+	OPERATION_TYPE_BURN           = "burn"
+	OPERATION_TYPE_WITHDRAW       = "withdraw"
 )
 
 type CreateWalletRequest struct {

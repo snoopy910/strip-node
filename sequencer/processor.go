@@ -35,6 +35,15 @@ type SwapMetadata struct {
 	Token string `json:"token"`
 }
 
+type BurnMetadata struct {
+	Token string `json:"token"`
+}
+
+type WithdrawMetadata struct {
+	ChainId string `json:"chainId"`
+	Token   string `json:"token"`
+}
+
 func ProcessIntent(intentId int64) {
 	for {
 		intent, err := GetIntent(intentId)
@@ -378,6 +387,118 @@ func ProcessIntent(intentId int64) {
 					}
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+				} else if operation.Type == OPERATION_TYPE_BURN {
+					bridgeSwap := intent.Operations[i-1]
+
+					if i == 0 || !(bridgeSwap.Type == OPERATION_TYPE_SWAP) {
+						fmt.Println("Invalid operation type for swap")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					burnAmount := bridgeSwap.SolverOutput
+					burnMetadata := BurnMetadata{}
+
+					json.Unmarshal([]byte(operation.SolverMetadata), &burnMetadata)
+
+					wallet, err := GetWallet(intent.Identity, "ecdsa")
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					dataToSign, err := bridge.BridgeBurnDataToSign(
+						RPC_URL,
+						BridgeContractAddress,
+						wallet.ECDSAPublicKey,
+						burnAmount,
+						burnMetadata.Token,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					intent.Operations[i].SolverDataToSign = dataToSign
+
+					signature, err := getSignature(intent, i)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					fmt.Println("Burn tokens", wallet.ECDSAPublicKey, burnAmount, burnMetadata.Token, signature)
+
+					result, err := burnTokens(
+						wallet.ECDSAPublicKey,
+						burnAmount,
+						burnMetadata.Token,
+						signature,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
+					burn := intent.Operations[i-1]
+
+					if i == 0 || !(burn.Type == OPERATION_TYPE_BURN) {
+						fmt.Println("Invalid operation type for withdraw after burn")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					var withdrawMetadata WithdrawMetadata
+					var burnMetadata BurnMetadata
+					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
+					json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+
+					chainIdToWithdrawTo := withdrawMetadata.ChainId
+					tokenToWithdraw := withdrawMetadata.Token
+
+					// verify these fields
+					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, chainIdToWithdrawTo, tokenToWithdraw)
+
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if !exists {
+						fmt.Println("Token does not exist", tokenToWithdraw, chainIdToWithdrawTo)
+
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					if destAddress != burnMetadata.Token {
+						fmt.Println("Token mismatch", destAddress, burnMetadata.Token)
+
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					withdrawalChain, err := GetChain(chainIdToWithdrawTo)
+
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if withdrawalChain.KeyCurve == "ecdsa" {
+					} else if withdrawalChain.KeyCurve == "eddsa" {
+					}
 				}
 
 				break
@@ -502,6 +623,36 @@ func ProcessIntent(intentId int64) {
 					}
 
 					swapOutput, err := bridge.GetSwapOutput(
+						RPC_URL,
+						operation.Result,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					UpdateOperationSolverOutput(operation.ID, swapOutput)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
+				} else if operation.Type == OPERATION_TYPE_BURN {
+					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if !confirmed {
+						break
+					}
+
+					swapOutput, err := bridge.GetBurnOutput(
 						RPC_URL,
 						operation.Result,
 					)

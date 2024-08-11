@@ -3,6 +3,7 @@ package sequencer
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -10,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/StripChain/strip-node/bridge"
+	"github.com/mr-tron/base58"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,6 +20,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	bin "github.com/gagliardetto/binary"
+	"github.com/gagliardetto/solana-go"
+	"github.com/gagliardetto/solana-go/programs/system"
+	"github.com/gagliardetto/solana-go/programs/token"
+	"github.com/gagliardetto/solana-go/rpc"
 )
 
 func initiaiseBridge() {
@@ -536,4 +544,159 @@ func withdrawERC20GetSignature(
 	txHash := signer.Hash(tx)
 
 	return hex.EncodeToString(txHash.Bytes()), tx, nil
+}
+
+func withdrawSolanaNativeGetSignature(
+	rpcURL string,
+	account string,
+	amount string,
+	recipient string,
+) (string, string, error) {
+	accountFrom := solana.MustPublicKeyFromBase58(account)
+	accountTo := solana.MustPublicKeyFromBase58(recipient)
+
+	// convert amount to uint64
+	_amount, _ := big.NewInt(0).SetString(amount, 10)
+	amountUint64 := _amount.Uint64()
+
+	c := rpc.New(rpcURL)
+	recentHash, err := c.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
+	if err != nil {
+		return "", "", err
+	}
+
+	tx, err := solana.NewTransaction(
+		[]solana.Instruction{
+			system.NewTransferInstruction(
+				amountUint64,
+				accountFrom,
+				accountTo,
+			).Build(),
+		},
+		recentHash.Value.Blockhash,
+		solana.TransactionPayer(accountFrom),
+	)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	_msg, err := tx.ToBase64()
+	if err != nil {
+		return "", "", err
+	}
+
+	_msgBytes, _ := base64.StdEncoding.DecodeString(_msg)
+	_msgBase58 := base58.Encode(_msgBytes)
+
+	msg, err := tx.Message.MarshalBinary()
+	if err != nil {
+		return "", "", err
+	}
+
+	return _msgBase58, base58.Encode(msg), nil
+}
+
+func withdrawSolanaSPLGetSignature(
+	rpcURL string,
+	account string,
+	amount string,
+	recipient string,
+	tokenAddr string,
+) (string, string, error) {
+	accountFrom := solana.MustPublicKeyFromBase58(account)
+	accountTo := solana.MustPublicKeyFromBase58(recipient)
+	tokenMint := solana.MustPublicKeyFromBase58(tokenAddr)
+
+	senderTokenAccount, _, err := solana.FindAssociatedTokenAddress(accountFrom, tokenMint)
+	if err != nil {
+		log.Fatalf("failed to get sender token account: %v", err)
+	}
+
+	recipientTokenAccount, _, err := solana.FindAssociatedTokenAddress(accountTo, tokenMint)
+	if err != nil {
+		log.Fatalf("failed to get recipient token account: %v", err)
+	}
+
+	// convert amount to uint64
+	_amount, _ := big.NewInt(0).SetString(amount, 10)
+	amountUint64 := _amount.Uint64()
+
+	c := rpc.New(rpcURL)
+	recentHash, err := c.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
+	if err != nil {
+		return "", "", err
+	}
+
+	transferInstruction := token.NewTransferInstruction(
+		amountUint64,
+		senderTokenAccount,
+		recipientTokenAccount,
+		accountFrom,
+		nil, // No multisig signers
+	).Build()
+
+	tx, err := solana.NewTransaction(
+		[]solana.Instruction{
+			transferInstruction,
+		},
+		recentHash.Value.Blockhash,
+		solana.TransactionPayer(accountFrom),
+	)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	_msg, err := tx.ToBase64()
+	if err != nil {
+		return "", "", err
+	}
+
+	_msgBytes, _ := base64.StdEncoding.DecodeString(_msg)
+	_msgBase58 := base58.Encode(_msgBytes)
+
+	msg, err := tx.Message.MarshalBinary()
+	if err != nil {
+		return "", "", err
+	}
+
+	return _msgBase58, base58.Encode(msg), nil
+}
+
+func withdrawSolanaTxn(
+	rpcURL string,
+	transaction string,
+	signature string,
+) (string, error) {
+	c := rpc.New(rpcURL)
+
+	decodedTransactionData, err := base58.Decode(transaction)
+	if err != nil {
+		return "", err
+	}
+
+	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
+	if err != nil {
+		return "", err
+	}
+
+	sig, _ := base58.Decode(signature)
+	_signature := solana.SignatureFromBytes(sig)
+
+	_tx.Signatures = append(_tx.Signatures, _signature)
+
+	err = _tx.VerifySignatures()
+
+	if err != nil {
+		return "", err
+	}
+
+	hash, err := c.SendTransaction(context.Background(), _tx)
+
+	if err != nil {
+		return "", err
+	}
+
+	return hash.String(), nil
 }

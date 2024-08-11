@@ -595,6 +595,83 @@ func ProcessIntent(intentId int64) {
 
 						break
 					} else if withdrawalChain.KeyCurve == "eddsa" {
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// handle native token
+							transaction, dataToSign, err := withdrawSolanaNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.EDDSAPublicKey,
+								burn.SolverOutput,
+								user.ECDSAPublicKey,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := withdrawSolanaTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						} else {
+							// implement SPL
+							transaction, dataToSign, err := withdrawSolanaSPLGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.EDDSAPublicKey,
+								burn.SolverOutput,
+								user.ECDSAPublicKey,
+								tokenToWithdraw,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := withdrawSolanaTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						}
+						break
 					}
 				}
 

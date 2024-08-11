@@ -41,8 +41,7 @@ type BurnMetadata struct {
 }
 
 type WithdrawMetadata struct {
-	ChainId string `json:"chainId"`
-	Token   string `json:"token"`
+	Token string `json:"token"`
 }
 
 func ProcessIntent(intentId int64) {
@@ -468,11 +467,10 @@ func ProcessIntent(intentId int64) {
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
 					json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
 
-					chainIdToWithdrawTo := withdrawMetadata.ChainId
 					tokenToWithdraw := withdrawMetadata.Token
 
 					// verify these fields
-					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, chainIdToWithdrawTo, tokenToWithdraw)
+					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, operation.ChainId, tokenToWithdraw)
 
 					if err != nil {
 						fmt.Println(err)
@@ -480,7 +478,7 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if !exists {
-						fmt.Println("Token does not exist", tokenToWithdraw, chainIdToWithdrawTo)
+						fmt.Println("Token does not exist", tokenToWithdraw, operation.ChainId)
 
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -495,7 +493,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					withdrawalChain, err := GetChain(chainIdToWithdrawTo)
+					withdrawalChain, err := GetChain(operation.ChainId)
 
 					if err != nil {
 						fmt.Println(err)
@@ -517,13 +515,50 @@ func ProcessIntent(intentId int64) {
 					if withdrawalChain.KeyCurve == "ecdsa" {
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native token
+							dataToSign, tx, err := withdrawEVMNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.ECDSAPublicKey,
+								burn.SolverOutput,
+								user.ECDSAPublicKey,
+								operation.ChainId,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := withdrawEVMTxn(
+								withdrawalChain.ChainUrl,
+								signature,
+								tx,
+								operation.ChainId,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						} else {
 							dataToSign, tx, err := withdrawERC20GetSignature(
 								withdrawalChain.ChainUrl,
-								bridgeWallet.Identity,
+								bridgeWallet.ECDSAPublicKey,
 								burn.SolverOutput,
 								user.ECDSAPublicKey,
-								chainIdToWithdrawTo,
+								operation.ChainId,
 								tokenToWithdraw,
 							)
 
@@ -545,7 +580,7 @@ func ProcessIntent(intentId int64) {
 								withdrawalChain.ChainUrl,
 								signature,
 								tx,
-								chainIdToWithdrawTo,
+								operation.ChainId,
 							)
 
 							if err != nil {
@@ -556,7 +591,6 @@ func ProcessIntent(intentId int64) {
 							}
 
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
-
 						}
 
 						break

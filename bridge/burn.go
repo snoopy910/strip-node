@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"encoding/hex"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -34,8 +33,6 @@ func BridgeBurnDataToSign(
 		return "", err
 	}
 
-	fmt.Println("Getting Message Hash", account, nonce, _amountIn, token)
-
 	messageHash, err := instance.GetBurnMessageHash(
 		&bind.CallOpts{},
 		common.HexToAddress(account),
@@ -43,8 +40,6 @@ func BridgeBurnDataToSign(
 		_amountIn,
 		common.HexToAddress(token),
 	)
-
-	fmt.Println("Message Hash", messageHash)
 
 	if err != nil {
 		return "", err

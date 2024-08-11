@@ -406,20 +406,20 @@ func withdrawEVMNativeGetSignature(
 	amount string,
 	recipient string,
 	chainId string,
-) ([]byte, *types.Transaction, error) {
+) (string, *types.Transaction, error) {
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
-		return nil, nil, err
+		return "", nil, err
 	}
 
 	nonce, err := client.PendingNonceAt(context.Background(), common.HexToAddress(account))
 	if err != nil {
-		return nil, nil, err
+		return "", nil, err
 	}
 
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
-		return nil, nil, err
+		return "", nil, err
 	}
 
 	gasLimit := uint64(60000)
@@ -431,7 +431,7 @@ func withdrawEVMNativeGetSignature(
 	signer := types.NewEIP155Signer(chainIdBigInt)
 	txHash := signer.Hash(tx)
 
-	return txHash.Bytes(), tx, nil
+	return hex.EncodeToString(txHash.Bytes()), tx, nil
 }
 
 func withdrawEVMTxn(
@@ -453,24 +453,24 @@ func withdrawEVMTxn(
 		return "", err
 	}
 
-	ethSigHex := hexutil.Encode(signatureBytes[:])
-	recoveryParam := ethSigHex[len(ethSigHex)-2:]
-	ethSigHex = ethSigHex[:len(ethSigHex)-2]
+	// ethSigHex := hexutil.Encode(signatureBytes[:])
+	// recoveryParam := ethSigHex[len(ethSigHex)-2:]
+	// ethSigHex = ethSigHex[:len(ethSigHex)-2]
 
-	if recoveryParam == "00" {
-		ethSigHex = ethSigHex + "1b"
-	} else {
-		ethSigHex = ethSigHex + "1c"
-	}
+	// if recoveryParam == "00" {
+	// 	ethSigHex = ethSigHex + "1b"
+	// } else {
+	// 	ethSigHex = ethSigHex + "1c"
+	// }
 
-	ethSigHex = strings.Replace(ethSigHex, "0x", "", -1)
+	// ethSigHex = strings.Replace(ethSigHex, "0x", "", -1)
 
-	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
-	if err != nil {
-		return "", err
-	}
+	// ethSigHexBytes, err := hex.DecodeString(ethSigHex)
+	// if err != nil {
+	// 	return "", err
+	// }
 
-	signedTx, err := tx.WithSignature(signer, ethSigHexBytes)
+	signedTx, err := tx.WithSignature(signer, signatureBytes)
 	if err != nil {
 		return "", err
 	}

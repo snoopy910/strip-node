@@ -47,11 +47,19 @@ type WalletSchema struct {
 	Signers        string `json:"signers"`
 }
 
+type LockSchema struct {
+	Id            int64  `json:"id"`
+	Identity      string `json:"identity"`
+	IdentityCurve string `json:"identityCurve"`
+	Locked        bool   `json:"locked"`
+}
+
 func createSchemas(db *pg.DB) error {
 	models := []interface{}{
 		(*IntentSchema)(nil),
 		(*OperationSchema)(nil),
 		(*WalletSchema)(nil),
+		(*LockSchema)(nil),
 	}
 
 	for _, model := range models {
@@ -78,6 +86,62 @@ func InitialiseDB(host string, database string, username string, password string
 	if err != nil {
 		panic(err)
 	}
+}
+
+func LockIdentity(identity string, identityCurve string) error {
+	// insert if row doesn't exist or else update
+
+	// first get the lock
+	var lockSchema LockSchema
+	err := client.Model(&lockSchema).Where("identity = ? AND identity_curve = ?", identity, identityCurve).Select()
+	if err != nil {
+		return err
+	}
+
+	if lockSchema.Id == 0 {
+		lockSchema = LockSchema{
+			Identity:      identity,
+			IdentityCurve: identityCurve,
+			Locked:        true,
+		}
+
+		_, err = client.Model(&lockSchema).Insert()
+		if err != nil {
+			return err
+		}
+	} else {
+		lockSchema.Locked = true
+		_, err = client.Model(&lockSchema).Column("locked").WherePK().Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func GetLock(identity string, identityCurve string) (*LockSchema, error) {
+	var lockSchema LockSchema
+	err := client.Model(&lockSchema).Where("identity = ? AND identity_curve = ?", identity, identityCurve).Select()
+	if err != nil {
+		return &lockSchema, err
+	}
+
+	return &lockSchema, nil
+}
+
+func UnlockIdentity(id int64) error {
+	lockSchema := LockSchema{
+		Id:     id,
+		Locked: false,
+	}
+
+	_, err := client.Model(&lockSchema).Column("locked").WherePK().Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func AddIntent(

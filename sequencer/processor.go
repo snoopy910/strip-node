@@ -41,7 +41,12 @@ type BurnMetadata struct {
 }
 
 type WithdrawMetadata struct {
-	Token string `json:"token"`
+	Token  string `json:"token"`
+	Unlock bool   `json:"unlock"`
+}
+
+type LockMetadata struct {
+	Lock bool `json:"lock"`
 }
 
 func ProcessIntent(intentId int64) {
@@ -78,6 +83,18 @@ func ProcessIntent(intentId int64) {
 				// sign and send the txn. Change status to waiting
 
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
+					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if lockSchema.Locked {
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
 					if operation.KeyCurve == "ecdsa" {
 						signature, err := getSignature(intent, i)
 						if err != nil {
@@ -95,7 +112,21 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						var lockMetadata LockMetadata
+						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+						if lockMetadata.Lock {
+							err := LockIdentity(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+						} else {
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						}
+
 					} else if operation.KeyCurve == "eddsa" {
 						chain, err := GetChain(operation.ChainId)
 						if err != nil {
@@ -120,10 +151,35 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+							var lockMetadata LockMetadata
+							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+							if lockMetadata.Lock {
+								err := LockIdentity(intent.Identity, intent.IdentityCurve)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+
+								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+							} else {
+								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+							}
 						}
 					}
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
+					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if lockSchema.Locked {
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
 					// get data to sign from solver
 					dataToSign, err := solver.Construct(operation.Solver, &intentBytes, i)
 
@@ -157,7 +213,20 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					var lockMetadata LockMetadata
+					json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+					if lockMetadata.Lock {
+						err := LockIdentity(intent.Identity, intent.IdentityCurve)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, result)
+					} else {
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					}
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					depositOperation := intent.Operations[i-1]
 
@@ -249,6 +318,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						UpdateOperationSolverOutput(operation.ID, string(mintOutputBytes))
+
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" {
@@ -317,6 +387,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+
 					}
 				} else if operation.Type == OPERATION_TYPE_SWAP {
 					bridgeDeposit := intent.Operations[i-1]
@@ -877,7 +948,64 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					// now unlock the identity if locked
+					var withdrawMetadata WithdrawMetadata
+					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
+
+					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if withdrawMetadata.Unlock {
+						depositOperation := intent.Operations[i-4]
+						// check for confirmations
+						confirmed = false
+						if depositOperation.KeyCurve == "ecdsa" {
+							txnConfirmed, err := checkEVMTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							if txnConfirmed {
+								confirmed = true
+								err := UnlockIdentity(lockSchema.Id)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+							}
+						} else if depositOperation.KeyCurve == "eddsa" {
+							chain, err := GetChain(depositOperation.ChainId)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							if chain.ChainType == "solana" {
+								txnConfirmed, err := checkSolanaTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+								}
+							}
+						}
+					}
+
+					if confirmed {
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					}
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed

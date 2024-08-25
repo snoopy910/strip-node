@@ -85,8 +85,24 @@ func ProcessIntent(intentId int64) {
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
 					if err != nil {
-						fmt.Println(err)
-						break
+						if err.Error() == "pg: no rows in result set" {
+							_, err := AddLock(intent.Identity, intent.IdentityCurve)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						} else {
+							fmt.Println(err)
+							break
+						}
 					}
 
 					if lockSchema.Locked {
@@ -116,7 +132,7 @@ func ProcessIntent(intentId int64) {
 						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 						if lockMetadata.Lock {
-							err := LockIdentity(intent.Identity, intent.IdentityCurve)
+							err := LockIdentity(lockSchema.Id)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -155,7 +171,7 @@ func ProcessIntent(intentId int64) {
 							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 							if lockMetadata.Lock {
-								err := LockIdentity(intent.Identity, intent.IdentityCurve)
+								err := LockIdentity(lockSchema.Id)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -170,8 +186,24 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
 					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
 					if err != nil {
-						fmt.Println(err)
-						break
+						if err.Error() == "pg: no rows in result set" {
+							_, err := AddLock(intent.Identity, intent.IdentityCurve)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						} else {
+							fmt.Println(err)
+							break
+						}
 					}
 
 					if lockSchema.Locked {
@@ -217,7 +249,7 @@ func ProcessIntent(intentId int64) {
 					json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 					if lockMetadata.Lock {
-						err := LockIdentity(intent.Identity, intent.IdentityCurve)
+						err := LockIdentity(lockSchema.Id)
 						if err != nil {
 							fmt.Println(err)
 							break

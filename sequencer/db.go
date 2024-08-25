@@ -88,33 +88,30 @@ func InitialiseDB(host string, database string, username string, password string
 	}
 }
 
-func LockIdentity(identity string, identityCurve string) error {
-	// insert if row doesn't exist or else update
-
-	// first get the lock
-	var lockSchema LockSchema
-	err := client.Model(&lockSchema).Where("identity = ? AND identity_curve = ?", identity, identityCurve).Select()
-	if err != nil {
-		return err
+func AddLock(identity string, identityCurve string) (int64, error) {
+	lock := &LockSchema{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		Locked:        false,
 	}
 
-	if lockSchema.Id == 0 {
-		lockSchema = LockSchema{
-			Identity:      identity,
-			IdentityCurve: identityCurve,
-			Locked:        true,
-		}
+	_, err := client.Model(lock).Insert()
+	if err != nil {
+		return 0, err
+	}
 
-		_, err = client.Model(&lockSchema).Insert()
-		if err != nil {
-			return err
-		}
-	} else {
-		lockSchema.Locked = true
-		_, err = client.Model(&lockSchema).Column("locked").WherePK().Update()
-		if err != nil {
-			return err
-		}
+	return lock.Id, nil
+}
+
+func LockIdentity(id int64) error {
+	lockSchema := LockSchema{
+		Id:     id,
+		Locked: true,
+	}
+
+	_, err := client.Model(&lockSchema).Column("locked").WherePK().Update()
+	if err != nil {
+		return err
 	}
 
 	return nil

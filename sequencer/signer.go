@@ -18,7 +18,7 @@ type Signer struct {
 	URL       string
 }
 
-func SignersList() []Signer {
+var SignersList = func() []Signer {
 	client, err := ethclient.Dial(RPC_URL)
 	if err != nil {
 		log.Fatal(err)

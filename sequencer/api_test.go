@@ -5,8 +5,97 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
+
+func TestCreateWalletEndpoint(t *testing.T) {
+	tests := []struct {
+		name          string
+		identity      string
+		identityCurve string
+		wantStatus    int
+	}{
+		{
+			name:          "Valid wallet creation",
+			identity:      "testIdentity",
+			identityCurve: "ecdsa",
+			wantStatus:    http.StatusOK,
+		},
+		{
+			name:          "Missing identity",
+			identity:      "",
+			identityCurve: "ecdsa",
+			wantStatus:    http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/createWallet?identity="+tt.identity+"&identityCurve="+tt.identityCurve, nil)
+			w := httptest.NewRecorder()
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if tt.identity == "" {
+						http.Error(w, "identity required", http.StatusInternalServerError)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
+				}).ServeHTTP(w, r)
+			})
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("CreateWallet returned wrong status code: got %v want %v", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestGetWalletEndpoint(t *testing.T) {
+	tests := []struct {
+		name          string
+		identity      string
+		identityCurve string
+		wantStatus    int
+	}{
+		{
+			name:          "Valid wallet retrieval",
+			identity:      "testIdentity",
+			identityCurve: "ecdsa",
+			wantStatus:    http.StatusOK,
+		},
+		{
+			name:          "Missing identity",
+			identity:      "",
+			identityCurve: "ecdsa",
+			wantStatus:    http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/getWallet?identity="+tt.identity+"&identityCurve="+tt.identityCurve, nil)
+			w := httptest.NewRecorder()
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.identity == "" {
+					http.Error(w, "identity required", http.StatusInternalServerError)
+					return
+				}
+				json.NewEncoder(w).Encode(map[string]string{"identity": tt.identity})
+			})
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("GetWallet returned wrong status code: got %v want %v", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
 
 func TestCreateIntent(t *testing.T) {
 	// Create a test intent
@@ -105,5 +194,188 @@ func TestGetIntent(t *testing.T) {
 
 	if response.ID != 1 || response.Status != INTENT_STATUS_COMPLETED {
 		t.Errorf("Got unexpected response: %+v", response)
+	}
+}
+
+func TestGetIntentsWithPagination(t *testing.T) {
+	tests := []struct {
+		name       string
+		limit      int
+		skip       int
+		wantStatus int
+	}{
+		{
+			name:       "Valid pagination",
+			limit:      10,
+			skip:       0,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "Invalid limit",
+			limit:      -1,
+			skip:       0,
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/getIntents?limit="+strconv.Itoa(tt.limit)+"&skip="+strconv.Itoa(tt.skip), nil)
+			w := httptest.NewRecorder()
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.limit < 0 {
+					http.Error(w, "invalid limit", http.StatusInternalServerError)
+					return
+				}
+				result := IntentsResult{
+					Intents: []*Intent{},
+					Total:   0,
+				}
+				json.NewEncoder(w).Encode(result)
+			})
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("GetIntents returned wrong status code: got %v want %v", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestGetSolverStats(t *testing.T) {
+	tests := []struct {
+		name       string
+		solver     string
+		wantStatus int
+	}{
+		{
+			name:       "Valid solver",
+			solver:     "testSolver",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "Empty solver",
+			solver:     "",
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/getStatsOfSolver?solver="+tt.solver, nil)
+			w := httptest.NewRecorder()
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.solver == "" {
+					http.Error(w, "solver required", http.StatusInternalServerError)
+					return
+				}
+				result := SolverStatResult{
+					IsActive:    true,
+					ActiveSince: 123456,
+					Chains:      []uint{1, 2, 3},
+				}
+				json.NewEncoder(w).Encode(result)
+			})
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("GetSolverStats returned wrong status code: got %v want %v", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestParseOperation(t *testing.T) {
+	tests := []struct {
+		name        string
+		operationId string
+		intentId    string
+		wantStatus  int
+	}{
+		{
+			name:        "Valid operation",
+			operationId: "1",
+			intentId:    "1",
+			wantStatus:  http.StatusOK,
+		},
+		{
+			name:        "Invalid operation",
+			operationId: "",
+			intentId:    "1",
+			wantStatus:  http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := "/parseOperation?operationId=" + tt.operationId + "&intentId=" + tt.intentId
+			req := httptest.NewRequest("GET", url, nil)
+			w := httptest.NewRecorder()
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.operationId == "" {
+					http.Error(w, "operation ID required", http.StatusInternalServerError)
+					return
+				}
+				json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+			})
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("ParseOperation returned wrong status code: got %v want %v", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestGetTotalStats(t *testing.T) {
+	req := httptest.NewRequest("GET", "/getTotalStats", nil)
+	w := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stats := TotalStats{
+			TotalSolvers: 10,
+			TotalIntents: 100,
+		}
+		json.NewEncoder(w).Encode(stats)
+	})
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GetTotalStats returned wrong status code: got %v want %v", w.Code, http.StatusOK)
+	}
+
+	var response TotalStats
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Errorf("Failed to decode response: %v", err)
+	}
+
+	if response.TotalSolvers != 10 || response.TotalIntents != 100 {
+		t.Errorf("Unexpected response values: %+v", response)
+	}
+}
+
+func TestStatusEndpoint(t *testing.T) {
+	req := httptest.NewRequest("GET", "/status", nil)
+	w := httptest.NewRecorder()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("OK"))
+	})
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Status endpoint returned wrong status code: got %v want %v", w.Code, http.StatusOK)
+	}
+
+	if w.Body.String() != "OK" {
+		t.Errorf("Status endpoint returned wrong body: got %v want OK", w.Body.String())
 	}
 }

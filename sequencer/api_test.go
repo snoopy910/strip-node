@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+// TestCreateWalletEndpoint tests the /createWallet endpoint for creating a wallet.
+// It verifies the response status code for valid and invalid requests.
 func TestCreateWalletEndpoint(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -54,6 +56,8 @@ func TestCreateWalletEndpoint(t *testing.T) {
 	}
 }
 
+// TestGetWalletEndpoint tests the /getWallet endpoint for retrieving a wallet.
+// It checks the response status code for valid and missing identity scenarios.
 func TestGetWalletEndpoint(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -97,6 +101,8 @@ func TestGetWalletEndpoint(t *testing.T) {
 	}
 }
 
+// TestCreateIntent tests the /createIntent endpoint for creating an intent.
+// It verifies the JSON payload and response status code.
 func TestCreateIntent(t *testing.T) {
 	// Create a test intent
 	testIntent := Intent{
@@ -154,6 +160,8 @@ func TestCreateIntent(t *testing.T) {
 	}
 }
 
+// TestGetIntent tests the /getIntent endpoint for retrieving an intent by ID.
+// It checks the response status code and verifies the returned intent data.
 func TestGetIntent(t *testing.T) {
 	// Create test request
 	req := httptest.NewRequest("GET", "/getIntent?id=1", nil)
@@ -197,6 +205,8 @@ func TestGetIntent(t *testing.T) {
 	}
 }
 
+// TestGetIntentsWithPagination tests the /getIntents endpoint with pagination parameters.
+// It verifies the response status code for valid and invalid limit values.
 func TestGetIntentsWithPagination(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -244,6 +254,8 @@ func TestGetIntentsWithPagination(t *testing.T) {
 	}
 }
 
+// TestGetSolverStats tests the /getStatsOfSolver endpoint for retrieving solver statistics.
+// It checks the response status code for valid and empty solver scenarios.
 func TestGetSolverStats(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -289,6 +301,8 @@ func TestGetSolverStats(t *testing.T) {
 	}
 }
 
+// TestParseOperation tests the /parseOperation endpoint for parsing an operation.
+// It verifies the response status code for valid and invalid operation ID scenarios.
 func TestParseOperation(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -333,6 +347,8 @@ func TestParseOperation(t *testing.T) {
 	}
 }
 
+// TestGetTotalStats tests the /getTotalStats endpoint for retrieving total statistics.
+// It checks the response status code and verifies the returned statistics data.
 func TestGetTotalStats(t *testing.T) {
 	req := httptest.NewRequest("GET", "/getTotalStats", nil)
 	w := httptest.NewRecorder()
@@ -361,6 +377,8 @@ func TestGetTotalStats(t *testing.T) {
 	}
 }
 
+// TestStatusEndpoint tests the /status endpoint for checking service health.
+// It verifies the response status code and body content.
 func TestStatusEndpoint(t *testing.T) {
 	req := httptest.NewRequest("GET", "/status", nil)
 	w := httptest.NewRecorder()

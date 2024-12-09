@@ -19,6 +19,9 @@ func (m *mockDB) AddWallet(wallet *WalletSchema) (int64, error) {
 }
 
 // Setup mock server for testing
+// - GET /keygen: Returns 200 OK for key generation requests
+// - GET /address: Returns a mock address based on the provided key curve
+// The server validates required query parameters and returns appropriate error responses
 func setupMockServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -50,6 +53,10 @@ func setupMockServer(t *testing.T) *httptest.Server {
 }
 
 // Setup test environment for testing
+// 1. Creates a mock HTTP server
+// 2. Sets up mock signers with predefined public keys
+// 3. Creates an in-memory mock database
+// 4. Overrides global functions (SignersList and AddWallet)
 func setupTestEnvironment(t *testing.T) (*httptest.Server, func()) {
 	// Create mock server
 	mockServer := setupMockServer(t)
@@ -85,6 +92,11 @@ func setupTestEnvironment(t *testing.T) (*httptest.Server, func()) {
 	return mockServer, cleanup
 }
 
+// TestCreateWallet tests the createWallet function with various test scenarios.
+// Test cases cover:
+// - Successful wallet creation
+// - Empty identity validation
+// - Empty curve validation
 func TestCreateWallet(t *testing.T) {
 	// Set up test environment once for all test cases
 	mockServer, cleanup := setupTestEnvironment(t)
@@ -137,6 +149,10 @@ func TestCreateWallet(t *testing.T) {
 	}
 }
 
+// TestCreateWalletWithMaximumSigners verifies that the wallet creation process
+// respects the MaximumSigners limit when selecting signers.
+// It temporarily sets MaximumSigners to 3 and ensures the number of selected
+// signers never exceeds this limit.
 func TestCreateWalletWithMaximumSigners(t *testing.T) {
 	_, cleanup := setupTestEnvironment(t)
 	defer cleanup()
@@ -157,6 +173,9 @@ func TestCreateWalletWithMaximumSigners(t *testing.T) {
 	}
 }
 
+// TestCreateWalletServerErrors verifies error handling when signer nodes
+// return server errors. It sets up a mock server that always returns 500
+// Internal Server Error and ensures the wallet creation fails as expected.
 func TestCreateWalletServerErrors(t *testing.T) {
 	// Create a server that always returns errors
 	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

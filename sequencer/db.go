@@ -560,7 +560,7 @@ func GetWallet(identity string, identityCurve string) (*WalletSchema, error) {
 	return &walletSchema, nil
 }
 
-func AddWallet(wallet *WalletSchema) (int64, error) {
+var AddWallet = func(wallet *WalletSchema) (int64, error) {
 	_, err := client.Model(wallet).Insert()
 	if err != nil {
 		return 0, err

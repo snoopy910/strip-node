@@ -1,7 +1,9 @@
 package sequencer
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -54,6 +56,13 @@ type LockSchema struct {
 	Locked        bool   `json:"locked"`
 }
 
+// Add these constants for pool configuration
+const (
+	minPoolSize     = 2
+	maxPoolSize     = 10
+	maxConnIdleTime = 30 * time.Minute
+)
+
 func createSchemas(db *pg.DB) error {
 	models := []interface{}{
 		(*IntentSchema)(nil),
@@ -76,11 +85,24 @@ func createSchemas(db *pg.DB) error {
 func InitialiseDB(host string, database string, username string, password string) {
 
 	client = pg.Connect(&pg.Options{
-		User:     username,
-		Password: password,
-		Database: database,
-		Addr:     host,
+		User:                  username,         // Database user name
+		Password:              password,         // Database password
+		Database:              database,         // Name of the database to connect
+		Addr:                  host,             // Host address and port
+		MinIdleConns:          minPoolSize,      // Minimum number of idle connections
+		MaxConnAge:            maxConnIdleTime,  // Maximum age of a connection
+		PoolSize:              maxPoolSize,      // Maximum number of connections
+		PoolTimeout:           30 * time.Second, // Time to wait for a connection from the pool
+		IdleTimeout:           maxConnIdleTime,  // How long a connection can be idle
+		MaxRetries:            3,                // Number of retries on connection failure
+		RetryStatementTimeout: true,             // Retry on statement timeout
 	})
+
+	// Test the connection pool
+	ctx := context.Background()
+	if err := client.Ping(ctx); err != nil {
+		panic(fmt.Sprintf("Error connecting to the database: %v", err))
+	}
 
 	err := createSchemas(client)
 	if err != nil {

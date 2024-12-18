@@ -1142,7 +1142,9 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 		return false, err
 	}
 
-	_, err = c.GetConfirmedTransaction(context.Background(), signature)
+	_, err = c.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
+		Commitment: rpc.CommitmentConfirmed,
+	})
 
 	if err != nil {
 		return false, err

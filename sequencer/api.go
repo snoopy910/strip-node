@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 )
@@ -57,6 +58,9 @@ const (
 	OPERATION_TYPE_SWAP           = "swap"
 	OPERATION_TYPE_BURN           = "burn"
 	OPERATION_TYPE_WITHDRAW       = "withdraw"
+	//------------------sign messages
+	OPERATION_TYPE_SIGN_MESSAGE       = "sign_message"
+	OPERATION_TYPE_SIGN_TYPED_MESSAGE = "sign_typed_message"
 )
 
 type CreateWalletRequest struct {
@@ -93,6 +97,49 @@ func enableCors(w *http.ResponseWriter) {
 }
 
 func startHTTPServer(port string) {
+
+	// I added sign messages ops endpoints
+	http.HandleFunc("/signMessage", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		var intent Intent
+		var operations []Operation
+
+		// Create message signing operation
+		operation := Operation{
+			Type:     OPERATION_TYPE_SIGN_MESSAGE,
+			Status:   OPERATION_STATUS_PENDING,
+			KeyCurve: r.URL.Query().Get("keyCurve"), // ecdsa or eddsa
+		}
+
+		// Add message data
+		operation.DataToSign = r.URL.Query().Get("message")
+		operations = append(operations, operation)
+
+		// Create intent
+		intent.Operations = operations
+		intent.Identity = r.URL.Query().Get("identity")
+		intent.IdentityCurve = r.URL.Query().Get("identityCurve")
+		intent.Status = INTENT_STATUS_PROCESSING
+
+		// Add expiry (e.g., 1 hour from now)
+		intent.Expiry = uint64(time.Now().Add(1 * time.Hour).Unix())
+
+		id, err := AddIntent(&intent)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		go ProcessIntent(id)
+		fmt.Fprintf(w, "{\"id\": %d}", id)
+	})
+
 	// Root endpoint - Health check
 	// Method: GET
 	// Response: Plain text "OK"
@@ -522,4 +569,5 @@ func startHTTPServer(port string) {
 	})
 
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
+
 }

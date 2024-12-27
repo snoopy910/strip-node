@@ -10,6 +10,21 @@ import (
 	"time"
 )
 
+// createWallet creates a new wallet with the specified identity and identity curve.
+// Note: It selects a list of signers, ensuring the number of signers does not exceed MaximumSigners.
+// The function performs the following steps:
+// 1. Selects a random subset of signers if the total number exceeds MaximumSigners.
+// 2. Constructs a CreateWalletRequest for both "eddsa" and "ecdsa" key curves.
+// 3. Sends HTTP requests to the first signer's URL to generate keys.
+// 4. Retrieves the generated addresses for both key curves.
+// 5. Constructs a WalletSchema and adds it to the wallet store.
+//
+// Parameters:
+// - identity: A string representing the identity for the wallet.
+// - identityCurve: A string representing the curve type for the identity.
+//
+// Returns:
+// - error: An error if any step in the wallet creation process fails.
 func createWallet(identity string, identityCurve string) error {
 	// select a list of nodes.
 	// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
@@ -29,7 +44,7 @@ func createWallet(identity string, identityCurve string) error {
 		signersPublicKeyList[i] = signer.PublicKey
 	}
 
-	// now create the wallet here
+	// create the wallet whose keycurve is eddsa here
 	createWalletRequest := CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
@@ -54,6 +69,7 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
+	// create the wallet whose keycurve is ecdsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
@@ -79,6 +95,7 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
+	// get the address of the wallet whose keycurve is eddsa here
 	resp, err := http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=eddsa")
 	if err != nil {
 		return err
@@ -99,6 +116,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	eddsaAddress := getAddressResponse.Address
 
+	// get the address of the wallet whose keycurve is ecdsa here
 	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=ecdsa")
 	if err != nil {
 		return err
@@ -119,6 +137,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	ecdsaAddress := getAddressResponse.Address
 
+	// add created wallet to the store
 	wallet := WalletSchema{
 		Identity:       identity,
 		IdentityCurve:  identityCurve,

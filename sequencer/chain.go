@@ -53,6 +53,20 @@ var Chains = []Chain{
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "MATIC",
 	},
+	{
+		ChainId:     "11",
+		ChainType:   "aptos",
+		ChainUrl:    "https://fullnode.mainnet.aptoslabs.com",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "APT",
+	},
+	{
+		ChainId:     "165",
+		ChainType:   "aptos",
+		ChainUrl:    "https://fullnode.devnet.aptoslabs.com",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "APT",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

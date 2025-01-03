@@ -1,23 +1,12 @@
 package sequencer
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
-	"net/http"
-	"strings"
-)
 
-// Transfer defines the structure of a transfer event
-type Transfer struct {
-	From         string
-	To           string
-	Amount       string
-	Token        string
-	IsNative     bool
-	TokenAddress string
-	ScaledAmount string
-}
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/rpcclient"
+)
 
 // Bitcoin integration constants
 const (
@@ -34,108 +23,86 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 		return nil, fmt.Errorf("failed to get chain config: %v", err)
 	}
 
-	// Fetch transaction details using Bitcoin Core RPC
-	tx, err := getBitcoinTransaction(chain.ChainUrl, chain.RpcUsername, chain.RpcPassword, txHash)
+	// Create a new RPC client
+	client, err := rpcclient.New(&rpcclient.ConnConfig{
+		Host:         chain.ChainUrl,
+		User:         chain.RpcUsername, // TODO: need to replace username and password
+		Pass:         chain.RpcPassword,
+		HTTPPostMode: true,
+		DisableTLS:   true,
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC client: %v", err)
+	}
+	defer client.Shutdown()
+
+	// Convert transaction hash from string to *chainhash.Hash
+	hash, err := chainhash.NewHashFromStr(txHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid transaction hash: %v", err)
+	}
+
+	// Fetch transaction details
+	rawTx, err := client.GetRawTransactionVerbose(hash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Bitcoin transaction: %v", err)
 	}
 
 	var transfers []Transfer
 
-	for _, output := range tx.Vout {
-		// Ignore outputs with no addresses
-		if len(output.ScriptPubKey.Addresses) == 0 {
+	// Process each input
+	for _, input := range rawTx.Vin {
+		// Fetch the previous transaction
+		prevTxHash, err := chainhash.NewHashFromStr(input.Txid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse previous transaction hash: %v", err)
+		}
+
+		prevTx, err := client.GetRawTransactionVerbose(prevTxHash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch previous transaction: %v", err)
+		}
+
+		// Get the address from the previous transaction's output
+		prevOut := prevTx.Vout[input.Vout]
+		if len(prevOut.ScriptPubKey.Addresses) == 0 {
 			continue
 		}
 
-		amount := big.NewFloat(output.Value)
-		amount.Mul(amount, big.NewFloat(1e8)) // Convert BTC to Satoshis
-		scaledAmount := fmt.Sprintf("%d", int64(amount.Float64()))
+		fromAddress := prevOut.ScriptPubKey.Addresses[0]
 
-		formattedAmount, err := getFormattedAmount(scaledAmount, SATOSHI_DECIMALS)
-		if err != nil {
-			return nil, fmt.Errorf("error formatting amount: %w", err)
+		// Process outputs
+		for _, output := range rawTx.Vout {
+			if len(output.ScriptPubKey.Addresses) == 0 {
+				continue
+			}
+
+			amount := big.NewFloat(output.Value)
+			amount.Mul(amount, big.NewFloat(1e8)) // Convert BTC to Satoshis
+			floatValue, _ := amount.Float64()
+			scaledAmount := fmt.Sprintf("%d", int64(floatValue))
+
+			formattedAmount, err := getFormattedAmount(scaledAmount, SATOSHI_DECIMALS)
+			if err != nil {
+				return nil, fmt.Errorf("error formatting amount: %w", err)
+			}
+
+			transfers = append(transfers, Transfer{
+				From:         fromAddress,
+				To:           output.ScriptPubKey.Addresses[0],
+				Amount:       formattedAmount,
+				Token:        BTC_TOKEN_SYMBOL,
+				IsNative:     true,
+				TokenAddress: BTC_ZERO_ADDRESS,
+				ScaledAmount: scaledAmount,
+			})
 		}
-
-		transfers = append(transfers, Transfer{
-			From:         tx.Vin[0].PrevOut.Addresses[0],
-			To:           output.ScriptPubKey.Addresses[0],
-			Amount:       formattedAmount,
-			Token:        BTC_TOKEN_SYMBOL,
-			IsNative:     true,
-			TokenAddress: BTC_ZERO_ADDRESS,
-			ScaledAmount: scaledAmount,
-		})
 	}
 
 	return transfers, nil
 }
 
-type BitcoinTransaction struct {
-	Txid string `json:"txid"`
-	Vin  []struct {
-		PrevOut struct {
-			Addresses []string `json:"addresses"`
-		} `json:"prev_out"`
-	} `json:"vin"`
-	Vout []struct {
-		Value        float64 `json:"value"`
-		ScriptPubKey struct {
-			Addresses []string `json:"addresses"`
-		} `json:"scriptPubKey"`
-	} `json:"vout"`
-}
-
-func getBitcoinTransaction(url, username, password, txHash string) (*BitcoinTransaction, error) {
-	// Create RPC request payload
-	type RpcRequest struct {
-		Jsonrpc string        `json:"jsonrpc"`
-		Method  string        `json:"method"`
-		Params  []interface{} `json:"params"`
-		Id      string        `json:"id"`
-	}
-
-	rpcPayload := RpcRequest{
-		Jsonrpc: "1.0",
-		Method:  "getrawtransaction",
-		Params:  []interface{}{txHash, true},
-		Id:      "1",
-	}
-
-	payload, err := json.Marshal(rpcPayload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal JSON payload: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", url, strings.NewReader(string(payload)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-
-	req.SetBasicAuth(username, password)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error: received status code %d", resp.StatusCode)
-	}
-
-	var rpcResponse struct {
-		Result BitcoinTransaction `json:"result"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&rpcResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &rpcResponse.Result, nil
-}
-
+// Helper function to format amounts
 func getFormattedAmount(amount string, decimal int) (string, error) {
 	bigIntAmount := new(big.Int)
 

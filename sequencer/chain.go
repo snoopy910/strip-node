@@ -53,6 +53,20 @@ var Chains = []Chain{
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "MATIC",
 	},
+	{
+		ChainId:     "1000",
+		ChainType:   "bitcoin",
+		ChainUrl:    "https://blockstream.info/api",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "BTC",
+	},
+	{
+		ChainId:     "1001",
+		ChainType:   "bitcoin",
+		ChainUrl:    "https://blockstream.info/testnet/api",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "BTC",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

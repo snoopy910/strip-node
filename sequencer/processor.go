@@ -3,6 +3,7 @@ package sequencer
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,8 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/mr-tron/base58"
+	aptosClient "github.com/portto/aptos-go-sdk/client"
+	aptosModels "github.com/portto/aptos-go-sdk/models"
 )
 
 type MintOutput struct {
@@ -159,6 +162,32 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "solana" {
 							txnHash, err := sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							var lockMetadata LockMetadata
+							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+							if lockMetadata.Lock {
+								err := LockIdentity(lockSchema.Id)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+
+								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+							} else {
+								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+							}
+						}
+
+						if chain.ChainType == "aptos" {
+							txnHash, err := sendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 							if err != nil {
 								fmt.Println(err)
@@ -1231,4 +1260,39 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	}
 
 	return hash.String(), nil
+}
+
+func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase64 string) (string, error) {
+	chain, err := GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	client := aptosClient.NewAptosClient(chain.ChainUrl)
+
+	decodedTransactionData, err := base64.StdEncoding.DecodeString(serializedTxn)
+	if err != nil {
+		fmt.Println("Error decoding transaction data:", err)
+		return "", err
+	}
+
+	signature, err := base64.StdEncoding.DecodeString(signatureBase64)
+	if err != nil {
+		fmt.Println("Error decoding signature:", err)
+		return "", err
+	}
+
+	tx := &aptosModels.Transaction{}
+
+	err = json.Unmarshal(decodedTransactionData, tx)
+	if err != nil {
+		return "", err
+	}
+
+	response, err := client.SubmitTransaction(context.Background(), tx.UserTransaction, signature)
+	if err != nil {
+		return "", err
+	}
+
+	return response.Hash, nil
 }

@@ -66,6 +66,8 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 	}
 
 	var transfers []Transfer
+	var totalInputValue int64
+	var totalOutputValue int64
 
 	// Process inputs and outputs
 	for _, input := range tx.Inputs {
@@ -100,7 +102,30 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 		}
 	}
 
+	// Process outputs and calculate total output value
+	for _, output := range tx.Outputs {
+		if len(output.Addresses) == 0 {
+			continue
+		}
+		totalOutputValue += output.Value
+	}
+
+	// Calculate transaction fee
+	transactionFee := totalInputValue - totalOutputValue
+	_, err = getFormattedAmount(fmt.Sprintf("%d", transactionFee), SATOSHI_DECIMALS)
+	if err != nil {
+		return nil, fmt.Errorf("error formatting fee: %w", err)
+	}
+	// TODO: output fee
+
 	return transfers, nil
+}
+
+// FetchUTXOValue fetches the value of a UTXO (mock function)
+func FetchUTXOValue(chainUrl string, txHash string) (int64, error) {
+	// Use BlockCypher or other API to fetch UTXO details by txHash
+	// Example: Use a dummy value for now
+	return 100000, nil // Replace with actual UTXO fetch logic
 }
 
 // Helper function to format amounts

@@ -56,14 +56,14 @@ var Chains = []Chain{
 	{
 		ChainId:     "1000",
 		ChainType:   "bitcoin",
-		ChainUrl:    "https://blockstream.info/api",
+		ChainUrl:    "https://api.blockcypher.com/v1/btc/main",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
 	},
 	{
 		ChainId:     "1001",
 		ChainType:   "bitcoin",
-		ChainUrl:    "https://blockstream.info/testnet/api",
+		ChainUrl:    "https://api.blockcypher.com/v1/btc/test3",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
 	},

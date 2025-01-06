@@ -26,8 +26,6 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 	// Create a new RPC client
 	client, err := rpcclient.New(&rpcclient.ConnConfig{
 		Host:         chain.ChainUrl,
-		User:         chain.RpcUsername, // TODO: need to replace username and password
-		Pass:         chain.RpcPassword,
 		HTTPPostMode: true,
 		DisableTLS:   true,
 	}, nil)

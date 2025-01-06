@@ -1,11 +1,10 @@
 package sequencer
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/rpcclient"
+	"net/http"
 )
 
 // Bitcoin integration constants
@@ -15,6 +14,43 @@ const (
 	BTC_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 )
 
+// BlockCypherTransaction represents the transaction data structure returned by BlockCypher
+type BlockCypherTransaction struct {
+	Inputs  []BlockCypherInput  `json:"inputs"`
+	Outputs []BlockCypherOutput `json:"outputs"`
+}
+
+type BlockCypherInput struct {
+	Addresses []string `json:"addresses"`
+}
+
+type BlockCypherOutput struct {
+	Addresses []string `json:"addresses"`
+	Value     int64    `json:"value"` // Value in satoshis
+}
+
+// FetchTransaction fetches transaction details from BlockCypher
+func FetchTransaction(chainUrl string, txHash string) (*BlockCypherTransaction, error) {
+	url := fmt.Sprintf("%s/txs/%s", chainUrl, txHash)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch transaction: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var tx BlockCypherTransaction
+	if err := json.NewDecoder(resp.Body).Decode(&tx); err != nil {
+		return nil, fmt.Errorf("failed to decode transaction response: %v", err)
+	}
+
+	return &tx, nil
+}
+
 // GetBitcoinTransfers fetches Bitcoin transaction details and parses them into transfers
 func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 	// Get chain configuration
@@ -23,62 +59,29 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 		return nil, fmt.Errorf("failed to get chain config: %v", err)
 	}
 
-	// Create a new RPC client
-	client, err := rpcclient.New(&rpcclient.ConnConfig{
-		Host:         chain.ChainUrl,
-		HTTPPostMode: true,
-		DisableTLS:   true,
-	}, nil)
+	// Fetch transaction details from BlockCypher
+	tx, err := FetchTransaction(chain.ChainUrl, txHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create RPC client: %v", err)
-	}
-	defer client.Shutdown()
-
-	// Convert transaction hash from string to *chainhash.Hash
-	hash, err := chainhash.NewHashFromStr(txHash)
-	if err != nil {
-		return nil, fmt.Errorf("invalid transaction hash: %v", err)
-	}
-
-	// Fetch transaction details
-	rawTx, err := client.GetRawTransactionVerbose(hash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch Bitcoin transaction: %v", err)
+		return nil, err
 	}
 
 	var transfers []Transfer
 
-	// Process each input
-	for _, input := range rawTx.Vin {
-		// Fetch the previous transaction
-		prevTxHash, err := chainhash.NewHashFromStr(input.Txid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse previous transaction hash: %v", err)
-		}
-
-		prevTx, err := client.GetRawTransactionVerbose(prevTxHash)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch previous transaction: %v", err)
-		}
-
-		// Get the address from the previous transaction's output
-		prevOut := prevTx.Vout[input.Vout]
-		if len(prevOut.ScriptPubKey.Addresses) == 0 {
+	// Process inputs and outputs
+	for _, input := range tx.Inputs {
+		if len(input.Addresses) == 0 {
 			continue
 		}
+		fromAddress := input.Addresses[0]
 
-		fromAddress := prevOut.ScriptPubKey.Addresses[0]
-
-		// Process outputs
-		for _, output := range rawTx.Vout {
-			if len(output.ScriptPubKey.Addresses) == 0 {
+		for _, output := range tx.Outputs {
+			if len(output.Addresses) == 0 {
 				continue
 			}
 
-			amount := big.NewFloat(output.Value)
-			amount.Mul(amount, big.NewFloat(1e8)) // Convert BTC to Satoshis
-			floatValue, _ := amount.Float64()
-			scaledAmount := fmt.Sprintf("%d", int64(floatValue))
+			amount := output.Value // Value is already in satoshis
+
+			scaledAmount := fmt.Sprintf("%d", amount)
 
 			formattedAmount, err := getFormattedAmount(scaledAmount, SATOSHI_DECIMALS)
 			if err != nil {
@@ -87,7 +90,7 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 
 			transfers = append(transfers, Transfer{
 				From:         fromAddress,
-				To:           output.ScriptPubKey.Addresses[0],
+				To:           output.Addresses[0],
 				Amount:       formattedAmount,
 				Token:        BTC_TOKEN_SYMBOL,
 				IsNative:     true,

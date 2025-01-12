@@ -1,4 +1,3 @@
-
 # Bitcoin Module Documentation
 
 ## Overview
@@ -6,87 +5,131 @@
 This module adds Bitcoin (BTC) support to the `strip-node` sequencer. It enables handling native BTC transfers and UTXO-based transactions, including parsing, transfer event tracking, and transaction fee calculation.
 
 ## Features
-1. Native BTC transfers
+1. Native BTC transfers with support for both mainnet and testnet
 2. UTXO-based transaction parsing and management
 3. Bitcoin amount formatting (satoshis to BTC)
 4. Transaction fee calculation
 5. Integration with existing sequencer logic
+6. Comprehensive error handling for all operations
 
 ## File Structure
 
 ### `bitcoin.go`
-- Contains the implementation of Bitcoin module.
-- Handles Bitcoin transfers using the `Transfer` struct.
-- Provides utilities for formatting BTC amounts and calculating transaction fees.
+- Contains the implementation of Bitcoin module
+- Handles Bitcoin transfers using the `Transfer` struct
+- Provides utilities for formatting BTC amounts and calculating transaction fees
+- Implements BlockCypher API integration for transaction data
 
 ### `bitcoin_test.go`
 - Unit tests for Bitcoin functionality, including:
-  - Validating transfers
-  - Testing mainnet and testnet configurations
+  - Mainnet and testnet transaction validation
+  - Error handling scenarios
+  - UTXO value fetching
+  - Transaction fee calculation
 
-## Key Functions
+## Implementation Details
 
-### `FetchTransaction`
-Fetches Bitcoin transaction details from BlockCypher API.
+### Chain Configuration
 
-**Parameters:**
-- `chainUrl`: The URL of the BlockCypher API.
-- `txHash`: The transaction hash.
+Bitcoin chain configuration is managed through `chain.go`, which defines the following chain:
+- Mainnet (ChainId: "1000"): Uses "https://api.blockcypher.com/v1/btc/main"
 
-**Returns:**
-- A `BlockCypherTransaction` struct containing transaction details.
+### Transaction Processing
+1. **Chain Selection**
+   - Mainnet (chainId: "1000"): Uses "https://api.blockcypher.com/v1/btc/main"
 
----
+2. **UTXO Management**
+   ```go
+   type BlockCypherTransaction struct {
+       Inputs  []BlockCypherInput  `json:"inputs"`
+       Outputs []BlockCypherOutput `json:"outputs"`
+       Fees    int64              `json:"fees"`
+   }
+   ```
 
-### `GetBitcoinTransfers`
-Fetches and parses Bitcoin transaction details into a list of `Transfer` objects.
+3. **Fee Calculation**
+   ```go
+   feeDetails := &FeeDetails{
+       FeeAmount:    tx.Fees,
+       TotalInputs:  totalInputValue,
+       TotalOutputs: totalOutputValue,
+   }
+   ```
 
-**Parameters:**
-- `chainId`: The ID of the blockchain.
-- `txHash`: The transaction hash.
+4. **Amount Formatting**
+   - Converts satoshis to BTC (8 decimal places)
+   - Example: 100000000 satoshis → "1.00000000" BTC
 
-**Returns:**
-- A list of `Transfer` objects representing parsed transactions.
+### Error Handling
 
----
+The module handles various error scenarios:
+1. Invalid chain ID
+2. Invalid transaction hash
+3. API server errors
+4. Network timeouts
+5. Empty responses
+6. Missing input/output addresses
+7. Malformed JSON responses
 
-### `getFormattedAmount`
-Formats BTC amounts by converting satoshis to BTC.
+### API Integration
 
-**Parameters:**
-- `amount`: The amount in satoshis as a string.
-- `decimal`: The number of decimals for BTC (8).
-
-**Returns:**
-- A string representation of the formatted BTC amount.
-
----
-
-### `FetchUTXOValue` (Mock Function)
-Fetches the value of a UTXO. Placeholder for future implementation.
-
-**Parameters:**
-- `chainUrl`: The URL of the BlockCypher API.
-- `txHash`: The transaction hash.
-
-**Returns:**
-- The value of the UTXO in satoshis.
+#### BlockCypher API
+- **Base URLs**:
+  - Mainnet: https://api.blockcypher.com/v1/btc/main
+  - Testnet: https://api.blockcypher.com/v1/btc/test3
+- **Endpoints**:
+  - Transaction details: `/txs/{hash}`
+  - UTXO details: `/txs/{hash}?includeHex=true`
 
 ## Testing
-The `bitcoin_test.go` file provides test cases for validating:
-1. Basic BTC transfer parsing.
-2. Mainnet and testnet configurations.
-3. Amount formatting and fee calculations.
+
+### Test Coverage
+1. **Basic Transfer Tests**
+   - Mainnet transaction validation
+   - Fee calculation verification
+
+2. **Error Handling Tests**
+   - Invalid chain ID
+   - Invalid transaction hash
+   - API server errors
+   - Malformed JSON responses
+   - Network timeouts
+   - Empty responses
+   - Missing output addresses
+
+3. **UTXO Value Tests**
+   - Valid Bitcoin transaction
+   - Invalid transaction hash
+   - Invalid chain URL
+
+### Test Results
+All test cases pass successfully, including:
+- Transaction fetching and parsing
+- Transfer formatting
+- Fee calculation
+- Error handling scenarios
 
 ## Configuration
-- **Chain Configuration**: The module integrates seamlessly with the sequencer's existing chain configuration system.
-- **Libraries Used**: `btcd/btcutil` for handling BTC-specific operations.
 
-## Notes
-- The module currently uses BlockCypher API for transaction details.
-- Proper error handling and logging are implemented for robustness.
+### Constants
+```go
+const (
+    BTC_TOKEN_SYMBOL = "BTC"
+    SATOSHI_DECIMALS = 8
+    BTC_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+)
+```
 
 ## Future Enhancements
-1. Add support for additional Bitcoin APIs to improve redundancy.
-2. Optimize UTXO selection logic for better fee management.
-3. Enhance documentation and include more examples in test cases.
+1. Add support for additional Bitcoin APIs (e.g., Blockstream API) for redundancy
+2. Implement mempool monitoring for unconfirmed transactions
+3. Add support for SegWit addresses
+4. Enhance UTXO selection logic for better fee optimization
+5. Add support for multi-signature transactions
+
+## References
+- [BlockCypher API Documentation](https://www.blockcypher.com/dev/bitcoin/)
+- [Bitcoin Transaction Format](https://en.bitcoin.it/wiki/Transaction)
+- [UTXO Model](https://en.wikipedia.org/wiki/Unspent_transaction_output)
+
+Last Updated: 2025-01-12

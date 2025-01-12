@@ -16,19 +16,25 @@ const (
 
 // BlockCypherTransaction represents the transaction data structure returned by BlockCypher
 type BlockCypherTransaction struct {
+	Hash    string              `json:"hash"`    // Transaction hash
 	Inputs  []BlockCypherInput  `json:"inputs"`  // List of inputs in the transaction
 	Outputs []BlockCypherOutput `json:"outputs"` // List of outputs in the transaction
+	Fees    int64               `json:"fees"`    // Transaction fees in satoshis
 }
 
 // BlockCypherInput represents the input of a transaction
 type BlockCypherInput struct {
-	Addresses []string `json:"addresses"` // List of addresses involved in the input
+	Addresses   []string `json:"addresses"`    // List of addresses involved in the input
+	Value       int64    `json:"value"`        // Value of the input in satoshis
+	OutputValue int64    `json:"output_value"` // Alternative field for output value
 }
 
 // BlockCypherOutput represents the output of a transaction
 type BlockCypherOutput struct {
-	Addresses []string `json:"addresses"` // List of addresses involved in the output
-	Value     int64    `json:"value"`     // Value of the output in satoshis
+	Addresses   []string `json:"addresses"`    // List of addresses involved in the output
+	Value       int64    `json:"value"`        // Value of the output in satoshis
+	OutputValue int64    `json:"output_value"` // Alternative field for output value
+	Script      string   `json:"script"`       // Output script
 }
 
 // FetchTransaction fetches transaction details from BlockCypher
@@ -58,19 +64,40 @@ func FetchTransaction(chainUrl string, txHash string) (*BlockCypherTransaction, 
 	return &tx, nil
 }
 
+// GetChainFunc is a function type for getting chain information
+type GetChainFunc func(chainId string) (Chain, error)
+
+// defaultGetChain is the default implementation that uses the GetChain function
+var defaultGetChain = func(chainId string) (Chain, error) {
+	return GetChain(chainId)
+}
+
+// FeeDetails represents the transaction fee information
+type FeeDetails struct {
+	FeeAmount    int64  `json:"feeAmount"`    // Fee amount in satoshis
+	FormattedFee string `json:"formattedFee"` // Fee amount formatted in BTC
+	TotalInputs  int64  `json:"totalInputs"`  // Total input value in satoshis
+	TotalOutputs int64  `json:"totalOutputs"` // Total output value in satoshis
+}
+
 // GetBitcoinTransfers fetches Bitcoin transaction details and parses them into transfers
 // This function processes a transaction and extracts transfers from inputs and outputs
-func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
-	// Get chain configuration using the chain ID
-	chain, err := GetChain(chainId)
+func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, *FeeDetails, error) {
+	// Get chain information
+	chain, err := defaultGetChain(chainId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get chain config: %v", err)
+		return nil, nil, fmt.Errorf("chain not found")
 	}
 
 	// Fetch transaction details from BlockCypher using the chain URL and txHash
 	tx, err := FetchTransaction(chain.ChainUrl, txHash)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// Validate transaction has inputs
+	if len(tx.Inputs) == 0 {
+		return nil, nil, fmt.Errorf("transaction has no inputs")
 	}
 
 	// Initialize slice to hold transfers and variables to calculate total input/output values
@@ -85,6 +112,13 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 		}
 		fromAddress := input.Addresses[0] // Get the first address from the input
 
+		// Use OutputValue if Value is not available
+		inputValue := input.Value
+		if inputValue == 0 {
+			inputValue = input.OutputValue
+		}
+		totalInputValue += inputValue // Sum input values
+
 		// Process outputs of the transaction
 		for _, output := range tx.Outputs {
 			if len(output.Addresses) == 0 {
@@ -92,13 +126,16 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 			}
 
 			// Extract value (amount) from the output and convert to string
-			amount := output.Value // Amount is in satoshis (1 satoshi = 0.00000001 BTC)
-			scaledAmount := fmt.Sprintf("%d", amount)
+			outputValue := output.Value
+			if outputValue == 0 {
+				outputValue = output.OutputValue
+			}
+			scaledAmount := fmt.Sprintf("%d", outputValue)
 
 			// Format the amount using the helper function
 			formattedAmount, err := getFormattedAmount(scaledAmount, SATOSHI_DECIMALS)
 			if err != nil {
-				return nil, fmt.Errorf("error formatting amount: %w", err)
+				return nil, nil, fmt.Errorf("error formatting amount: %w", err)
 			}
 
 			// Append the transfer details to the transfers slice
@@ -114,32 +151,64 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, error) {
 		}
 	}
 
+	// Validate we found some transfers
+	if len(transfers) == 0 {
+		return nil, nil, fmt.Errorf("no transfers found")
+	}
+
 	// Process outputs of the transaction to calculate the total output value
 	for _, output := range tx.Outputs {
 		if len(output.Addresses) == 0 {
 			continue // Skip output if there are no addresses
 		}
-		totalOutputValue += output.Value // Sum output values
+		outputValue := output.Value
+		if outputValue == 0 {
+			outputValue = output.OutputValue
+		}
+		totalOutputValue += outputValue // Sum output values
 	}
 
-	// Calculate transaction fee by subtracting total output value from total input value
-	transactionFee := totalInputValue - totalOutputValue
-	_, err = getFormattedAmount(fmt.Sprintf("%d", transactionFee), SATOSHI_DECIMALS)
+	// Get transaction fee from BlockCypher API response
+	transactionFee := tx.Fees
+	formattedFee, err := getFormattedAmount(fmt.Sprintf("%d", transactionFee), SATOSHI_DECIMALS)
 	if err != nil {
-		return nil, fmt.Errorf("error formatting fee: %w", err)
+		return nil, nil, fmt.Errorf("error formatting fee: %w", err)
 	}
 
-	// TODO: Output the fee details as needed
+	// Create fee details structure
+	feeDetails := &FeeDetails{
+		FeeAmount:    transactionFee,
+		FormattedFee: formattedFee,
+		TotalInputs:  totalInputValue,
+		TotalOutputs: totalOutputValue,
+	}
 
-	// Return the list of transfers
-	return transfers, nil
+	// Return the list of transfers and fee details
+	return transfers, feeDetails, nil
 }
 
-// FetchUTXOValue fetches the value of a UTXO (mock function)
-// This function simulates fetching the value of an unspent transaction output (UTXO)
+// FetchUTXOValue fetches the value of a UTXO using BlockCypher API
+// This function retrieves the value of an unspent transaction output (UTXO)
 func FetchUTXOValue(chainUrl string, txHash string) (int64, error) {
-	// Example: Use a dummy value for now, can be replaced with actual logic to fetch UTXO details
-	return 100000, nil // Example value (100,000 satoshis)
+	// Fetch the full transaction details
+	tx, err := FetchTransaction(chainUrl, txHash)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch transaction: %v", err)
+	}
+
+	// For UTXOs, we're interested in the first output value
+	// In most Bitcoin transactions, the first output is the actual transfer amount
+	if len(tx.Outputs) == 0 {
+		return 0, fmt.Errorf("transaction has no outputs")
+	}
+
+	// Use OutputValue if Value is not available
+	outputValue := tx.Outputs[0].Value
+	if outputValue == 0 {
+		outputValue = tx.Outputs[0].OutputValue
+	}
+
+	return outputValue, nil
 }
 
 // Helper function to format amounts

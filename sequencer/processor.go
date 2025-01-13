@@ -834,6 +834,14 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
+
+						if chain.ChainType == "aptos" {
+							confirmed, err = checkAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
 					}
 
 					if !confirmed {
@@ -865,6 +873,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "solana" {
 							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "aptos" {
+							confirmed, err = checkAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1003,6 +1019,14 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
+
+						if chain.ChainType == "aptos" {
+							confirmed, err = checkAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
 					}
 
 					if !confirmed {
@@ -1047,6 +1071,23 @@ func ProcessIntent(intentId int64) {
 
 							if chain.ChainType == "solana" {
 								txnConfirmed, err := checkSolanaTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+								}
+							}
+
+							if chain.ChainType == "aptos" {
+								txnConfirmed, err := checkAptosTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -1181,6 +1222,26 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 
 }
 
+func checkAptosTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	chain, err := GetChain(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	client := aptosClient.NewAptosClient(chain.ChainUrl)
+
+	tx, err := client.GetTransactionByHash(context.Background(), txnHash)
+	if err != nil {
+		return false, err
+	}
+
+	if tx.Success {
+		return true, nil
+	} else {
+		return false, nil
+	}
+}
+
 func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
 	chain, err := GetChain(chainId)
 	if err != nil {
@@ -1289,7 +1350,11 @@ func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string,
 		return "", err
 	}
 
-	response, err := client.SubmitTransaction(context.Background(), tx.UserTransaction, signature)
+	tx.SetAuthenticator(aptosModels.TransactionAuthenticatorEd25519{
+		Signature: signature,
+	})
+
+	response, err := client.SubmitTransaction(context.Background(), tx.UserTransaction)
 	if err != nil {
 		return "", err
 	}

@@ -160,57 +160,43 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						if chain.ChainType == "solana" {
-							txnHash, err := sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						var txnHash string
 
+						if chain.ChainType == "solana" {
+							txnHash, err = sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
-							}
-
-							var lockMetadata LockMetadata
-							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
-
-							if lockMetadata.Lock {
-								err := LockIdentity(lockSchema.Id)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
-							} else {
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 							}
 						}
 
 						if chain.ChainType == "aptos" {
-							txnHash, err := sendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
-
+							txnHash, err = sendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
-
-							var lockMetadata LockMetadata
-							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
-
-							if lockMetadata.Lock {
-								err := LockIdentity(lockSchema.Id)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
-							} else {
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
-							}
 						}
+
+						var lockMetadata LockMetadata
+						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+						if lockMetadata.Lock {
+							err := LockIdentity(lockSchema.Id)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+						} else {
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						}
+
 					}
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
 					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
@@ -383,10 +369,28 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" {
-						transfers, err := GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
+						chain, err := GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
+						}
+
+						var transfers []Transfer
+
+						if chain.ChainType == "solana" {
+							transfers, err = GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "aptos" {
+							transfers, err = GetAptosTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
 						}
 
 						if len(transfers) == 0 {

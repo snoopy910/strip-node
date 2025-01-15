@@ -11,6 +11,8 @@ var MaximumSigners int
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress string
 var HeliusApiKey string
 var PrivateKey string
+var CLIENT_ID, CLIENT_SECRET, JWT_SECRET, SESSION_SECRET, REDIRECT_URL string
+var oauthInfo *OAuthParameters
 
 func StartSequencer(
 	httpPort string,
@@ -20,6 +22,11 @@ func StartSequencer(
 	heliusApiKey string,
 	bridgeContractAddress string,
 	privateKey string,
+	clientId string,
+	clientSecret string,
+	jwtSecret string,
+	redirectUrl string,
+	sessionSecret string,
 ) {
 	keepAlive := make(chan string)
 
@@ -49,6 +56,13 @@ func StartSequencer(
 	MaximumSigners = int(_maxSigners.Int64())
 
 	initiaiseBridge()
+
+	CLIENT_ID = clientId
+	CLIENT_SECRET = clientSecret
+	JWT_SECRET = jwtSecret
+	REDIRECT_URL = redirectUrl
+
+	oauthInfo = InitializeGoogleOauth(REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, SESSION_SECRET)
 
 	go startHTTPServer(httpPort)
 

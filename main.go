@@ -30,6 +30,8 @@ func main() {
 	isAddSolver := flag.Bool("isAddSolver", LookupEnvOrBool("IS_ADD_SOLVER", false), "add solver to SolversRegistry")
 	isAddToken := flag.Bool("isAddToken", LookupEnvOrBool("IS_ADD_TOKEN", false), "add token to Bridge")
 	isSetSwapRouter := flag.Bool("isSetSwapRouter", LookupEnvOrBool("IS_SET_SWAP_ROUTER", false), "set swap router in Bridge")
+	// oauth
+	isOAuth := flag.Bool("isOAuth", LookupEnvOrBool("IS_OAUTH", false), "is oauth enabled")
 	privateKey := flag.String("privateKey", LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
 	isBootstrap := flag.Bool("isBootstrap", LookupEnvOrBool("IS_BOOTSTRAP", false), "is the process a signer")
 	isSequencer := flag.Bool("isSequencer", LookupEnvOrBool("IS_SEQUENCER", false), "is the process a sequencer")
@@ -62,6 +64,13 @@ func main() {
 	postgresDB := flag.String("postgresDB", LookupEnvOrString("POSTGRES_DB", "postgres"), "postgres db name")
 	postgresUser := flag.String("postgresUser", LookupEnvOrString("POSTGRES_USER", "postgres"), "postgres user")
 	postgresPassword := flag.String("postgresPassword", LookupEnvOrString("POSTGRES_PASSWORD", "password"), "postgres password")
+
+	// auth
+	clientId := flag.String("clientId", LookupEnvOrString("CLIENT_ID", ""), "google client id")
+	clientSecret := flag.String("clientSecret", LookupEnvOrString("CLIENT_SECRET", ""), "google client secret")
+	redirectUrl := flag.String("redirectUrl", LookupEnvOrString("REDIRECT_URL", ""), "google redirect url")
+	jwtSecret := flag.String("jwtSecret", LookupEnvOrString("JWT_SECRET", ""), "application secret for jwt")
+	sessionSecret := flag.String("sessionSecret", LookupEnvOrString("SESSION_SECRET", ""), "application secret for sessions")
 
 	defaultPath, err := os.Getwd()
 	if err != nil {
@@ -102,6 +111,11 @@ func main() {
 			*heliusApiKey,
 			*bridgeContractAddress,
 			*privateKey,
+			*clientId,
+			*clientSecret,
+			*redirectUrl,
+			*jwtSecret,
+			*sessionSecret,
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)

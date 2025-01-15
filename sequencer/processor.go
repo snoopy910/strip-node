@@ -1216,7 +1216,11 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 		return false, err
 	}
 
-	_, err = c.GetConfirmedTransaction(context.Background(), signature)
+	// Regarding the deprecation of GetConfirmedTransaction in Solana-Core v2, this has been updated to use GetTransaction.
+	// https://solana.com/docs/rpc/deprecated/getconfirmedtransaction
+	_, err = c.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
+		Commitment: rpc.CommitmentConfirmed,
+	})
 
 	if err != nil {
 		return false, err

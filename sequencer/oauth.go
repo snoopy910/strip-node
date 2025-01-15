@@ -31,7 +31,7 @@ type OAuthParameters struct {
 	verifier   string
 }
 
-func InitializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string) *OAuthParameters {
+func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string) *OAuthParameters {
 	googleOauthConfig := &oauth2.Config{
 		RedirectURL:  redirectUrl, //"http://localhost:4000/auth/google/callback",
 		ClientID:     clientId,
@@ -54,7 +54,7 @@ func InitializeGoogleOauth(redirectUrl string, clientId string, clientSecret str
 	return &OAuthParameters{googleOauthConfig, sessionStore, oauthState, verifier}
 
 }
-func generateIdToken(user UserInfo, identity string, identityCurve string, email string, signedMessage string) (string, error) {
+func generateIdToken(user UserInfo, identity string, identityCurve string, signedMessage string) (string, error) {
 	// Define token claims
 	// 	Issuer (iss)
 	// Subject (sub)
@@ -66,7 +66,7 @@ func generateIdToken(user UserInfo, identity string, identityCurve string, email
 	claims := jwt.MapClaims{}
 	claims["sub"] = user.ID
 	claims["name"] = user.Name
-	claims["email"] = email
+	claims["email"] = user.Email
 	claims["exp"] = time.Now().Add(time.Hour * 1).Unix()
 	claims["identity"] = identity
 	claims["identityCurve"] = identityCurve
@@ -155,13 +155,6 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// // Generate a JWT refresh token
-	// refreshToken, err := GenerateRefreshToken(userInfo.ID)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-
 	session, err := oauthInfo.session.Get(r, "session-name")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -177,6 +170,13 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// // Generate a JWT refresh token
+	// refreshToken, err := GenerateRefreshToken(userInfo.ID)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
 
 	// session.Values["refreshToken"] = refreshToken
 	// err = session.Save(r, w)

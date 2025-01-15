@@ -62,7 +62,7 @@ func StartSequencer(
 	JWT_SECRET = jwtSecret
 	REDIRECT_URL = redirectUrl
 
-	oauthInfo = InitializeGoogleOauth(REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, SESSION_SECRET)
+	oauthInfo = initializeGoogleOauth(REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, SESSION_SECRET)
 
 	go startHTTPServer(httpPort)
 

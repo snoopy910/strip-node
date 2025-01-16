@@ -1,6 +1,7 @@
 package sequencer
 
 import (
+	"fmt"
 	"log"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
@@ -11,7 +12,7 @@ var MaximumSigners int
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress string
 var HeliusApiKey string
 var PrivateKey string
-var CLIENT_ID, CLIENT_SECRET, JWT_SECRET, SESSION_SECRET, REDIRECT_URL string
+var JWT_SECRET string
 var oauthInfo *OAuthParameters
 
 func StartSequencer(
@@ -22,6 +23,7 @@ func StartSequencer(
 	heliusApiKey string,
 	bridgeContractAddress string,
 	privateKey string,
+	enableOAuth bool,
 	clientId string,
 	clientSecret string,
 	jwtSecret string,
@@ -57,12 +59,25 @@ func StartSequencer(
 
 	initiaiseBridge()
 
-	CLIENT_ID = clientId
-	CLIENT_SECRET = clientSecret
-	JWT_SECRET = jwtSecret
-	REDIRECT_URL = redirectUrl
+	fmt.Println("Bridge initialized")
 
-	oauthInfo = initializeGoogleOauth(REDIRECT_URL, CLIENT_ID, CLIENT_SECRET, SESSION_SECRET)
+	fmt.Println("enableOAuth")
+	fmt.Println(enableOAuth)
+	fmt.Println("clientId")
+	fmt.Println(clientId)
+	fmt.Println(rpcURL)
+	if enableOAuth {
+		fmt.Println("Initializing Google OAuth")
+		// check if != ""
+		fmt.Println(clientId)
+		fmt.Println(clientSecret)
+		fmt.Println(sessionSecret)
+		fmt.Println(redirectUrl)
+		// oauthinfo secret
+		JWT_SECRET = jwtSecret
+		oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret)
+		fmt.Println("Initializing Google OAuth done")
+	}
 
 	go startHTTPServer(httpPort)
 

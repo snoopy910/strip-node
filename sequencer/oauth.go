@@ -3,6 +3,7 @@ package sequencer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -111,6 +112,8 @@ func GenerateRefreshToken(userID string) (string, error) {
 
 func login(w http.ResponseWriter, r *http.Request) {
 	// Generate a new state string (use a secure random string in production)
+	// security token state (oauthInfo.authState = "pseudo-random")
+	// adding nonce and hd
 	url := oauthInfo.config.AuthCodeURL(oauthInfo.oauthState, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(oauthInfo.verifier))
 
 	// Redirect user to Google's consent page
@@ -171,21 +174,8 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// // Generate a JWT refresh token
-	// refreshToken, err := GenerateRefreshToken(userInfo.ID)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-
-	// session.Values["refreshToken"] = refreshToken
-	// err = session.Save(r, w)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-
 	SetTokenCookie(w, accessToken)
+
 	// Redirect user to the home page
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -202,7 +192,26 @@ func SetTokenCookie(w http.ResponseWriter, token string) {
 	})
 }
 
+func verifyToken(tokenStr string, secretKey string) error {
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) { // interface to define
+		return secretKey, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if !token.Valid {
+		return fmt.Errorf("invalid token")
+	}
+
+	return nil
+}
+
 // user sign a message
 // message verified
 // jwt stored and sent to the client
 // use the jwt in the header authorization bearer
+// adding nonce --> replay attack
+// adding oauth protected to existing routes
+// https://www.unicorn.studio/embed/SaCYz48FXaFwo5ifY36I?preview=true

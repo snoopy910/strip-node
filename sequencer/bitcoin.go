@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"regexp"
 )
 
 // Bitcoin integration constants
@@ -228,4 +229,11 @@ func getFormattedAmount(amount string, decimal int) (string, error) {
 	}
 
 	return formattedAmount, nil
+}
+
+// isValidBitcoinAddress checks if a Bitcoin address is valid
+func isValidBitcoinAddress(address string) bool {
+	// Basic regex to validate Bitcoin address format
+	re := regexp.MustCompile(`^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$`)
+	return re.MatchString(address)
 }

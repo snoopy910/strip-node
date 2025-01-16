@@ -568,3 +568,16 @@ func TestFetchUTXOValueErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestIsValidBitcoinAddress tests the isValidBitcoinAddress function
+func TestIsValidBitcoinAddress(t *testing.T) {
+	t.Run("Valid BTC Address", func(t *testing.T) {
+		address := "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+		require.True(t, isValidBitcoinAddress(address))
+	})
+
+	t.Run("Invalid BTC Address", func(t *testing.T) {
+		address := "InvalidAddress123"
+		require.False(t, isValidBitcoinAddress(address))
+	})
+}

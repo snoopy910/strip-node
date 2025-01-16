@@ -33,8 +33,9 @@ type OAuthParameters struct {
 }
 
 func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string) *OAuthParameters {
+
 	googleOauthConfig := &oauth2.Config{
-		RedirectURL:  redirectUrl, //"http://localhost:4000/auth/google/callback",
+		RedirectURL:  redirectUrl,
 		ClientID:     clientId,
 		ClientSecret: clientSecret,
 		Scopes: []string{
@@ -114,7 +115,8 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Generate a new state string (use a secure random string in production)
 	// security token state (oauthInfo.authState = "pseudo-random")
 	// adding nonce and hd
-	url := oauthInfo.config.AuthCodeURL(oauthInfo.oauthState, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(oauthInfo.verifier))
+	// oauthInfo.oauthState to be set in start sequencer
+	url := oauthInfo.config.AuthCodeURL("state", oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(oauthInfo.verifier))
 
 	// Redirect user to Google's consent page
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)

@@ -65,9 +65,9 @@ func main() {
 
 	// auth
 	enableOAuth := flag.Bool("enableOAuth", LookupEnvOrBool("ENABLE_OAUTH", false), "is oauth enabled")
+	redirectUrl := flag.String("redirectUrl", LookupEnvOrString("REDIRECT_URL", ""), "google redirect url")
 	clientId := flag.String("clientId", LookupEnvOrString("CLIENT_ID", ""), "google client id")
 	clientSecret := flag.String("clientSecret", LookupEnvOrString("CLIENT_SECRET", ""), "google client secret")
-	redirectUrl := flag.String("redirectUrl", LookupEnvOrString("REDIRECT_URL", ""), "google redirect url")
 	jwtSecret := flag.String("jwtSecret", LookupEnvOrString("JWT_SECRET", ""), "application secret for jwt")
 	sessionSecret := flag.String("sessionSecret", LookupEnvOrString("SESSION_SECRET", ""), "application secret for sessions")
 

@@ -26,8 +26,8 @@ func StartSequencer(
 	enableOAuth bool,
 	clientId string,
 	clientSecret string,
-	jwtSecret string,
 	redirectUrl string,
+	jwtSecret string,
 	sessionSecret string,
 ) {
 	keepAlive := make(chan string)

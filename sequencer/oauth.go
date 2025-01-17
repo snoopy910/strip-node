@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
@@ -51,6 +50,7 @@ func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret str
 		Endpoint: google.Endpoint,
 	}
 
+	// use PKCE to protect against CSRF attacks
 	verifier := oauth2.GenerateVerifier()
 
 	sessionStore := sessions.NewCookieStore([]byte(sessionSecret))
@@ -75,7 +75,7 @@ func generateIdToken(user UserInfo, identity string, identityCurve string, signe
 
 	// Sign the token with the secret
 	// should it be encrypted?
-	return token.SignedString(oauthInfo.jwtSecret)
+	return token.SignedString([]byte(oauthInfo.jwtSecret))
 }
 
 // GenerateAccessToken creates a JWT access token
@@ -93,7 +93,7 @@ func generateAccessToken(userId string, identity string, identityCurve string) (
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign and get the complete encoded token as a string
-	return token.SignedString(oauthInfo.jwtSecret)
+	return token.SignedString([]byte(oauthInfo.jwtSecret))
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
@@ -118,12 +118,16 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("handleCallback-1", code)
+
 	// Exchange the authorization code for an access token
-	token, err := oauthInfo.config.Exchange(r.Context(), code, oauth2.SetAuthURLParam("code_verifier", oauthInfo.verifier))
+	token, err := oauthInfo.config.Exchange(context.Background(), code, oauth2.VerifierOption(oauthInfo.verifier))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	fmt.Println("handleCallback-2", token.AccessToken)
 
 	// Get user information from Google
 	client := oauthInfo.config.Client(context.Background(), token)
@@ -135,12 +139,16 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	defer userInfoResponse.Body.Close()
 
+	fmt.Println("handleCallback-3", userInfoResponse.StatusCode)
+
 	var userInfo UserInfo
 	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	fmt.Println("handleCallback-4", userInfo)
 
 	// generate the idToken here without identity and identityCurve
 	session, err := oauthInfo.session.Get(r, "session-name")
@@ -155,20 +163,30 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	// Generate a JWT access token
 	idToken, err := generateIdToken(userInfo, "", "", "")
 	if err != nil {
+		fmt.Println("handleCallback error-1 id token", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	fmt.Println("handleCallback-5", idToken)
+
 	SetTokenCookie(w, idToken, "id_token")
+
+	fmt.Println("handleCallback-6 SetTokenCookie(w, idToken")
 
 	// Generate a JWT access token
 	accessToken, err := generateAccessToken(userInfo.ID, "", "")
 	if err != nil {
+		fmt.Println("handleCallback error-2 access token", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	fmt.Println("handleCallback-6", accessToken)
+
 	SetTokenCookie(w, accessToken, "access_token")
+
+	fmt.Println("handleCallback-7 SetTokenCookie(w, accessToken")
 
 	// Redirect user to the home page
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -210,42 +228,42 @@ func generateState() string {
 	return base64.URLEncoding.EncodeToString(b)
 }
 
-func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
+// func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 
-	identity := r.URL.Query().Get("identity")
-	identityCurve := r.URL.Query().Get("identityCurve")
+// 	identity := r.URL.Query().Get("identity")
+// 	identityCurve := r.URL.Query().Get("identityCurve")
 
-	_, err := GetWallet(identity, identityCurve)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+// 	_, err := GetWallet(identity, identityCurve)
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
 
-	signature := r.URL.Query().Get("signature")
-	message := oauthInfo.message
-	session, err := oauthInfo.session.Get(r, "session-name")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	userInfo := session.Values["user"].(UserInfo)
-	err = identityVerification.VerifySignature(
-		identity,
-		identityCurve,
-		message,
-		signature,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	//get the old access and id token
-	idToken, _ := generateIdToken(userInfo, identity, identityCurve, signature)
-	accessToken, _ := generateAccessToken(userInfo.ID, identity, identityCurve)
-	SetTokenCookie(w, accessToken, "access_token")
-	SetTokenCookie(w, idToken, "id_token")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
+// 	signature := r.URL.Query().Get("signature")
+// 	message := oauthInfo.message
+// 	session, err := oauthInfo.session.Get(r, "session-name")
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+// 	userInfo := session.Values["user"].(UserInfo)
+// 	err = identityVerification.VerifySignature(
+// 		identity,
+// 		identityCurve,
+// 		message,
+// 		signature,
+// 	)
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+// 	//get the old access and id token
+// 	idToken, _ := generateIdToken(userInfo, identity, identityCurve, signature)
+// 	accessToken, _ := generateAccessToken(userInfo.ID, identity, identityCurve)
+// 	SetTokenCookie(w, accessToken, "access_token")
+// 	SetTokenCookie(w, idToken, "id_token")
+// 	http.Redirect(w, r, "/", http.StatusSeeOther)
+// }
 
 // user sign a message
 // message verified

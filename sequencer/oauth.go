@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
@@ -33,9 +34,10 @@ type OAuthParameters struct {
 	jwtSecret  string
 	oauthState string
 	verifier   string
+	message    string
 }
 
-func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string) *OAuthParameters {
+func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, message string) *OAuthParameters {
 
 	googleOauthConfig := &oauth2.Config{
 		RedirectURL:  redirectUrl,
@@ -55,20 +57,10 @@ func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret str
 
 	// State string for CSRF protection
 	oauthState := generateState()
-	fmt.Println("oauthState")
-	fmt.Println(oauthState)
-	return &OAuthParameters{googleOauthConfig, sessionStore, jwtSecret, oauthState, verifier}
+	return &OAuthParameters{googleOauthConfig, sessionStore, jwtSecret, oauthState, verifier, message}
 
 }
 func generateIdToken(user UserInfo, identity string, identityCurve string, signedMessage string) (string, error) {
-	// Define token claims
-	// 	Issuer (iss)
-	// Subject (sub)
-	// Audience (aud)
-	// Expiration time (exp)
-	// Not before (nbf)
-	// Issued at (iat)
-	// JWT ID (jti)
 	claims := jwt.MapClaims{}
 	claims["sub"] = user.ID
 	claims["name"] = user.Name
@@ -82,20 +74,20 @@ func generateIdToken(user UserInfo, identity string, identityCurve string, signe
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign the token with the secret
-	return token.SignedString(oauthInfo.jwtSecret)
 	// should it be encrypted?
+	return token.SignedString(oauthInfo.jwtSecret)
 }
 
 // GenerateAccessToken creates a JWT access token
-func GenerateAccessToken(userId string) (string, error) {
+func generateAccessToken(userId string, identity string, identityCurve string) (string, error) {
 	// Define token claims
 	claims := jwt.MapClaims{}
 	claims["sub"] = userId
 	claims["exp"] = time.Now().Add(time.Hour * 1).Unix() // Token expires after 1 hour
 	claims["iat"] = time.Now().Unix()
 	claims["iss"] = "StripChain"
-	// claims["identity"] = identity
-	// claims["identityCurve"] = identityCurve
+	claims["identity"] = identity
+	claims["identityCurve"] = identityCurve
 
 	// Create the token using HS256 signing method
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -104,26 +96,8 @@ func GenerateAccessToken(userId string) (string, error) {
 	return token.SignedString(oauthInfo.jwtSecret)
 }
 
-func GenerateRefreshToken(userID string) (string, error) {
-	claims := jwt.MapClaims{}
-	claims["sub"] = userID
-	claims["exp"] = time.Now().Add(time.Hour * 24 * 7).Unix() // 7 days
-	claims["iat"] = time.Now().Unix()
-	claims["iss"] = "StripChain"
-	// claims["identity"] = identity
-	// claims["identityCurve"] = identityCurve
-	claims["type"] = "refresh"
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	return token.SignedString(oauthInfo.jwtSecret)
-}
-
 func login(w http.ResponseWriter, r *http.Request) {
-	// Generate a new state string (use a secure random string in production)
-	// security token state (oauthInfo.authState = "pseudo-random")
 	// adding nonce and hd
-	// oauthInfo.oauthState to be set in start sequencer
 	url := oauthInfo.config.AuthCodeURL(oauthInfo.oauthState, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(oauthInfo.verifier))
 
 	// Redirect user to Google's consent page
@@ -168,6 +142,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// generate the idToken here without identity and identityCurve
 	session, err := oauthInfo.session.Get(r, "session-name")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -178,21 +153,30 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	session.Save(r, w)
 
 	// Generate a JWT access token
-	accessToken, err := GenerateAccessToken(userInfo.ID)
+	idToken, err := generateIdToken(userInfo, "", "", "")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	SetTokenCookie(w, accessToken)
+	SetTokenCookie(w, idToken, "id_token")
+
+	// Generate a JWT access token
+	accessToken, err := generateAccessToken(userInfo.ID, "", "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	SetTokenCookie(w, accessToken, "access_token")
 
 	// Redirect user to the home page
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func SetTokenCookie(w http.ResponseWriter, token string) {
+func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
+		Name:     tokenType,
 		Value:    token,
 		HttpOnly: true,                          // Prevents JavaScript access
 		Secure:   true,                          // Ensures cookie is sent over HTTPS
@@ -224,6 +208,43 @@ func generateState() string {
 		return "strip_chain"
 	}
 	return base64.URLEncoding.EncodeToString(b)
+}
+
+func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
+
+	identity := r.URL.Query().Get("identity")
+	identityCurve := r.URL.Query().Get("identityCurve")
+
+	_, err := GetWallet(identity, identityCurve)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	signature := r.URL.Query().Get("signature")
+	message := oauthInfo.message
+	session, err := oauthInfo.session.Get(r, "session-name")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userInfo := session.Values["user"].(UserInfo)
+	err = identityVerification.VerifySignature(
+		identity,
+		identityCurve,
+		message,
+		signature,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	//get the old access and id token
+	idToken, _ := generateIdToken(userInfo, identity, identityCurve, signature)
+	accessToken, _ := generateAccessToken(userInfo.ID, identity, identityCurve)
+	SetTokenCookie(w, accessToken, "access_token")
+	SetTokenCookie(w, idToken, "id_token")
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // user sign a message

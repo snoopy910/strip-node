@@ -28,6 +28,7 @@ func StartSequencer(
 	redirectUrl string,
 	jwtSecret string,
 	sessionSecret string,
+	message string,
 ) {
 	keepAlive := make(chan string)
 
@@ -72,7 +73,7 @@ func StartSequencer(
 		fmt.Println(clientSecret)
 		fmt.Println(sessionSecret)
 		fmt.Println(redirectUrl)
-		oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret)
+		oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, message)
 		fmt.Println("Initializing Google OAuth done")
 	}
 

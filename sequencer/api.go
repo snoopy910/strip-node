@@ -529,18 +529,19 @@ func startHTTPServer(port string) {
 
 	http.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("/oauth/callback")
+		enableCors(&w)
 		handleCallback(w, r)
 	})
 
 	http.HandleFunc("/oauth/logout", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
 		fmt.Println("/oauth/logout")
 	})
 
 	http.HandleFunc("/oauth/verifySignature", func(w http.ResponseWriter, r *http.Request) {
-		// verify the signature
-		// send back the JWT token web2 field + identity + identityCurve
 		// store it in db
-		fmt.Println("/oauth/verifySignature")
+		enableCors(&w)
+		handleIdentityVerification(w, r)
 	})
 
 	// protected := router.PathPrefix("/protected").Subrouter()

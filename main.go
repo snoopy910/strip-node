@@ -127,14 +127,14 @@ func main() {
 			"243hStsqpngr2Dv4ktE9wCW6CZTbFYaRiXo1QAK1PTtyLZBL2xz17XTAuud3HN8YmpYhdSRJmP3Rx3pMHdu6Pxqi",
 			*heliusApiKey,
 		)
-		// identity.VerifySignature(
+		// common.VerifySignature(
 		// 	"GScvaHyfG3NMNm8AdPjjZt3xRiNtAwHy5z5yY1oaQA4Q",
 		// 	"eddsa",
 		// 	"The quick brown fox jumps over the lazy dog",
 		// 	"3XdzeBWMBCAhuTZ7237A6GZRW2N9ge5LjszPBycvkFdaspSwN8vn5kMN8cW9dvqJtur34Wef5rdn6uMFyUXBwsVJ",
 		// )
 
-		// identity.VerifySignature(
+		// common.VerifySignature(
 		// 	"0x805B25e9246e1D80c399f05C4B515a0C22097457",
 		// 	"ecdsa",
 		// 	"The quick brown fox jumps over the lazy dog",

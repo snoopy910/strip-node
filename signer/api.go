@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/StripChain/strip-node/common"
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/StripChain/strip-node/solver"
@@ -211,7 +212,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		verified, err := identityVerification.VerifySignature(
+		verified, err := common.VerifySignature(
 			intent.Identity,
 			intent.IdentityCurve,
 			intentStr,

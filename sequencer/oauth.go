@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
@@ -16,15 +18,11 @@ import (
 )
 
 type UserInfo struct {
-	Email string `json:"email"`
-	// FamilyName    string `json:"family_name"`
-	// GivenName     string `json:"given_name"`
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	// Picture       string `json:"picture"`
-	// VerifiedEmail bool   `json:"verified_email"`
-	// Identity      string `json:"identity"`
-	// IdentityCurve string `json:"identity_curve"`
+	Email         string `json:"email"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Identity      string `json:"identity"`
+	IdentityCurve string `json:"identity_curve"`
 }
 
 type OAuthParameters struct {
@@ -74,7 +72,6 @@ func generateIdToken(user UserInfo, identity string, identityCurve string, signe
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign the token with the secret
-	// should it be encrypted?
 	return token.SignedString([]byte(oauthInfo.jwtSecret))
 }
 
@@ -144,6 +141,8 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// generate the idToken here without identity and identityCurve
 	session, err := oauthInfo.session.Get(r, "session-name")
+	fmt.Println("session", session)
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -152,14 +151,12 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	session.Values["user"] = userInfo
 	session.Save(r, w)
 
-	// Generate a JWT access token
+	// Generate a JWT id token
 	idToken, err := generateIdToken(userInfo, "", "", "")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	SetTokenCookie(w, idToken, "id_token")
 
 	// Generate a JWT access token
 	accessToken, err := generateAccessToken(userInfo.ID, "", "")
@@ -168,9 +165,16 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("accessToken", accessToken)
+	fmt.Println("idToken", idToken)
+	SetTokenCookie(w, idToken, "id_token")
 	SetTokenCookie(w, accessToken, "access_token")
 
 	// Redirect user to the home page
+	fmt.Println("w callback response 1", w.Header().Get("Set-Cookie"))
+	fmt.Println("w callback response 2", w.Header().Values("access_token"))
+	fmt.Println("w callback response 3", w.Header().Values("id_token"))
+	fmt.Println("w callback response 4", w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -190,15 +194,12 @@ func verifyToken(tokenStr string, secretKey string) error {
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) { // interface to define
 		return secretKey, nil
 	})
-
 	if err != nil {
 		return err
 	}
-
 	if !token.Valid {
 		return fmt.Errorf("invalid token")
 	}
-
 	return nil
 }
 
@@ -210,42 +211,60 @@ func generateState() string {
 	return base64.URLEncoding.EncodeToString(b)
 }
 
-// func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
+func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
+	// get and verify access token in authorization header
+	// verifyToken(tokenStr string, secretKey string)
+	prefix := "Bearer "
+	authHeader := r.Header.Get("Authorization")
+	accessToken := strings.TrimPrefix(authHeader, prefix)
 
-// 	identity := r.URL.Query().Get("identity")
-// 	identityCurve := r.URL.Query().Get("identityCurve")
+	if authHeader == "" || accessToken == authHeader {
+		http.Error(w, "Authentication header not present or malformed", http.StatusInternalServerError)
+		return
+	}
 
-// 	_, err := GetWallet(identity, identityCurve)
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-// 		return
-// 	}
+	err := verifyToken(accessToken, oauthInfo.jwtSecret)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 
-// 	signature := r.URL.Query().Get("signature")
-// 	message := oauthInfo.message
-// 	session, err := oauthInfo.session.Get(r, "session-name")
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-// 		return
-// 	}
-// 	userInfo := session.Values["user"].(UserInfo)
-// 	err = identityVerification.VerifySignature(
-// 		identity,
-// 		identityCurve,
-// 		message,
-// 		signature,
-// 	)
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-// 		return
-// 	}
-// 	//get the old access and id token
-// 	idToken, _ := generateIdToken(userInfo, identity, identityCurve, signature)
-// 	accessToken, _ := generateAccessToken(userInfo.ID, identity, identityCurve)
-// 	SetTokenCookie(w, accessToken, "access_token")
-// 	SetTokenCookie(w, idToken, "id_token")
-// 	http.Redirect(w, r, "/", http.StatusSeeOther)
-// }
+	userId := r.URL.Query().Get("userId")
+	userName := r.URL.Query().Get("Name")
+	userEmail := r.URL.Query().Get("Email")
+	identity := r.URL.Query().Get("identity")
+	identityCurve := r.URL.Query().Get("identityCurve")
+
+	signature := r.URL.Query().Get("signature")
+	message := oauthInfo.message
+	session, err := oauthInfo.session.Get(r, "session-name")
+	fmt.Println("session", session.Values["authenticated"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userInfo := &UserInfo{
+		ID:    userId,
+		Name:  userName,
+		Email: userEmail,
+	}
+	_, err = common.VerifySignature(
+		identity,
+		identityCurve,
+		message,
+		signature,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	//get the old access and id token
+	idToken, _ := generateIdToken(*userInfo, identity, identityCurve, signature)
+	accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
+	SetTokenCookie(w, accessToken, "access_token")
+	SetTokenCookie(w, idToken, "id_token")
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
 
 // user sign a message
 // message verified

@@ -118,16 +118,12 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("handleCallback-1", code)
-
 	// Exchange the authorization code for an access token
 	token, err := oauthInfo.config.Exchange(context.Background(), code, oauth2.VerifierOption(oauthInfo.verifier))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	fmt.Println("handleCallback-2", token.AccessToken)
 
 	// Get user information from Google
 	client := oauthInfo.config.Client(context.Background(), token)
@@ -139,16 +135,12 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	defer userInfoResponse.Body.Close()
 
-	fmt.Println("handleCallback-3", userInfoResponse.StatusCode)
-
 	var userInfo UserInfo
 	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	fmt.Println("handleCallback-4", userInfo)
 
 	// generate the idToken here without identity and identityCurve
 	session, err := oauthInfo.session.Get(r, "session-name")
@@ -163,30 +155,20 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	// Generate a JWT access token
 	idToken, err := generateIdToken(userInfo, "", "", "")
 	if err != nil {
-		fmt.Println("handleCallback error-1 id token", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Println("handleCallback-5", idToken)
-
 	SetTokenCookie(w, idToken, "id_token")
-
-	fmt.Println("handleCallback-6 SetTokenCookie(w, idToken")
 
 	// Generate a JWT access token
 	accessToken, err := generateAccessToken(userInfo.ID, "", "")
 	if err != nil {
-		fmt.Println("handleCallback error-2 access token", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Println("handleCallback-6", accessToken)
-
 	SetTokenCookie(w, accessToken, "access_token")
-
-	fmt.Println("handleCallback-7 SetTokenCookie(w, accessToken")
 
 	// Redirect user to the home page
 	http.Redirect(w, r, "/", http.StatusSeeOther)

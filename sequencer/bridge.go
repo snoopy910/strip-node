@@ -1,6 +1,7 @@
 package sequencer
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/base64"
@@ -10,9 +11,13 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/StripChain/strip-node/bridge"
-	"github.com/mr-tron/base58"
+	"strconv"
 
+	"github.com/StripChain/strip-node/bridge"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +30,7 @@ import (
 	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/mr-tron/base58"
 )
 
 func initiaiseBridge() {
@@ -699,4 +705,59 @@ func withdrawSolanaTxn(
 	}
 
 	return hash.String(), nil
+}
+
+func withdrawBitcoinGetSignature(
+	rpcURL string,
+	account string,
+	amount string,
+	recipient string,
+) (string, error) {
+	// Create a new Bitcoin transaction
+	var msgTx wire.MsgTx
+	msgTx.Version = wire.TxVersion
+
+	// Parse solver output for transaction details
+	amountFloat, err := strconv.ParseFloat(amount, 64)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse amount: %w", err)
+	}
+
+	// Convert amount to satoshis
+	amountSatoshis := int64(amountFloat * 100000000)
+
+	// Create transaction output
+	addr, err := btcutil.DecodeAddress(recipient, &chaincfg.MainNetParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode recipient address: %w", err)
+	}
+
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		return "", fmt.Errorf("failed to create output script: %w", err)
+	}
+
+	txOut := wire.NewTxOut(amountSatoshis, pkScript)
+	msgTx.AddTxOut(txOut)
+
+	// Serialize the transaction
+	var buf bytes.Buffer
+	if err := msgTx.Serialize(&buf); err != nil {
+		return "", fmt.Errorf("failed to serialize transaction: %w", err)
+	}
+
+	return hex.EncodeToString(buf.Bytes()), nil
+}
+
+func withdrawBitcoinTxn(
+	rpcURL string,
+	transaction string,
+	signature string,
+) (string, error) {
+	// Create a dummy transaction to pass the required parameters
+	keyCurve := "secp256k1"
+	dataToSign := transaction // Use the transaction as the data to sign
+
+	// Use the sendBitcoinTransaction function from processor.go
+	return sendBitcoinTransaction(transaction, rpcURL, keyCurve, dataToSign, signature)
 }

@@ -12,7 +12,6 @@ var MaximumSigners int
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress string
 var HeliusApiKey string
 var PrivateKey string
-var JWT_SECRET string
 var oauthInfo *OAuthParameters
 
 func StartSequencer(
@@ -73,9 +72,7 @@ func StartSequencer(
 		fmt.Println(clientSecret)
 		fmt.Println(sessionSecret)
 		fmt.Println(redirectUrl)
-		// oauthinfo secret
-		JWT_SECRET = jwtSecret
-		oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret)
+		oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret)
 		fmt.Println("Initializing Google OAuth done")
 	}
 

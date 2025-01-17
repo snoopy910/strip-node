@@ -2,8 +2,10 @@ package sequencer
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -28,11 +30,12 @@ type UserInfo struct {
 type OAuthParameters struct {
 	config     *oauth2.Config
 	session    *sessions.CookieStore
+	jwtSecret  string
 	oauthState string
 	verifier   string
 }
 
-func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string) *OAuthParameters {
+func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string) *OAuthParameters {
 
 	googleOauthConfig := &oauth2.Config{
 		RedirectURL:  redirectUrl,
@@ -48,12 +51,13 @@ func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret str
 
 	verifier := oauth2.GenerateVerifier()
 
-	// Session store using Gorilla sessions (replace with secure key in production)
 	sessionStore := sessions.NewCookieStore([]byte(sessionSecret))
 
-	// State string for CSRF protection (generate securely in production)
-	oauthState := "pseudo-random" // Replace with a secure random string
-	return &OAuthParameters{googleOauthConfig, sessionStore, oauthState, verifier}
+	// State string for CSRF protection
+	oauthState := generateState()
+	fmt.Println("oauthState")
+	fmt.Println(oauthState)
+	return &OAuthParameters{googleOauthConfig, sessionStore, jwtSecret, oauthState, verifier}
 
 }
 func generateIdToken(user UserInfo, identity string, identityCurve string, signedMessage string) (string, error) {
@@ -78,7 +82,7 @@ func generateIdToken(user UserInfo, identity string, identityCurve string, signe
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign the token with the secret
-	return token.SignedString(JWT_SECRET)
+	return token.SignedString(oauthInfo.jwtSecret)
 	// should it be encrypted?
 }
 
@@ -90,12 +94,14 @@ func GenerateAccessToken(userId string) (string, error) {
 	claims["exp"] = time.Now().Add(time.Hour * 1).Unix() // Token expires after 1 hour
 	claims["iat"] = time.Now().Unix()
 	claims["iss"] = "StripChain"
+	// claims["identity"] = identity
+	// claims["identityCurve"] = identityCurve
 
 	// Create the token using HS256 signing method
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign and get the complete encoded token as a string
-	return token.SignedString(JWT_SECRET)
+	return token.SignedString(oauthInfo.jwtSecret)
 }
 
 func GenerateRefreshToken(userID string) (string, error) {
@@ -104,11 +110,13 @@ func GenerateRefreshToken(userID string) (string, error) {
 	claims["exp"] = time.Now().Add(time.Hour * 24 * 7).Unix() // 7 days
 	claims["iat"] = time.Now().Unix()
 	claims["iss"] = "StripChain"
+	// claims["identity"] = identity
+	// claims["identityCurve"] = identityCurve
 	claims["type"] = "refresh"
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString(JWT_SECRET)
+	return token.SignedString(oauthInfo.jwtSecret)
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +124,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// security token state (oauthInfo.authState = "pseudo-random")
 	// adding nonce and hd
 	// oauthInfo.oauthState to be set in start sequencer
-	url := oauthInfo.config.AuthCodeURL("state", oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(oauthInfo.verifier))
+	url := oauthInfo.config.AuthCodeURL(oauthInfo.oauthState, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(oauthInfo.verifier))
 
 	// Redirect user to Google's consent page
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
@@ -137,7 +145,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Exchange the authorization code for an access token
-	token, err := oauthInfo.config.Exchange(r.Context(), code)
+	token, err := oauthInfo.config.Exchange(r.Context(), code, oauth2.SetAuthURLParam("code_verifier", oauthInfo.verifier))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -208,6 +216,14 @@ func verifyToken(tokenStr string, secretKey string) error {
 	}
 
 	return nil
+}
+
+func generateState() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "strip_chain"
+	}
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 // user sign a message

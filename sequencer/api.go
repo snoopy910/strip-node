@@ -527,8 +527,8 @@ func startHTTPServer(port string) {
 		fmt.Println("/oauth/login")
 	})
 
-	http.HandleFunc("/oauth/google-callback", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("/oauth/google-callback")
+	http.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("/oauth/callback")
 		handleCallback(w, r)
 	})
 

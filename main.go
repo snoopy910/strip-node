@@ -70,6 +70,7 @@ func main() {
 	clientSecret := flag.String("clientSecret", LookupEnvOrString("CLIENT_SECRET", ""), "google client secret")
 	jwtSecret := flag.String("jwtSecret", LookupEnvOrString("JWT_SECRET", ""), "application secret for jwt")
 	sessionSecret := flag.String("sessionSecret", LookupEnvOrString("SESSION_SECRET", ""), "application secret for sessions")
+	message := flag.String("message", LookupEnvOrString("MESSAGE", "user needs to sign the message to validate its web3 identity"), "message to sign")
 
 	defaultPath, err := os.Getwd()
 	if err != nil {
@@ -116,6 +117,7 @@ func main() {
 			*redirectUrl,
 			*jwtSecret,
 			*sessionSecret,
+			*message,
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)

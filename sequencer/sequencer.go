@@ -61,20 +61,14 @@ func StartSequencer(
 
 	fmt.Println("Bridge initialized")
 
-	fmt.Println("enableOAuth")
-	fmt.Println(enableOAuth)
-	fmt.Println("clientId")
-	fmt.Println(clientId)
-	fmt.Println(rpcURL)
 	if enableOAuth {
 		fmt.Println("Initializing Google OAuth")
-		// check if != ""
-		fmt.Println(clientId)
-		fmt.Println(clientSecret)
-		fmt.Println(sessionSecret)
-		fmt.Println(redirectUrl)
-		oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, message)
-		fmt.Println("Initializing Google OAuth done")
+		if redirectUrl != "" && clientId != "" && clientSecret != "" && sessionSecret != "" && jwtSecret != "" && message != "" {
+			oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, message)
+			fmt.Println("Initializing Google OAuth done")
+		} else {
+			panic("Missing OAuth parameters")
+		}
 	}
 
 	go startHTTPServer(httpPort)

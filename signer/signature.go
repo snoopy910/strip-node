@@ -124,6 +124,24 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	var rawKeyEcdsa *ecdsaKeygen.LocalPartySaveData
 
 	if keyCurve == EDDSA_CURVE {
+		// var msgBytes []byte
+		// var err error
+		// hashStr := string(hash)
+		// fmt.Println("hashStr:", hashStr)
+
+		// // If starts with 0x, treat as hex
+		// if strings.HasPrefix(hashStr, "0x") {
+		// 	msgBytes = []byte(hashStr)
+		// } else {
+		// 	// Try base58 decode
+		// 	msgBytes, err = base58.Decode(hashStr)
+		// 	if err != nil {
+		// 		fmt.Println("Error decoding base58:", err)
+		// 		return
+		// 	}
+		// }
+
+		// msg := (&big.Int{}).SetBytes(msgBytes)
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := (&big.Int{}).SetBytes(hash)
 

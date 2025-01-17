@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	identityVerification "github.com/StripChain/strip-node/identity"
@@ -229,10 +230,18 @@ func startHTTPServer(port string) {
 		}
 
 		if keyCurve == EDDSA_CURVE {
-			msgBytes, err := base58.Decode(msg)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-				return
+			var msgBytes []byte
+			var err error
+
+			// If starts with 0x, treat as hex
+			if strings.HasPrefix(msg, "0x") {
+				msgBytes = []byte(msg)
+			} else {
+				msgBytes, err = base58.Decode(msg)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+					return
+				}
 			}
 
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)

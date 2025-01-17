@@ -59,7 +59,7 @@ func TestGetAptosTransfers(t *testing.T) {
 		},
 		{
 			Name:         "Native APT Transfer on Devnet",
-			ChainID:      "165",
+			ChainID:      "167",
 			TxHash:       "0xed84af67094ebfe3bf5e531ec9ddda7dc2ebc439ed250e476836ce5a877e1ab6",
 			From:         "0x7e9983bf1e8a75e305d081bacc994cea4051ef0d40548f38e0fb2140f20be6d0",
 			To:           "0x82c076aaf063b09738b54b7277792252a3abc21a8e78e2422472892dc4c4a788",

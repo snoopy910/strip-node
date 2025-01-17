@@ -61,7 +61,7 @@ var Chains = []Chain{
 		TokenSymbol: "APT",
 	},
 	{
-		ChainId:     "165",
+		ChainId:     "167",
 		ChainType:   "aptos",
 		ChainUrl:    "https://fullnode.devnet.aptoslabs.com",
 		KeyCurve:    "eddsa",

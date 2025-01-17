@@ -3,7 +3,8 @@ package sequencer
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
+	"crypto/ed25519"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"filippo.io/edwards25519"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/util"
@@ -28,6 +30,7 @@ import (
 	"github.com/mr-tron/base58"
 	aptosClient "github.com/portto/aptos-go-sdk/client"
 	aptosModels "github.com/portto/aptos-go-sdk/models"
+	"github.com/the729/lcs"
 )
 
 type MintOutput struct {
@@ -1331,41 +1334,111 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	return hash.String(), nil
 }
 
-func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase64 string) (string, error) {
+func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
 	chain, err := GetChain(chainId)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error getting chain: %v", err)
 	}
 
 	client := aptosClient.NewAptosClient(chain.ChainUrl)
 
-	decodedTransactionData, err := base64.StdEncoding.DecodeString(serializedTxn)
+	serializedTxn = strings.TrimPrefix(serializedTxn, "0x")
+	decodedTransactionData, err := hex.DecodeString(serializedTxn)
 	if err != nil {
-		fmt.Println("Error decoding transaction data:", err)
-		return "", err
+		return "", fmt.Errorf("error decoding transaction data: %v", err)
 	}
 
-	signature, err := base64.StdEncoding.DecodeString(signatureBase64)
+	rawTxn := &aptosModels.RawTransaction{}
+
+	err = lcs.Unmarshal(decodedTransactionData, rawTxn)
 	if err != nil {
-		fmt.Println("Error decoding signature:", err)
-		return "", err
+		fmt.Println("error unmarshalling raw transaction: ", err)
 	}
 
 	tx := &aptosModels.Transaction{}
+	tx.RawTransaction = *rawTxn
 
-	err = json.Unmarshal(decodedTransactionData, tx)
+	convertedSignature, err := convertEdDSASignatureForAptos(signatureBase58)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error converting signature: %v", err)
 	}
 
-	tx.SetAuthenticator(aptosModels.TransactionAuthenticatorEd25519{
+	signature, err := hex.DecodeString(convertedSignature)
+	if err != nil {
+		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+
+	accInfo, err := client.GetAccount(context.Background(), tx.Sender.ToHex())
+	if err != nil {
+		return "", fmt.Errorf("failed to get account resources: %v", err)
+	}
+
+	publicKey, _ := hex.DecodeString(strings.TrimPrefix(accInfo.AuthenticationKey, "0x"))
+
+	signedTx := tx.SetAuthenticator(aptosModels.TransactionAuthenticatorEd25519{
+		PublicKey: publicKey,
 		Signature: signature,
 	})
 
-	response, err := client.SubmitTransaction(context.Background(), tx.UserTransaction)
+	response, err := client.SubmitTransaction(context.Background(), signedTx.UserTransaction)
+	if err != nil {
+		return "", fmt.Errorf("error submitting transaction: %v", err)
+	}
+
+	fmt.Println("Submitted aptos transaction with hash:", response.Hash)
+
+	return response.Hash, nil
+}
+
+func convertEdDSASignatureForAptos(signature string) (string, error) {
+	// Convert EdDSA signature to hex format for Aptos
+	decodedSignature, err := base58.Decode(signature)
 	if err != nil {
 		return "", err
 	}
 
-	return response.Hash, nil
+	return hex.EncodeToString(decodedSignature), nil
+}
+
+func Verify(publicKey ed25519.PublicKey, message, sig []byte) bool {
+	if l := len(publicKey); l != 32 {
+		panic("ed25519: bad public key length: " + strconv.Itoa(l))
+	}
+
+	if len(sig) != 64 || sig[63]&224 != 0 {
+		fmt.Println("sig?")
+		return false
+	}
+
+	A, err := (&edwards25519.Point{}).SetBytes(publicKey)
+	if err != nil {
+		fmt.Println("A?")
+		return false
+	}
+
+	kh := sha512.New()
+	kh.Write(sig[:32])
+	kh.Write(publicKey)
+	kh.Write(message)
+	hramDigest := make([]byte, 0, sha512.Size)
+	hramDigest = kh.Sum(hramDigest)
+	k, err := edwards25519.NewScalar().SetUniformBytes(hramDigest)
+	if err != nil {
+		fmt.Println("here?")
+		panic("ed25519: internal error: setting scalar failed")
+	}
+
+	S, err := edwards25519.NewScalar().SetCanonicalBytes(sig[32:])
+	if err != nil {
+		fmt.Println("final?")
+		return false
+	}
+
+	// [S]B = R + [k]A --> [k](-A) + [S]B = R
+	minusA := (&edwards25519.Point{}).Negate(A)
+	R := (&edwards25519.Point{}).VarTimeDoubleScalarBaseMult(k, minusA, S)
+
+	fmt.Println("R: ", R.Bytes())
+	fmt.Println("Sig: ", sig[:32])
+	return bytes.Equal(sig[:32], R.Bytes())
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -1414,12 +1415,6 @@ func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
 	}
 
-	// Decode the signature
-	signature, err := hex.DecodeString(signatureHex)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode signature: %v", err)
-	}
-
 	// Create a new bitcoin transaction
 	var msgTx wire.MsgTx
 	err = msgTx.Deserialize(bytes.NewReader(serializedTx))
@@ -1427,33 +1422,22 @@ func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 		return "", fmt.Errorf("failed to deserialize transaction: %v", err)
 	}
 
-	// Get network parameters based on chainId
-	// var params *chaincfg.Params
-	// if chain.ChainUrl == "https://btc.getblock.io/mainnet/" {
-	// 	params = &chaincfg.MainNetParams
-	// } else {
-	// 	params = &chaincfg.TestNet3Params
-	// }
-
-	// Apply the signature to each input
-	// Note: This assumes P2PKH transactions. For other script types,
-	// the signing process would need to be adjusted
-	dataToSignBytes, err := hex.DecodeString(dataToSign)
+	// Decode the signature
+	signature, err := hex.DecodeString(signatureHex)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode data to sign: %v", err)
+		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}
 
 	// Create signature script
 	builder := txscript.NewScriptBuilder()
 	builder.AddData(signature)
-	builder.AddData(dataToSignBytes)
+	builder.AddData([]byte(dataToSign))
 	signatureScript, err := builder.Script()
 	if err != nil {
 		return "", fmt.Errorf("failed to build signature script: %v", err)
 	}
 
 	// Apply signature script to all inputs
-	// In a real implementation, you would need to match signatures to specific inputs
 	for i := range msgTx.TxIn {
 		msgTx.TxIn[i].SignatureScript = signatureScript
 	}
@@ -1467,18 +1451,66 @@ func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 	// Convert to hex for broadcasting
 	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
 
-	// Broadcast the transaction
-	// Note: In a real implementation, you would use RPC to broadcast
-	txn, err := FetchTransaction(chain.ChainUrl, signedTxHex)
+	// Prepare RPC request
+	rpcURL := chain.ChainUrl
+	rpcRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "sendrawtransaction",
+		"params":  []interface{}{signedTxHex},
+	}
+
+	jsonData, err := json.Marshal(rpcRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to broadcast transaction: %v", err)
+		return "", fmt.Errorf("failed to marshal RPC request: %v", err)
 	}
 
-	if txn == nil {
-		return "", fmt.Errorf("transaction broadcast failed")
+	// Create HTTP request
+	req, err := http.NewRequest("POST", rpcURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP request: %v", err)
 	}
 
-	// Calculate and return the transaction hash
-	txHash := msgTx.TxHash()
-	return txHash.String(), nil
+	// Add headers
+	req.Header.Set("Content-Type", "application/json")
+	// if chain.ChainApiKey != "" {
+	// 	req.Header.Set("Authorization", "Bearer "+chain.ChainApiKey)
+	// }
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// Parse response
+	var rpcResponse struct {
+		Result string    `json:"result"`
+		Error  *RPCError `json:"error"`
+	}
+
+	if err := json.Unmarshal(body, &rpcResponse); err != nil {
+		return "", fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	// Check for RPC error
+	if rpcResponse.Error != nil {
+		return "", fmt.Errorf("RPC error: %v", rpcResponse.Error.Message)
+	}
+
+	// Return the transaction hash from RPC response
+	return rpcResponse.Result, nil
+}
+
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }

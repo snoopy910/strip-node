@@ -194,7 +194,6 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(tokens)
 	fmt.Println("tokens", tokens)
-	fmt.Println("w callback response: ", w)
 	// Redirect user to the home page
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -203,21 +202,19 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	// get and verify access token in authorization header
 	// verifyToken(tokenStr string, secretKey string)
 
-	cookie1, err := r.Cookie("access_token")
+	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	cookie2, err := r.Cookie("id_token")
+	accessToken := accessCookie.Value
+	idCookie, err := r.Cookie("id_token")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	accessToken := cookie1.Value
+	idToken := idCookie.Value
 	fmt.Println("accessToken", accessToken)
-	idToken := cookie2.Value
 	fmt.Println("idToken", idToken)
 
 	err = verifyToken(accessToken, oauthInfo.jwtSecret)
@@ -228,14 +225,16 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 
 	identity := r.URL.Query().Get("identity")
 	identityCurve := r.URL.Query().Get("identityCurve")
-
 	signature := r.URL.Query().Get("signature")
 	message := oauthInfo.message
 	session, err := oauthInfo.session.Get(r, "stripchain-session")
-	fmt.Println("session", session.Values["authenticated"])
-	fmt.Println("session", session.Values["user"])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// check if authenticated
+	if !session.Values["authenticated"].(bool) {
+		http.Error(w, "Not authenticated", http.StatusUnauthorized)
 		return
 	}
 	userInfo := &UserInfo{
@@ -243,7 +242,8 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 		Name:  session.Values["user"].(*UserInfo).Name,
 		Email: session.Values["user"].(*UserInfo).Email,
 	}
-	_, err = common.VerifySignature(
+	fmt.Println("userInfo", userInfo)
+	verified, err := common.VerifySignature(
 		identity,
 		identityCurve,
 		message,
@@ -254,11 +254,15 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//get the old access and id token
-	idToken, _ = generateIdToken(*userInfo, identity, identityCurve, signature)
-	accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
-	SetTokenCookie(w, accessToken, "access_token")
-	SetTokenCookie(w, idToken, "id_token")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	if verified {
+		idToken, _ = generateIdToken(*userInfo, identity, identityCurve, signature)
+		accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
+		SetTokenCookie(w, accessToken, "access_token")
+		SetTokenCookie(w, idToken, "id_token")
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	} else {
+		http.Error(w, "Invalid signature", http.StatusUnauthorized)
+	}
 }
 
 func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
@@ -306,3 +310,5 @@ func generateState() string {
 // adding nonce --> replay attack
 // adding oauth protected to existing routes
 // https://www.unicorn.studio/embed/SaCYz48FXaFwo5ifY36I?preview=true
+// http://localhost/oauth/verifySignature?identity=0x76C09917EF1A6E885affCb8B14c0E09df271F393&identityCurve=ecdsa&signature=0x2b7fe067cf63bbfff8df636002eb6f71f4610b3958e75e759a2f6633c75c0a03147da8cbcbf788174b3c771e829ac5089a3cbc6511f9b76f2575ba2dd64dbfdd1b
+// http://localhost/oauth/verifySignature?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&signature=0xbc490764bf20e3e55f100555d9e1fd84c41fa658850332c388cd8f40d554983b68db49713591539f24cf7d4bcb68f17c89930c314ef7581cf7805b247683b8561b

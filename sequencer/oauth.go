@@ -3,11 +3,11 @@ package sequencer
 import (
 	"context"
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/common"
@@ -25,6 +25,8 @@ type UserInfo struct {
 	IdentityCurve string `json:"identity_curve"`
 }
 
+type M map[string]interface{}
+
 type OAuthParameters struct {
 	config     *oauth2.Config
 	session    *sessions.CookieStore
@@ -32,6 +34,12 @@ type OAuthParameters struct {
 	oauthState string
 	verifier   string
 	message    string
+}
+
+type Tokens struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	IdToken      string `json:"id_token"`
 }
 
 func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, message string) *OAuthParameters {
@@ -52,6 +60,18 @@ func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret str
 	verifier := oauth2.GenerateVerifier()
 
 	sessionStore := sessions.NewCookieStore([]byte(sessionSecret))
+
+	sessionStore.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 30, // 30 days
+		HttpOnly: true,
+		// Secure:   true,                   // Ensures cookie is sent over HTTPS
+		Secure:   false,                   // for localhost testing
+		SameSite: http.SameSiteStrictMode, // CSRF protection
+	}
+
+	gob.Register(&UserInfo{})
+	gob.Register(&M{})
 
 	// State string for CSRF protection
 	oauthState := generateState()
@@ -139,18 +159,17 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("userInfo", userInfo)
 	// generate the idToken here without identity and identityCurve
-	session, err := oauthInfo.session.Get(r, "session-name")
-	fmt.Println("session", session)
-
+	session, err := oauthInfo.session.Get(r, "stripchain-session")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	session.Values["authenticated"] = true
-	session.Values["user"] = userInfo
+	session.Values["user"] = &userInfo
 	session.Save(r, w)
-
+	fmt.Println("session", session.Values["user"])
 	// Generate a JWT id token
 	idToken, err := generateIdToken(userInfo, "", "", "")
 	if err != nil {
@@ -165,16 +184,80 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("accessToken", accessToken)
-	fmt.Println("idToken", idToken)
 	SetTokenCookie(w, idToken, "id_token")
 	SetTokenCookie(w, accessToken, "access_token")
 
+	tokens := Tokens{
+		AccessToken:  accessToken,
+		RefreshToken: "",
+		IdToken:      idToken,
+	}
+	json.NewEncoder(w).Encode(tokens)
+	fmt.Println("tokens", tokens)
+	fmt.Println("w callback response: ", w)
 	// Redirect user to the home page
-	fmt.Println("w callback response 1", w.Header().Get("Set-Cookie"))
-	fmt.Println("w callback response 2", w.Header().Values("access_token"))
-	fmt.Println("w callback response 3", w.Header().Values("id_token"))
-	fmt.Println("w callback response 4", w)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
+	// get and verify access token in authorization header
+	// verifyToken(tokenStr string, secretKey string)
+
+	cookie1, err := r.Cookie("access_token")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	cookie2, err := r.Cookie("id_token")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	accessToken := cookie1.Value
+	fmt.Println("accessToken", accessToken)
+	idToken := cookie2.Value
+	fmt.Println("idToken", idToken)
+
+	err = verifyToken(accessToken, oauthInfo.jwtSecret)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	identity := r.URL.Query().Get("identity")
+	identityCurve := r.URL.Query().Get("identityCurve")
+
+	signature := r.URL.Query().Get("signature")
+	message := oauthInfo.message
+	session, err := oauthInfo.session.Get(r, "stripchain-session")
+	fmt.Println("session", session.Values["authenticated"])
+	fmt.Println("session", session.Values["user"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	userInfo := &UserInfo{
+		ID:    session.Values["user"].(*UserInfo).ID,
+		Name:  session.Values["user"].(*UserInfo).Name,
+		Email: session.Values["user"].(*UserInfo).Email,
+	}
+	_, err = common.VerifySignature(
+		identity,
+		identityCurve,
+		message,
+		signature,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	//get the old access and id token
+	idToken, _ = generateIdToken(*userInfo, identity, identityCurve, signature)
+	accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
+	SetTokenCookie(w, accessToken, "access_token")
+	SetTokenCookie(w, idToken, "id_token")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -182,8 +265,9 @@ func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     tokenType,
 		Value:    token,
-		HttpOnly: true,                          // Prevents JavaScript access
-		Secure:   true,                          // Ensures cookie is sent over HTTPS
+		HttpOnly: true, // Prevents JavaScript access
+		Secure:   true, // Ensures cookie is sent over HTTPS
+		// Secure:   false,                         // just for localhost testing
 		SameSite: http.SameSiteStrictMode,       // CSRF protection
 		Path:     "/",                           // Cookie path
 		Expires:  time.Now().Add(time.Hour * 1), // Matches token expiration
@@ -191,8 +275,12 @@ func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
 }
 
 func verifyToken(tokenStr string, secretKey string) error {
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) { // interface to define
-		return secretKey, nil
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) { //interface to define
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return []byte(secretKey), nil
 	})
 	if err != nil {
 		return err
@@ -209,61 +297,6 @@ func generateState() string {
 		return "strip_chain"
 	}
 	return base64.URLEncoding.EncodeToString(b)
-}
-
-func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
-	// get and verify access token in authorization header
-	// verifyToken(tokenStr string, secretKey string)
-	prefix := "Bearer "
-	authHeader := r.Header.Get("Authorization")
-	accessToken := strings.TrimPrefix(authHeader, prefix)
-
-	if authHeader == "" || accessToken == authHeader {
-		http.Error(w, "Authentication header not present or malformed", http.StatusInternalServerError)
-		return
-	}
-
-	err := verifyToken(accessToken, oauthInfo.jwtSecret)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	userId := r.URL.Query().Get("userId")
-	userName := r.URL.Query().Get("Name")
-	userEmail := r.URL.Query().Get("Email")
-	identity := r.URL.Query().Get("identity")
-	identityCurve := r.URL.Query().Get("identityCurve")
-
-	signature := r.URL.Query().Get("signature")
-	message := oauthInfo.message
-	session, err := oauthInfo.session.Get(r, "session-name")
-	fmt.Println("session", session.Values["authenticated"])
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	userInfo := &UserInfo{
-		ID:    userId,
-		Name:  userName,
-		Email: userEmail,
-	}
-	_, err = common.VerifySignature(
-		identity,
-		identityCurve,
-		message,
-		signature,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	//get the old access and id token
-	idToken, _ := generateIdToken(*userInfo, identity, identityCurve, signature)
-	accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
-	SetTokenCookie(w, accessToken, "access_token")
-	SetTokenCookie(w, idToken, "id_token")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // user sign a message

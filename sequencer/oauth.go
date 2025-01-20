@@ -238,9 +238,11 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userInfo := &UserInfo{
-		ID:    session.Values["user"].(*UserInfo).ID,
-		Name:  session.Values["user"].(*UserInfo).Name,
-		Email: session.Values["user"].(*UserInfo).Email,
+		ID:            session.Values["user"].(*UserInfo).ID,
+		Name:          session.Values["user"].(*UserInfo).Name,
+		Email:         session.Values["user"].(*UserInfo).Email,
+		Identity:      identity,
+		IdentityCurve: identityCurve,
 	}
 	fmt.Println("userInfo", userInfo)
 	verified, err := common.VerifySignature(
@@ -257,8 +259,13 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	if verified {
 		idToken, _ = generateIdToken(*userInfo, identity, identityCurve, signature)
 		accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
+		session.Values["user"] = &userInfo
+		session.Save(r, w)
 		SetTokenCookie(w, accessToken, "access_token")
 		SetTokenCookie(w, idToken, "id_token")
+		// get user info from DB
+		// if does not exist, create it
+		// if exists, update it
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	} else {
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)

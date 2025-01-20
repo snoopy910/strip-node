@@ -18,8 +18,8 @@ import (
 )
 
 type UserInfo struct {
-	Email         string `json:"email"`
 	ID            string `json:"id"`
+	Email         string `json:"email"`
 	Name          string `json:"name"`
 	Identity      string `json:"identity"`
 	IdentityCurve string `json:"identity_curve"`
@@ -40,6 +40,20 @@ type Tokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	IdToken      string `json:"id_token"`
+}
+
+type ClaimsWithIdentity struct {
+	Email             string `json:"email"`
+	Name              string `json:"name"`
+	Identity          string `json:"identity"`
+	IdentityCurve     string `json:"identity_curve"`
+	UserSignedMessage string `json:"user_signed_message"`
+	jwt.RegisteredClaims
+}
+
+type IdentityAccess struct {
+	Identity      string `json:"identity"`
+	IdentityCurve string `json:"identity_curve"`
 }
 
 func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, message string) *OAuthParameters {
@@ -79,14 +93,18 @@ func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret str
 
 }
 func generateIdToken(user UserInfo, identity string, identityCurve string, signedMessage string) (string, error) {
-	claims := jwt.MapClaims{}
-	claims["sub"] = user.ID
-	claims["name"] = user.Name
-	claims["email"] = user.Email
-	claims["exp"] = time.Now().Add(time.Hour * 1).Unix()
-	claims["identity"] = identity
-	claims["identityCurve"] = identityCurve
-	claims["userSignedMessage"] = signedMessage
+	claims := ClaimsWithIdentity{
+		Email:             user.Email,
+		Name:              user.Name,
+		Identity:          identity,
+		IdentityCurve:     identityCurve,
+		UserSignedMessage: signedMessage,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 1)),
+			Issuer:    "StripChain",
+			Subject:   user.ID,
+		},
+	}
 
 	// Create the token using the claims
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -97,19 +115,39 @@ func generateIdToken(user UserInfo, identity string, identityCurve string, signe
 
 // GenerateAccessToken creates a JWT access token
 func generateAccessToken(userId string, identity string, identityCurve string) (string, error) {
-	// Define token claims
-	claims := jwt.MapClaims{}
-	claims["sub"] = userId
-	claims["exp"] = time.Now().Add(time.Hour * 1).Unix() // Token expires after 1 hour
-	claims["iat"] = time.Now().Unix()
-	claims["iss"] = "StripChain"
-	claims["identity"] = identity
-	claims["identityCurve"] = identityCurve
+	claims := ClaimsWithIdentity{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)), // Token expires after 10min
+			Issuer:    "StripChain",
+			Subject:   userId,
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
 
 	// Create the token using HS256 signing method
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign and get the complete encoded token as a string
+	return token.SignedString([]byte(oauthInfo.jwtSecret))
+}
+
+// to be stored in db ?
+func generateRefreshToken(userId string, identity string, identityCurve string) (string, error) {
+	claims := ClaimsWithIdentity{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 7)), // Token expires after 10min
+			Issuer:    "StripChain",
+			Subject:   userId,
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	return token.SignedString([]byte(oauthInfo.jwtSecret))
 }
 
@@ -141,7 +179,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
+	fmt.Println("Exchange token", token)
 	// Get user information from Google
 	client := oauthInfo.config.Client(context.Background(), token)
 	userInfoResponse, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
@@ -170,6 +208,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	session.Values["user"] = &userInfo
 	session.Save(r, w)
 	fmt.Println("session", session.Values["user"])
+
 	// Generate a JWT id token
 	idToken, err := generateIdToken(userInfo, "", "", "")
 	if err != nil {
@@ -184,12 +223,20 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate a JWT access token
+	refreshToken, err := generateRefreshToken(userInfo.ID, "", "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	SetTokenCookie(w, idToken, "id_token")
 	SetTokenCookie(w, accessToken, "access_token")
+	SetTokenCookie(w, refreshToken, "refresh_token")
 
 	tokens := Tokens{
 		AccessToken:  accessToken,
-		RefreshToken: "",
+		RefreshToken: refreshToken,
 		IdToken:      idToken,
 	}
 	json.NewEncoder(w).Encode(tokens)
@@ -217,7 +264,7 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("accessToken", accessToken)
 	fmt.Println("idToken", idToken)
 
-	err = verifyToken(accessToken, oauthInfo.jwtSecret)
+	_, err = verifyToken(accessToken, oauthInfo.jwtSecret)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -259,17 +306,46 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	if verified {
 		idToken, _ = generateIdToken(*userInfo, identity, identityCurve, signature)
 		accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
+		refreshToken, _ := generateRefreshToken(userInfo.ID, identity, identityCurve)
 		session.Values["user"] = &userInfo
 		session.Save(r, w)
 		SetTokenCookie(w, accessToken, "access_token")
 		SetTokenCookie(w, idToken, "id_token")
-		// get user info from DB
-		// if does not exist, create it
-		// if exists, update it
+		SetTokenCookie(w, refreshToken, "refresh_token")
+
+		tokens := Tokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			IdToken:      idToken,
+		}
+		json.NewEncoder(w).Encode(tokens)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	} else {
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 	}
+}
+
+func handleAccess(w http.ResponseWriter, r *http.Request) {
+	accessCookie, err := r.Cookie("access_token")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	accessToken := accessCookie.Value
+	claims, err := verifyToken(accessToken, oauthInfo.jwtSecret)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	fmt.Println("claims", claims)
+	identity := claims.Identity
+	identityCurve := claims.IdentityCurve
+	sc_id := IdentityAccess{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+	}
+	fmt.Println("id", sc_id)
+	json.NewEncoder(w).Encode(sc_id)
 }
 
 func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
@@ -285,21 +361,31 @@ func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
 	})
 }
 
-func verifyToken(tokenStr string, secretKey string) error {
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) { //interface to define
+func verifyToken(tokenStr string, secretKey string) (*ClaimsWithIdentity, error) {
+	claims := &ClaimsWithIdentity{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) { //interface to define
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
 		return []byte(secretKey), nil
 	})
+	fmt.Println("token from verifyToken", token)
 	if err != nil {
-		return err
+		if ve, ok := err.(*jwt.ValidationError); ok {
+			if ve.Errors&jwt.ValidationErrorExpired != 0 {
+				return nil, fmt.Errorf("token has expired")
+			} else {
+				return nil, fmt.Errorf("token validation error: %v", err)
+			}
+		}
+		return nil, fmt.Errorf("could not parse token: %v", err)
 	}
 	if !token.Valid {
-		return fmt.Errorf("invalid token")
+		return nil, fmt.Errorf("invalid token")
 	}
-	return nil
+	fmt.Println("claims from verifyToken", claims)
+	return claims, nil
 }
 
 func generateState() string {

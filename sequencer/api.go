@@ -93,12 +93,36 @@ func enableCors(w *http.ResponseWriter) {
 }
 
 func startHTTPServer(port string) {
+
+	// router := mux.NewRouter()
+
 	// Root endpoint - Health check
 	// Method: GET
 	// Response: Plain text "OK"
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 		fmt.Fprintf(w, "OK")
+	})
+
+	http.HandleFunc("/oauth/createWallet", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+		sc_id, err := handleAccess(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		identity := r.URL.Query().Get("identity")
+		identityCurve := r.URL.Query().Get("identityCurve")
+		fmt.Println("identity", identity)
+		fmt.Println("identityCurve", identityCurve)
+		fmt.Println("sc_id.Identity", sc_id.Identity)
+		fmt.Println("sc_id.IdentityCurve", sc_id.IdentityCurve)
+		if sc_id.Identity != identity || sc_id.IdentityCurve != identityCurve {
+			http.Error(w, "identity and identityCurve must match with access token identity data", http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/createWallet?identity="+identity+"&identityCurve="+identityCurve, http.StatusSeeOther)
+
 	})
 
 	// CreateWallet endpoint - Creates a new wallet for a given identity
@@ -519,6 +543,14 @@ func startHTTPServer(port string) {
 		enableCors(&w)
 
 		fmt.Fprintf(w, "OK")
+	})
+
+	http.HandleFunc("/oauth/", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+		// verify access token
+		handleAccess(r)
+		fmt.Fprintf(w, "OAuth request")
+
 	})
 
 	http.HandleFunc("/oauth/login", func(w http.ResponseWriter, r *http.Request) {

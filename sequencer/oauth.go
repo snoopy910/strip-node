@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -325,27 +326,22 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleAccess(w http.ResponseWriter, r *http.Request) {
+func handleAccess(r *http.Request) (*IdentityAccess, error) {
 	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	accessToken := accessCookie.Value
 	claims, err := verifyToken(accessToken, oauthInfo.jwtSecret)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
+		return nil, err
 	}
-	fmt.Println("claims", claims)
-	identity := claims.Identity
-	identityCurve := claims.IdentityCurve
-	sc_id := IdentityAccess{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
+	fmt.Println("claims handle access", claims)
+	scId := IdentityAccess{
+		Identity:      claims.Identity,
+		IdentityCurve: claims.IdentityCurve,
 	}
-	fmt.Println("id", sc_id)
-	json.NewEncoder(w).Encode(sc_id)
+	return &scId, nil
 }
 
 func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
@@ -374,7 +370,7 @@ func verifyToken(tokenStr string, secretKey string) (*ClaimsWithIdentity, error)
 	if err != nil {
 		if ve, ok := err.(*jwt.ValidationError); ok {
 			if ve.Errors&jwt.ValidationErrorExpired != 0 {
-				return nil, fmt.Errorf("token has expired")
+				return nil, errors.New("token is expired")
 			} else {
 				return nil, fmt.Errorf("token validation error: %v", err)
 			}

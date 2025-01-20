@@ -17,10 +17,11 @@ const (
 
 // BlockCypherTransaction represents the transaction data structure returned by BlockCypher
 type BlockCypherTransaction struct {
-	Hash    string              `json:"hash"`    // Transaction hash
-	Inputs  []BlockCypherInput  `json:"inputs"`  // List of inputs in the transaction
-	Outputs []BlockCypherOutput `json:"outputs"` // List of outputs in the transaction
-	Fees    int64               `json:"fees"`    // Transaction fees in satoshis
+	Hash          string              `json:"hash"`          // Transaction hash
+	Inputs        []BlockCypherInput  `json:"inputs"`        // List of inputs in the transaction
+	Outputs       []BlockCypherOutput `json:"outputs"`       // List of outputs in the transaction
+	Fees          int64               `json:"fees"`          // Transaction fees in satoshis
+	Confirmations int                 `json:"confirmations"` // Number of confirmations
 }
 
 // BlockCypherInput represents the input of a transaction

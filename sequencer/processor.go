@@ -1300,7 +1300,6 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 	}
 
 	return true, nil
-
 }
 
 func checkBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, error) {
@@ -1314,8 +1313,8 @@ func checkBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, err
 		return false, err
 	}
 
-	// Assuming a transaction is confirmed if it has at least one confirmation
-	if txn != nil {
+	// Assuming a transaction is confirmed if it has at least 3 confirmations
+	if txn != nil && txn.Confirmations >= 3 {
 		return true, nil
 	}
 

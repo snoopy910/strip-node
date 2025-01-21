@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
+	"github.com/gorilla/mux"
 )
 
 type Operation struct {
@@ -89,41 +90,39 @@ type TotalStats struct {
 func enableCors(w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
-func startHTTPServer(port string) {
-
-	// router := mux.NewRouter()
+func startHTTPServer(port string, router *mux.Router) {
 
 	// Root endpoint - Health check
 	// Method: GET
 	// Response: Plain text "OK"
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 		fmt.Fprintf(w, "OK")
 	})
 
-	http.HandleFunc("/oauth/createWallet", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
-		sc_id, err := handleAccess(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		identity := r.URL.Query().Get("identity")
-		identityCurve := r.URL.Query().Get("identityCurve")
-		fmt.Println("identity", identity)
-		fmt.Println("identityCurve", identityCurve)
-		fmt.Println("sc_id.Identity", sc_id.Identity)
-		fmt.Println("sc_id.IdentityCurve", sc_id.IdentityCurve)
-		if sc_id.Identity != identity || sc_id.IdentityCurve != identityCurve {
-			http.Error(w, "identity and identityCurve must match with access token identity data", http.StatusInternalServerError)
-			return
-		}
-		http.Redirect(w, r, "/createWallet?identity="+identity+"&identityCurve="+identityCurve, http.StatusSeeOther)
+	// http.HandleFunc("/oauth/createWallet", func(w http.ResponseWriter, r *http.Request) {
+	// 	enableCors(&w)
+	// 	sc_id, err := handleAccess(r)
+	// 	if err != nil {
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	identity := r.URL.Query().Get("identity")
+	// 	identityCurve := r.URL.Query().Get("identityCurve")
+	// 	fmt.Println("identity", identity)
+	// 	fmt.Println("identityCurve", identityCurve)
+	// 	fmt.Println("sc_id.Identity", sc_id.Identity)
+	// 	fmt.Println("sc_id.IdentityCurve", sc_id.IdentityCurve)
+	// 	if sc_id.Identity != identity || sc_id.IdentityCurve != identityCurve {
+	// 		http.Error(w, "identity and identityCurve must match with access token identity data", http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	http.Redirect(w, r, "/createWallet?identity="+identity+"&identityCurve="+identityCurve, http.StatusSeeOther)
 
-	})
+	// })
 
 	// CreateWallet endpoint - Creates a new wallet for a given identity
 	// Method: GET
@@ -134,8 +133,15 @@ func startHTTPServer(port string) {
 	//   - Success: "wallet already exists" if wallet exists
 	//   - Success: Empty response if wallet created
 	//   - Error: 500 with error message
-	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
+		id, ok := r.Context().Value(identityAccess).(IdentityAccess)
+		fmt.Println("id create wallet", id)
+		if !ok {
+			http.Error(w, "id not found in context", http.StatusInternalServerError)
+			return
+		}
+		fmt.Println("id", id)
 
 		// then store the wallet and it's list of signers in the db
 		identity := r.URL.Query().Get("identity")
@@ -545,13 +551,13 @@ func startHTTPServer(port string) {
 		fmt.Fprintf(w, "OK")
 	})
 
-	http.HandleFunc("/oauth/", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
-		// verify access token
-		handleAccess(r)
-		fmt.Fprintf(w, "OAuth request")
+	// http.HandleFunc("/oauth/", func(w http.ResponseWriter, r *http.Request) {
+	// 	enableCors(&w)
+	// 	// verify access token
+	// 	handleAccess(r)
+	// 	fmt.Fprintf(w, "OAuth request")
 
-	})
+	// })
 
 	http.HandleFunc("/oauth/login", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
@@ -576,9 +582,13 @@ func startHTTPServer(port string) {
 		handleIdentityVerification(w, r)
 	})
 
-	// protected := router.PathPrefix("/protected").Subrouter()
-	// protected.HandleFunc("", handleProtected).Methods("GET")
-	// protected.Use(jwtMiddleware)
+	// Protected route
+	// r.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
+	// 	// Redirect to /createWallet after successful authentication
+	// 	enableCors(&w) // 302 status code
+	// 	fmt.Println("/xoauth/createWallet")
+	// 	// http.Redirect(w, r, "/createWallet", http.StatusFound) // 302 status code
+	// })
 
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
 }

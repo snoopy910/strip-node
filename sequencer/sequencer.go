@@ -6,6 +6,7 @@ import (
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/gorilla/mux"
 )
 
 var MaximumSigners int
@@ -71,7 +72,11 @@ func StartSequencer(
 		}
 	}
 
-	go startHTTPServer(httpPort)
+	router := mux.NewRouter()
+	// oauthRouter := router.PathPrefix("/asoauth").Subrouter()
+	router.Use(ValidateAccess)
+
+	go startHTTPServer(httpPort, router)
 
 	<-keepAlive
 }

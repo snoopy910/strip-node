@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -56,6 +57,15 @@ type IdentityAccess struct {
 	Identity      string `json:"identity"`
 	IdentityCurve string `json:"identity_curve"`
 }
+
+var (
+	ErrTokenExpired                 = errors.New("token is expired")
+	ErrInvalidToken                 = errors.New("invalid token")
+	ErrAuthorization                = errors.New("authorization failed")
+	ErrInvalidTokenIdentityRequired = errors.New("invalid token: identity and identity curve are required")
+	ErrRefreshTokenExpired          = errors.New("refresh token is expired")
+	ErrInvalidTokenId               = errors.New("invalid token id")
+)
 
 func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, message string) *OAuthParameters {
 
@@ -134,7 +144,6 @@ func generateAccessToken(userId string, identity string, identityCurve string) (
 	return token.SignedString([]byte(oauthInfo.jwtSecret))
 }
 
-// to be stored in db ?
 func generateRefreshToken(userId string, identity string, identityCurve string) (string, error) {
 	claims := ClaimsWithIdentity{
 		Identity:      identity,
@@ -161,74 +170,81 @@ func login(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCallback(w http.ResponseWriter, r *http.Request) {
-	// Verify the state parameter
-	if r.FormValue("state") != oauthInfo.oauthState {
-		http.Error(w, "invalid state parameter", http.StatusBadRequest)
-		return
-	}
 
-	// Verify the code exists
-	code := r.FormValue("code")
-	if code == "" {
-		http.Error(w, "code parameter not found", http.StatusBadRequest)
-		return
-	}
+	idToken, accessToken, refreshToken, err := handleAccess(r)
+	fmt.Println("err handle access", err)
 
-	// Exchange the authorization code for an access token
-	token, err := oauthInfo.config.Exchange(context.Background(), code, oauth2.VerifierOption(oauthInfo.verifier))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Println("Exchange token", token)
-	// Get user information from Google
-	client := oauthInfo.config.Client(context.Background(), token)
-	userInfoResponse, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	if accessToken == "" || refreshToken == "" {
+		fmt.Println("acces token or refresh token empty")
+		if r.FormValue("state") != oauthInfo.oauthState {
+			http.Error(w, "invalid state parameter", http.StatusBadRequest)
+			return
+		}
 
-	defer userInfoResponse.Body.Close()
+		// Verify the code exists
+		code := r.FormValue("code")
+		if code == "" {
+			http.Error(w, "code parameter not found", http.StatusBadRequest)
+			return
+		}
 
-	var userInfo UserInfo
-	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+		// Exchange the authorization code for an access token
+		token, err := oauthInfo.config.Exchange(context.Background(), code, oauth2.VerifierOption(oauthInfo.verifier))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Println("Exchange token", token)
+		// Get user information from Google
+		client := oauthInfo.config.Client(context.Background(), token)
+		userInfoResponse, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	fmt.Println("userInfo", userInfo)
-	// generate the idToken here without identity and identityCurve
-	session, err := oauthInfo.session.Get(r, "stripchain-session")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	session.Values["authenticated"] = true
-	session.Values["user"] = &userInfo
-	session.Save(r, w)
-	fmt.Println("session", session.Values["user"])
+		defer userInfoResponse.Body.Close()
 
-	// Generate a JWT id token
-	idToken, err := generateIdToken(userInfo, "", "", "")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+		var userInfo UserInfo
+		err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	// Generate a JWT access token
-	accessToken, err := generateAccessToken(userInfo.ID, "", "")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+		fmt.Println("userInfo", userInfo)
+		// generate the idToken here without identity and identityCurve
+		session, err := oauthInfo.session.Get(r, "stripchain-session")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		session.Values["authenticated"] = true
+		session.Values["user"] = &userInfo
+		session.Save(r, w)
+		fmt.Println("session", session.Values["user"])
 
-	// Generate a JWT access token
-	refreshToken, err := generateRefreshToken(userInfo.ID, "", "")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		// Generate a JWT id token
+		idToken, err = generateIdToken(userInfo, "", "", "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Generate a JWT access token
+		accessToken, err = generateAccessToken(userInfo.ID, "", "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Generate a JWT access token
+		refreshToken, err = generateRefreshToken(userInfo.ID, "", "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 	}
 
 	SetTokenCookie(w, idToken, "id_token")
@@ -326,23 +342,92 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleAccess(r *http.Request) (*IdentityAccess, error) {
+func handleAccess(r *http.Request) (string, string, string, error) {
+	fmt.Println("handle access-1")
+	fmt.Println(r)
+	fmt.Println("cookies", r.Cookies())
 	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
-		return nil, err
+		return "", "", "", err
 	}
 	accessToken := accessCookie.Value
-	claims, err := verifyToken(accessToken, oauthInfo.jwtSecret)
+	accessClaims, err := verifyToken(accessToken, oauthInfo.jwtSecret)
+	if accessClaims.Identity == "" || accessClaims.IdentityCurve == "" {
+		return "", "", "", ErrInvalidTokenIdentityRequired
+	}
+	fmt.Println("handle access-2")
+	refreshToken := ""
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrTokenExpired) {
+			refreshCookie, err := r.Cookie("refresh_token")
+			if err != nil {
+				return "", "", "", err
+			}
+			refreshToken = refreshCookie.Value
+			refreshClaims, err := verifyToken(refreshToken, oauthInfo.jwtSecret)
+			if refreshClaims.Identity == "" || refreshClaims.IdentityCurve == "" {
+				return "", "", "", ErrInvalidTokenIdentityRequired
+			}
+			if err != nil {
+				if errors.Is(err, ErrTokenExpired) {
+					return "", "", "", ErrRefreshTokenExpired
+				}
+				return "", "", "", err
+			}
+			fmt.Println("handle access-3")
+			accessToken, err = generateAccessToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
+			if err != nil {
+				return "", "", "", err
+			}
+			refreshToken, err = generateRefreshToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
+			if err != nil {
+				return "", "", "", err
+			}
+		}
 	}
-	fmt.Println("claims handle access", claims)
-	scId := IdentityAccess{
-		Identity:      claims.Identity,
-		IdentityCurve: claims.IdentityCurve,
-	}
-	return &scId, nil
+	idCookie, _ := r.Cookie("id_token")
+	idToken := idCookie.Value
+	return idToken, accessToken, refreshToken, nil
 }
+
+func ValidateAccess(next http.Handler) http.Handler {
+	fmt.Println("validate access")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Auth middleware triggered for: %s\n", r.URL.Path)
+		accessCookie, err := r.Cookie("access_token")
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		accessToken := accessCookie.Value
+		claims, err := verifyToken(accessToken, oauthInfo.jwtSecret)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if claims.Identity == "" || claims.IdentityCurve == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		fmt.Println("claims handle access", claims)
+		_ = IdentityAccess{
+			Identity:      claims.Identity,
+			IdentityCurve: claims.IdentityCurve,
+		}
+		// return &scId, nil
+		// ctx := context.WithValue(r.Context(), identityAccess, scId)
+
+		// r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
+	})
+}
+
+type contextKey string
+
+const (
+	// Key for the ID
+	identityAccess contextKey = "identityAccess"
+)
 
 func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
 	http.SetCookie(w, &http.Cookie{
@@ -401,3 +486,4 @@ func generateState() string {
 // https://www.unicorn.studio/embed/SaCYz48FXaFwo5ifY36I?preview=true
 // http://localhost/oauth/verifySignature?identity=0x76C09917EF1A6E885affCb8B14c0E09df271F393&identityCurve=ecdsa&signature=0x2b7fe067cf63bbfff8df636002eb6f71f4610b3958e75e759a2f6633c75c0a03147da8cbcbf788174b3c771e829ac5089a3cbc6511f9b76f2575ba2dd64dbfdd1b
 // http://localhost/oauth/verifySignature?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&signature=0xbc490764bf20e3e55f100555d9e1fd84c41fa658850332c388cd8f40d554983b68db49713591539f24cf7d4bcb68f17c89930c314ef7581cf7805b247683b8561b
+// http://localhost/oauth/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa

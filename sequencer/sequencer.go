@@ -74,7 +74,7 @@ func StartSequencer(
 
 	router := mux.NewRouter()
 	// oauthRouter := router.PathPrefix("/asoauth").Subrouter()
-	router.Use(ValidateAccess)
+	router.Use(ValidateAccessMiddleware)
 
 	go startHTTPServer(httpPort, router)
 

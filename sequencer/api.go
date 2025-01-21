@@ -565,6 +565,12 @@ func startHTTPServer(port string, router *mux.Router) {
 		fmt.Println("/oauth/login")
 	})
 
+	http.HandleFunc("/oauth/accessToken", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+		requestAccess(w, r)
+		fmt.Println("/oauth/accessToken")
+	})
+
 	http.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("/oauth/callback")
 		enableCors(&w)

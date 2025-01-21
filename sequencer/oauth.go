@@ -149,7 +149,7 @@ func generateRefreshToken(userId string, identity string, identityCurve string) 
 		Identity:      identity,
 		IdentityCurve: identityCurve,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 7)), // Token expires after 10min
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 7)), // Token expires after 7 days
 			Issuer:    "StripChain",
 			Subject:   userId,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -171,7 +171,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 func handleCallback(w http.ResponseWriter, r *http.Request) {
 
-	idToken, accessToken, refreshToken, err := handleAccess(r)
+	idToken, accessToken, refreshToken, err := getAccess(r)
 	fmt.Println("err handle access", err)
 
 	if accessToken == "" || refreshToken == "" {
@@ -244,9 +244,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
 	}
-
 	SetTokenCookie(w, idToken, "id_token")
 	SetTokenCookie(w, accessToken, "access_token")
 	SetTokenCookie(w, refreshToken, "refresh_token")
@@ -259,33 +257,28 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tokens)
 	fmt.Println("tokens", tokens)
 	// Redirect user to the home page
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	// http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
-	// get and verify access token in authorization header
-	// verifyToken(tokenStr string, secretKey string)
-
 	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	accessToken := accessCookie.Value
+	_, err = verifyToken(accessToken, "access_token", false, oauthInfo.jwtSecret)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
 	idCookie, err := r.Cookie("id_token")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	idToken := idCookie.Value
-	fmt.Println("accessToken", accessToken)
-	fmt.Println("idToken", idToken)
-
-	_, err = verifyToken(accessToken, oauthInfo.jwtSecret)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
 
 	identity := r.URL.Query().Get("identity")
 	identityCurve := r.URL.Query().Get("identityCurve")
@@ -336,13 +329,27 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 			IdToken:      idToken,
 		}
 		json.NewEncoder(w).Encode(tokens)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		// http.Redirect(w, r, "/", http.StatusSeeOther)
 	} else {
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 	}
 }
 
-func handleAccess(r *http.Request) (string, string, string, error) {
+func requestAccess(w http.ResponseWriter, r *http.Request) {
+	idToken, accessToken, refreshToken, err := getAccess(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tokens := Tokens{
+		IdToken:      idToken,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}
+	json.NewEncoder(w).Encode(tokens)
+}
+
+func getAccess(r *http.Request) (string, string, string, error) {
 	fmt.Println("handle access-1")
 	fmt.Println(r)
 	fmt.Println("cookies", r.Cookies())
@@ -351,10 +358,7 @@ func handleAccess(r *http.Request) (string, string, string, error) {
 		return "", "", "", err
 	}
 	accessToken := accessCookie.Value
-	accessClaims, err := verifyToken(accessToken, oauthInfo.jwtSecret)
-	if accessClaims.Identity == "" || accessClaims.IdentityCurve == "" {
-		return "", "", "", ErrInvalidTokenIdentityRequired
-	}
+	_, err = verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
 	fmt.Println("handle access-2")
 	refreshToken := ""
 	if err != nil {
@@ -364,10 +368,8 @@ func handleAccess(r *http.Request) (string, string, string, error) {
 				return "", "", "", err
 			}
 			refreshToken = refreshCookie.Value
-			refreshClaims, err := verifyToken(refreshToken, oauthInfo.jwtSecret)
-			if refreshClaims.Identity == "" || refreshClaims.IdentityCurve == "" {
-				return "", "", "", ErrInvalidTokenIdentityRequired
-			}
+			fmt.Println("handle access-3", refreshToken)
+			refreshClaims, err := verifyToken(refreshToken, "refresh_token", true, oauthInfo.jwtSecret)
 			if err != nil {
 				if errors.Is(err, ErrTokenExpired) {
 					return "", "", "", ErrRefreshTokenExpired
@@ -387,10 +389,13 @@ func handleAccess(r *http.Request) (string, string, string, error) {
 	}
 	idCookie, _ := r.Cookie("id_token")
 	idToken := idCookie.Value
+	fmt.Println("handle access-4", refreshToken)
+	fmt.Println("handle access-5", accessToken)
+	fmt.Println("handle access-6", idToken)
 	return idToken, accessToken, refreshToken, nil
 }
 
-func ValidateAccess(next http.Handler) http.Handler {
+func ValidateAccessMiddleware(next http.Handler) http.Handler {
 	fmt.Println("validate access")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Auth middleware triggered for: %s\n", r.URL.Path)
@@ -400,12 +405,8 @@ func ValidateAccess(next http.Handler) http.Handler {
 			return
 		}
 		accessToken := accessCookie.Value
-		claims, err := verifyToken(accessToken, oauthInfo.jwtSecret)
+		claims, err := verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		if claims.Identity == "" || claims.IdentityCurve == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -442,7 +443,7 @@ func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
 	})
 }
 
-func verifyToken(tokenStr string, secretKey string) (*ClaimsWithIdentity, error) {
+func verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretKey string) (*ClaimsWithIdentity, error) {
 	claims := &ClaimsWithIdentity{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) { //interface to define
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -466,6 +467,9 @@ func verifyToken(tokenStr string, secretKey string) (*ClaimsWithIdentity, error)
 		return nil, fmt.Errorf("invalid token")
 	}
 	fmt.Println("claims from verifyToken", claims)
+	if verifyIdentity && (tokenType == "access_token" || tokenType == "refresh_token") && (claims.Identity == "" || claims.IdentityCurve == "") {
+		return nil, ErrInvalidTokenIdentityRequired
+	}
 	return claims, nil
 }
 

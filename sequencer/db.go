@@ -38,6 +38,13 @@ type OperationSchema struct {
 	SolverOutput     string
 }
 
+type RefreshTokenSchema struct {
+	Id           int64  `json:"id"`
+	RefreshToken string `json:"refreshToken"`
+	Expiry       uint64 `json:"expiry"`
+	Invalidated  bool   `json:"invalidated"`
+}
+
 type WalletSchema struct {
 	Id             int64  `json:"id"`
 	Identity       string `json:"identity"`
@@ -60,6 +67,7 @@ func createSchemas(db *pg.DB) error {
 		(*OperationSchema)(nil),
 		(*WalletSchema)(nil),
 		(*LockSchema)(nil),
+		(*RefreshTokenSchema)(nil),
 	}
 
 	for _, model := range models {
@@ -101,6 +109,31 @@ func AddLock(identity string, identityCurve string) (int64, error) {
 	}
 
 	return lock.Id, nil
+}
+
+func AddRefreshToken(refreshToken string, invalidated bool) (int64, error) {
+	token := &RefreshTokenSchema{
+		RefreshToken: refreshToken,
+		Invalidated:  invalidated,
+	}
+
+	_, err := client.Model(token).Insert()
+	if err != nil {
+		return 0, err
+	}
+
+	return token.Id, nil
+}
+
+func GetRefreshToken(token string) (*RefreshTokenSchema, error) {
+	var refreshTokenSchema RefreshTokenSchema
+	err := client.Model(&refreshTokenSchema).Where("RefreshToken = ?", token).Select()
+	if err != nil {
+		return nil, err
+	}
+
+	return &refreshTokenSchema, nil
+
 }
 
 func LockIdentity(id int64) error {

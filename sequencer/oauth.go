@@ -172,7 +172,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	idToken, accessToken, refreshToken, err := getAccess(r)
-	fmt.Println("err handle access", err)
+	fmt.Println("err handle access", err, idToken, accessToken, refreshToken)
 
 	if accessToken == "" || refreshToken == "" {
 		fmt.Println("acces token or refresh token empty")
@@ -351,36 +351,34 @@ func requestAccess(w http.ResponseWriter, r *http.Request) {
 
 func getAccess(r *http.Request) (string, string, string, error) {
 	fmt.Println("handle access-1")
-	fmt.Println(r)
 	fmt.Println("cookies", r.Cookies())
+	refreshCookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		return "", "", "", err
+	}
+	refreshToken := refreshCookie.Value
+	refreshClaims, err := verifyToken(refreshToken, "refresh_token", true, oauthInfo.jwtSecret)
+	if err != nil {
+		if errors.Is(err, ErrTokenExpired) {
+			return "", "", "", ErrRefreshTokenExpired
+		}
+		return "", "", "", err
+	}
 	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
 		return "", "", "", err
 	}
+	fmt.Println("handle access-2")
 	accessToken := accessCookie.Value
 	_, err = verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
-	fmt.Println("handle access-2")
-	refreshToken := ""
 	if err != nil {
 		if errors.Is(err, ErrTokenExpired) {
-			refreshCookie, err := r.Cookie("refresh_token")
-			if err != nil {
-				return "", "", "", err
-			}
-			refreshToken = refreshCookie.Value
-			fmt.Println("handle access-3", refreshToken)
-			refreshClaims, err := verifyToken(refreshToken, "refresh_token", true, oauthInfo.jwtSecret)
-			if err != nil {
-				if errors.Is(err, ErrTokenExpired) {
-					return "", "", "", ErrRefreshTokenExpired
-				}
-				return "", "", "", err
-			}
 			fmt.Println("handle access-3")
 			accessToken, err = generateAccessToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
 			if err != nil {
 				return "", "", "", err
 			}
+			AddRefreshToken(refreshToken, true)
 			refreshToken, err = generateRefreshToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
 			if err != nil {
 				return "", "", "", err
@@ -470,6 +468,13 @@ func verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretK
 	if verifyIdentity && (tokenType == "access_token" || tokenType == "refresh_token") && (claims.Identity == "" || claims.IdentityCurve == "") {
 		return nil, ErrInvalidTokenIdentityRequired
 	}
+	if tokenType == "refresh_token" {
+		token, _ := GetRefreshToken(tokenStr)
+		fmt.Println("gettoken from db", token)
+		if token != nil {
+			return nil, ErrInvalidToken
+		}
+	}
 	return claims, nil
 }
 
@@ -481,12 +486,6 @@ func generateState() string {
 	return base64.URLEncoding.EncodeToString(b)
 }
 
-// user sign a message
-// message verified
-// jwt stored and sent to the client
-// use the jwt in the header authorization bearer
-// adding nonce --> replay attack
-// adding oauth protected to existing routes
 // https://www.unicorn.studio/embed/SaCYz48FXaFwo5ifY36I?preview=true
 // http://localhost/oauth/verifySignature?identity=0x76C09917EF1A6E885affCb8B14c0E09df271F393&identityCurve=ecdsa&signature=0x2b7fe067cf63bbfff8df636002eb6f71f4610b3958e75e759a2f6633c75c0a03147da8cbcbf788174b3c771e829ac5089a3cbc6511f9b76f2575ba2dd64dbfdd1b
 // http://localhost/oauth/verifySignature?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&signature=0xbc490764bf20e3e55f100555d9e1fd84c41fa658850332c388cd8f40d554983b68db49713591539f24cf7d4bcb68f17c89930c314ef7581cf7805b247683b8561b

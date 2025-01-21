@@ -6,7 +6,13 @@ services:
     container_name: ganache
     ports:
       - '8545:8545'
-    command: ["-h", "0.0.0.0", "-m", "rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain"]
+    command: [
+      "-h", "0.0.0.0",
+      "-m", "rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain",
+      "--timeout", "1800000"
+    ]
+    environment:
+      - TIMEOUT=1800000          # 30 minutes
   
   ganache_wait:
     image: alpine
@@ -195,6 +201,15 @@ services:
     ports:
       - '30304:30304'
       - '8080:8080'
+    environment:
+      - HTTP_TIMEOUT=1800000      # 30 minutes
+      - REQUEST_TIMEOUT=1800000   # 30 minutes
+      - NODE_OPTIONS="--max-http-header-size=16384"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     command: ["--signerPublicKey", "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--signerPrivateKey", "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2", "--rpcURL", "http://ganache:8545", "--httpPort", "8080", "--port", "30304", "--postgresHost", "signer1postgres:5432", "--bootnode", "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"]
 
   signer2:
@@ -208,6 +223,15 @@ services:
     ports:
       - '30305:30305'
       - '8081:8081'
+    environment:
+      - HTTP_TIMEOUT=1800000      # 30 minutes
+      - REQUEST_TIMEOUT=1800000   # 30 minutes
+      - NODE_OPTIONS="--max-http-header-size=16384"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     command: ["--signerPublicKey", "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35", "--signerPrivateKey", "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de", "--rpcURL", "http://ganache:8545", "--httpPort", "8081", "--port", "30305", "--postgresHost", "signer2postgres:5432", "--bootnode", "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"]
 
   sequencerpostgres:
@@ -250,6 +274,15 @@ services:
     ports:
       - '30306:30306'
       - '80:8082'
+    environment:
+      - HTTP_TIMEOUT=1800000      # 30 minutes
+      - REQUEST_TIMEOUT=1800000   # 30 minutes
+      - NODE_OPTIONS="--max-http-header-size=16384"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--httpPort", "8082", "--postgresHost", "sequencerpostgres:5432", "--isSequencer", "true"]
   
   solver:
@@ -259,4 +292,8 @@ services:
     container_name: solver
     ports:
       - '8083:8083'
+    environment:
+      - HTTP_TIMEOUT=1800000      # 30 minutes
+      - REQUEST_TIMEOUT=1800000   # 30 minutes
+      - NODE_OPTIONS="--max-http-header-size=16384"
     command: ["--httpPort", "8083", "--isTestSolver", "true"]

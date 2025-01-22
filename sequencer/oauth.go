@@ -402,6 +402,10 @@ func getAccess(r *http.Request) (string, string, string, error) {
 
 func ValidateAccessMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/verifySignature" || r.URL.Path == "/oauth/accessToken" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		log.Printf("Auth middleware triggered for: %s\n", r.URL.Path)
 		accessCookie, err := r.Cookie("access_token")
 		if err != nil {

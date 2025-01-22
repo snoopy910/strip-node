@@ -128,10 +128,14 @@ func startHTTPServer(port string, oauthEnabled bool) {
 			return
 		}
 		fmt.Println("id", id)
-
 		// then store the wallet and it's list of signers in the db
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
+
+		if identity != id.Identity || identityCurve != id.IdentityCurve {
+			http.Error(w, "identity and identityCurve query parameters must match with the access identity", http.StatusBadRequest)
+			return
+		}
 
 		_createWallet := false
 
@@ -178,6 +182,11 @@ func startHTTPServer(port string, oauthEnabled bool) {
 
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
+
+		if identity != id.Identity || identityCurve != id.IdentityCurve {
+			http.Error(w, "identity and identityCurve query parameters must match with the access identity", http.StatusBadRequest)
+			return
+		}
 
 		wallet, err := GetWallet(identity, identityCurve)
 		if err != nil {

@@ -23,7 +23,9 @@ type contextKey string
 
 const (
 	// Key for the ID
-	identityAccess contextKey = "identityAccess"
+	identityAccess          contextKey = "identityAccess"
+	stripchainGoogleSession string     = "stripchain-google-session"
+	tokenIssuer             string     = "StripChain"
 )
 
 type UserInfo struct {
@@ -72,6 +74,7 @@ var (
 	ErrInvalidTokenIdentityRequired = errors.New("invalid token: identity and identity curve are required")
 	ErrRefreshTokenExpired          = errors.New("refresh token is expired")
 	ErrInvalidTokenId               = errors.New("invalid token id")
+	ErrNotAuthenticated             = errors.New("not authenticated")
 )
 
 func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, message string) *OAuthParameters {
@@ -119,7 +122,7 @@ func generateIdToken(user UserInfo, identity string, identityCurve string, signe
 		UserSignedMessage: signedMessage,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 1)),
-			Issuer:    "StripChain",
+			Issuer:    tokenIssuer,
 			Subject:   user.ID,
 		},
 	}
@@ -138,7 +141,7 @@ func generateAccessToken(userId string, identity string, identityCurve string) (
 		IdentityCurve: identityCurve,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 10)), // Token expires after 10min
-			Issuer:    "StripChain",
+			Issuer:    tokenIssuer,
 			Subject:   userId,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
@@ -157,7 +160,7 @@ func generateRefreshToken(userId string, identity string, identityCurve string) 
 		IdentityCurve: identityCurve,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 7)), // Token expires after 7 days
-			Issuer:    "StripChain",
+			Issuer:    tokenIssuer,
 			Subject:   userId,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
@@ -178,10 +181,17 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 func handleCallback(w http.ResponseWriter, r *http.Request) {
 
-	idToken, accessToken, refreshToken, err := getAccess(r)
-	fmt.Println("err handle access", err, idToken, accessToken, refreshToken)
+	tokens, err := getAccess(r)
+	fmt.Println("err handle access", err, tokens)
+	var idToken string
+	var accessToken string
+	var refreshToken string
 
-	if accessToken == "" || refreshToken == "" {
+	if tokens != nil {
+		idToken = tokens.IdToken
+		accessToken = tokens.AccessToken
+		refreshToken = tokens.RefreshToken
+	} else {
 		fmt.Println("acces token or refresh token empty")
 		if r.FormValue("state") != oauthInfo.oauthState {
 			http.Error(w, "invalid state parameter", http.StatusBadRequest)
@@ -221,7 +231,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Println("userInfo", userInfo)
 		// generate the idToken here without identity and identityCurve
-		session, err := oauthInfo.session.Get(r, "stripchain-session")
+		session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -256,18 +266,27 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	SetTokenCookie(w, accessToken, "access_token")
 	SetTokenCookie(w, refreshToken, "refresh_token")
 
-	tokens := Tokens{
+	tokens = &Tokens{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		IdToken:      idToken,
 	}
-	json.NewEncoder(w).Encode(tokens)
+	json.NewEncoder(w).Encode(*tokens)
 	fmt.Println("tokens", tokens)
-	// Redirect user to the home page
-	// http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
+	session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// check if authenticated
+	authenticated, ok := session.Values["authenticated"].(bool)
+	if !ok || !authenticated {
+		http.Error(w, ErrNotAuthenticated.Error(), http.StatusUnauthorized)
+		return
+	}
 	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -280,27 +299,11 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idCookie, err := r.Cookie("id_token")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	idToken := idCookie.Value
-
 	identity := r.URL.Query().Get("identity")
 	identityCurve := r.URL.Query().Get("identityCurve")
 	signature := r.URL.Query().Get("signature")
 	message := oauthInfo.message
-	session, err := oauthInfo.session.Get(r, "stripchain-session")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	// check if authenticated
-	if !session.Values["authenticated"].(bool) {
-		http.Error(w, "Not authenticated", http.StatusUnauthorized)
-		return
-	}
+
 	userInfo := &UserInfo{
 		ID:            session.Values["user"].(*UserInfo).ID,
 		Name:          session.Values["user"].(*UserInfo).Name,
@@ -321,7 +324,7 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	}
 	//get the old access and id token
 	if verified {
-		idToken, _ = generateIdToken(*userInfo, identity, identityCurve, signature)
+		idToken, _ := generateIdToken(*userInfo, identity, identityCurve, signature)
 		accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
 		refreshToken, _ := generateRefreshToken(userInfo.ID, identity, identityCurve)
 		session.Values["user"] = &userInfo
@@ -343,37 +346,44 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 }
 
 func requestAccess(w http.ResponseWriter, r *http.Request) {
-	idToken, accessToken, refreshToken, err := getAccess(r)
+	tokens, err := getAccess(r)
 	if err != nil {
+		if errors.Is(err, ErrNotAuthenticated) {
+			http.Error(w, ErrNotAuthenticated.Error(), http.StatusInternalServerError)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tokens := Tokens{
-		IdToken:      idToken,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}
-	json.NewEncoder(w).Encode(tokens)
+	json.NewEncoder(w).Encode(*tokens)
+	fmt.Println("request access", w)
 }
 
-func getAccess(r *http.Request) (string, string, string, error) {
-	fmt.Println("handle access-1")
-	fmt.Println("cookies", r.Cookies())
+func getAccess(r *http.Request) (*Tokens, error) {
+	session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
+	if err != nil {
+		return nil, err
+	}
+	authenticated, ok := session.Values["authenticated"].(bool)
+	if !ok || !authenticated {
+		return nil, ErrNotAuthenticated
+	}
+	fmt.Println("get-access-2")
 	refreshCookie, err := r.Cookie("refresh_token")
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
 	refreshToken := refreshCookie.Value
 	refreshClaims, err := verifyToken(refreshToken, "refresh_token", true, oauthInfo.jwtSecret)
 	if err != nil {
 		if errors.Is(err, ErrTokenExpired) {
-			return "", "", "", ErrRefreshTokenExpired
+			return nil, ErrRefreshTokenExpired
 		}
-		return "", "", "", err
+		return nil, err
 	}
 	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
 	fmt.Println("handle access-2")
 	accessToken := accessCookie.Value
@@ -383,30 +393,61 @@ func getAccess(r *http.Request) (string, string, string, error) {
 			fmt.Println("handle access-3")
 			accessToken, err = generateAccessToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
 			if err != nil {
-				return "", "", "", err
+				return nil, err
 			}
 			AddRefreshToken(refreshToken, true)
 			refreshToken, err = generateRefreshToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
 			if err != nil {
-				return "", "", "", err
+				return nil, err
 			}
 		}
 	}
 	idCookie, _ := r.Cookie("id_token")
 	idToken := idCookie.Value
-	fmt.Println("handle access-4", refreshToken)
-	fmt.Println("handle access-5", accessToken)
-	fmt.Println("handle access-6", idToken)
-	return idToken, accessToken, refreshToken, nil
+	fmt.Println("handle tokens", idToken, accessToken, refreshToken)
+	return &Tokens{IdToken: idToken, AccessToken: accessToken, RefreshToken: refreshToken}, nil
+}
+
+func logout(w http.ResponseWriter, r *http.Request) {
+	session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// check if authenticated
+	authenticated, ok := session.Values["authenticated"].(bool)
+	if !ok || !authenticated {
+		http.Error(w, ErrNotAuthenticated.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Revoke users authentication
+	session.Values["authenticated"] = false
+	session.Values["user"] = nil
+	session.Options.MaxAge = -1 // Delete session
+	session.Save(r, w)
+	SetTokenCookie(w, "", "access_token")
+	SetTokenCookie(w, "", "id_token")
+	SetTokenCookie(w, "", "refresh_token")
 }
 
 func ValidateAccessMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/verifySignature" || r.URL.Path == "/oauth/accessToken" {
+		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/verifySignature" || r.URL.Path == "/oauth/accessToken" || r.URL.Path == "/oauth/logout" {
 			next.ServeHTTP(w, r)
 			return
 		}
 		log.Printf("Auth middleware triggered for: %s\n", r.URL.Path)
+		session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		authenticated, ok := session.Values["authenticated"].(bool)
+		if !ok || !authenticated {
+			http.Error(w, ErrNotAuthenticated.Error(), http.StatusUnauthorized)
+			return
+		}
 		accessCookie, err := r.Cookie("access_token")
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)

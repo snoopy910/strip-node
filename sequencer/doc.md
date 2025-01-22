@@ -79,3 +79,21 @@ curl --location 'localhost:8082/getIntent?id=1'
 curl --location 'localhost:8082/getIntents?status=processing'
 ```
 
+# Google oauth2 login
+
+
+### Setup
+
+
+### Endpoints
+
+`/oauth/login`: Login with Google
+
+`/oauth/callback`: Callback from Google - checks if the user is authenticated and have a valid access token otherwise it will authenticate the user
+
+`/oauth/verifySignature`: Verifies the signature of the predefined message signed by the user's identity wallet and creates a new id,access and refresh tokens including the identity and identity curve.
+
+`/oauth/accessToken`: Get a new access token when the refresh token is still valid.
+
+
+### Environment Variables

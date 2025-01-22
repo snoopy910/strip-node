@@ -96,6 +96,7 @@ func enableCors(w *http.ResponseWriter) {
 func startHTTPServer(port string, oauthEnabled bool) {
 
 	router := mux.NewRouter()
+	// oauthRouter := router.PathPrefix("/oauth").Subrouter()
 
 	if oauthEnabled {
 		router.Use(ValidateAccessMiddleware)
@@ -104,7 +105,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	// Root endpoint - Health check
 	// Method: GET
 	// Response: Plain text "OK"
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 		fmt.Fprintf(w, "OK")
 	})
@@ -560,6 +561,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 
 	router.HandleFunc("/oauth/logout", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
+		logout(w, r)
 		fmt.Println("/oauth/logout")
 	})
 

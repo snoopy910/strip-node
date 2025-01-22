@@ -394,29 +394,28 @@ func getAccess(r *http.Request) (string, string, string, error) {
 }
 
 func ValidateAccessMiddleware(next http.Handler) http.Handler {
-	fmt.Println("validate access")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Auth middleware triggered for: %s\n", r.URL.Path)
 		accessCookie, err := r.Cookie("access_token")
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		accessToken := accessCookie.Value
 		claims, err := verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		fmt.Println("claims handle access", claims)
-		_ = IdentityAccess{
+		scId := IdentityAccess{
 			Identity:      claims.Identity,
 			IdentityCurve: claims.IdentityCurve,
 		}
-		// return &scId, nil
-		// ctx := context.WithValue(r.Context(), identityAccess, scId)
 
-		// r = r.WithContext(ctx)
+		ctx := context.WithValue(r.Context(), identityAccess, scId)
+
+		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
 	})
 }

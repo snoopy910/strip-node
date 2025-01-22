@@ -93,36 +93,22 @@ func enableCors(w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
-func startHTTPServer(port string, router *mux.Router) {
+func startHTTPServer(port string, oauthEnabled bool) {
+
+	router := mux.NewRouter()
+
+	if oauthEnabled {
+		router.Use(ValidateAccessMiddleware)
+	}
 
 	// Root endpoint - Health check
 	// Method: GET
 	// Response: Plain text "OK"
-	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
+		log.Printf("/ triggered for: %s\n", r.URL.Path)
 		fmt.Fprintf(w, "OK")
 	})
-
-	// http.HandleFunc("/oauth/createWallet", func(w http.ResponseWriter, r *http.Request) {
-	// 	enableCors(&w)
-	// 	sc_id, err := handleAccess(r)
-	// 	if err != nil {
-	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	identity := r.URL.Query().Get("identity")
-	// 	identityCurve := r.URL.Query().Get("identityCurve")
-	// 	fmt.Println("identity", identity)
-	// 	fmt.Println("identityCurve", identityCurve)
-	// 	fmt.Println("sc_id.Identity", sc_id.Identity)
-	// 	fmt.Println("sc_id.IdentityCurve", sc_id.IdentityCurve)
-	// 	if sc_id.Identity != identity || sc_id.IdentityCurve != identityCurve {
-	// 		http.Error(w, "identity and identityCurve must match with access token identity data", http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	http.Redirect(w, r, "/createWallet?identity="+identity+"&identityCurve="+identityCurve, http.StatusSeeOther)
-
-	// })
 
 	// CreateWallet endpoint - Creates a new wallet for a given identity
 	// Method: GET
@@ -180,8 +166,15 @@ func startHTTPServer(port string, router *mux.Router) {
 	// Response:
 	//   - Success: JSON encoded wallet object
 	//   - Error: 500 with error message
-	http.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
+		id, ok := r.Context().Value(identityAccess).(IdentityAccess)
+		fmt.Println("id create wallet", id)
+		if !ok {
+			http.Error(w, "id not found in context", http.StatusInternalServerError)
+			return
+		}
+		fmt.Println("id", id)
 
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
@@ -204,7 +197,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	// Response:
 	//   - Success: JSON encoded wallet object for the bridge contract
 	//   - Error: 500 with error message
-	http.HandleFunc("/getBridgeAddress", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getBridgeAddress", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		wallet, err := GetWallet(BridgeContractAddress, "ecdsa")
@@ -228,7 +221,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	//   - Error: 400 for invalid request body
 	//   - Error: 500 for processing errors
 	// Notes: Triggers async intent processing after creation
-	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		if r.Method == "OPTIONS" {
@@ -263,7 +256,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	// Response:
 	//   - Success: JSON encoded Intent object
 	//   - Error: 500 with error message
-	http.HandleFunc("/getIntent", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getIntent", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		intentId := r.URL.Query().Get("id")
@@ -290,7 +283,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	// Response:
 	//   - Success: JSON encoded IntentsResult {intents: Intent[], total: number}
 	//   - Error: 500 with error message
-	http.HandleFunc("/getIntents", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getIntents", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		limit := r.URL.Query().Get("limit")
@@ -326,7 +319,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	// Response:
 	//   - Success: JSON encoded IntentsResult
 	//   - Error: 500 with error message
-	http.HandleFunc("/getSolverIntents", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getSolverIntents", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		limit := r.URL.Query().Get("limit")
@@ -363,7 +356,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	// Response:
 	//   - Success: JSON encoded IntentsResult
 	//   - Error: 500 with error message
-	http.HandleFunc("/getIntentsOfAddress", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getIntentsOfAddress", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		limit := r.URL.Query().Get("limit")
@@ -402,7 +395,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	//       chains: number[]
 	//     }
 	//   - Error: 500 with error message
-	http.HandleFunc("/getStatsOfSolver", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getStatsOfSolver", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		solver := r.URL.Query().Get("solver")
@@ -439,7 +432,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	//       totalIntents: number
 	//     }
 	//   - Error: 500 with error message
-	http.HandleFunc("/getTotalStats", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/getTotalStats", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		totalSolvers, err := solversRegistry.TotalSolvers(
@@ -481,7 +474,7 @@ func startHTTPServer(port string, router *mux.Router) {
 	//   - Success: JSON encoded transfers data
 	//   - Error: 500 if operation not completed or other errors
 	// Notes: Supports both Ethereum and Solana transfers
-	http.HandleFunc("/parseOperation", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/parseOperation", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		operationId := r.URL.Query().Get("operationId")
@@ -545,56 +538,40 @@ func startHTTPServer(port string, router *mux.Router) {
 	// Status endpoint - Service health check
 	// Method: GET
 	// Response: Plain text "OK"
-	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		fmt.Fprintf(w, "OK")
 	})
 
-	// http.HandleFunc("/oauth/", func(w http.ResponseWriter, r *http.Request) {
-	// 	enableCors(&w)
-	// 	// verify access token
-	// 	handleAccess(r)
-	// 	fmt.Fprintf(w, "OAuth request")
-
-	// })
-
-	http.HandleFunc("/oauth/login", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/oauth/login", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 		login(w, r)
 		fmt.Println("/oauth/login")
 	})
 
-	http.HandleFunc("/oauth/accessToken", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/oauth/accessToken", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 		requestAccess(w, r)
 		fmt.Println("/oauth/accessToken")
 	})
 
-	http.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("/oauth/callback")
 		enableCors(&w)
 		handleCallback(w, r)
 	})
 
-	http.HandleFunc("/oauth/logout", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/oauth/logout", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 		fmt.Println("/oauth/logout")
 	})
 
-	http.HandleFunc("/oauth/verifySignature", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/oauth/verifySignature", func(w http.ResponseWriter, r *http.Request) {
 		// store it in db
 		enableCors(&w)
 		handleIdentityVerification(w, r)
 	})
 
-	// Protected route
-	// r.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
-	// 	// Redirect to /createWallet after successful authentication
-	// 	enableCors(&w) // 302 status code
-	// 	fmt.Println("/xoauth/createWallet")
-	// 	// http.Redirect(w, r, "/createWallet", http.StatusFound) // 302 status code
-	// })
-
-	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
+	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, router))
 }

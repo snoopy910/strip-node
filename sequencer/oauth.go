@@ -19,6 +19,13 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
+type contextKey string
+
+const (
+	// Key for the ID
+	identityAccess contextKey = "identityAccess"
+)
+
 type UserInfo struct {
 	ID            string `json:"id"`
 	Email         string `json:"email"`
@@ -413,19 +420,12 @@ func ValidateAccessMiddleware(next http.Handler) http.Handler {
 			IdentityCurve: claims.IdentityCurve,
 		}
 
-		ctx := context.WithValue(r.Context(), identityAccess, scId)
+		ctx := context.WithValue(r.Context(), identityAccess, &scId)
 
 		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
 	})
 }
-
-type contextKey string
-
-const (
-	// Key for the ID
-	identityAccess contextKey = "identityAccess"
-)
 
 func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
 	http.SetCookie(w, &http.Cookie{
@@ -475,6 +475,16 @@ func verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretK
 		}
 	}
 	return claims, nil
+}
+
+func verifyIdentity(r *http.Request) (bool, error) {
+	id, _ := r.Context().Value(identityAccess).(*IdentityAccess)
+	identity := r.URL.Query().Get("identity")
+	identityCurve := r.URL.Query().Get("identityCurve")
+	if id != nil && (identity != id.Identity || identityCurve != id.IdentityCurve) {
+		return false, errors.New("mismatch identity between url and token")
+	}
+	return true, nil
 }
 
 func generateState() string {

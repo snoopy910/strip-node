@@ -106,7 +106,6 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	// Response: Plain text "OK"
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
-		log.Printf("/ triggered for: %s\n", r.URL.Path)
 		fmt.Fprintf(w, "OK")
 	})
 
@@ -121,25 +120,19 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Error: 500 with error message
 	router.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
-		id, ok := r.Context().Value(identityAccess).(IdentityAccess)
-		fmt.Println("id create wallet", id)
-		if !ok {
-			http.Error(w, "id not found in context", http.StatusInternalServerError)
+
+		_, err := verifyIdentity(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		fmt.Println("id", id)
-		// then store the wallet and it's list of signers in the db
+
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
 
-		if identity != id.Identity || identityCurve != id.IdentityCurve {
-			http.Error(w, "identity and identityCurve query parameters must match with the access identity", http.StatusBadRequest)
-			return
-		}
-
 		_createWallet := false
 
-		_, err := GetWallet(identity, identityCurve)
+		_, err = GetWallet(identity, identityCurve)
 		if err != nil {
 
 			if err.Error() == "pg: no rows in result set" {
@@ -172,21 +165,15 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Error: 500 with error message
 	router.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
-		id, ok := r.Context().Value(identityAccess).(IdentityAccess)
-		fmt.Println("id create wallet", id)
-		if !ok {
-			http.Error(w, "id not found in context", http.StatusInternalServerError)
+
+		_, err := verifyIdentity(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		fmt.Println("id", id)
 
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
-
-		if identity != id.Identity || identityCurve != id.IdentityCurve {
-			http.Error(w, "identity and identityCurve query parameters must match with the access identity", http.StatusBadRequest)
-			return
-		}
 
 		wallet, err := GetWallet(identity, identityCurve)
 		if err != nil {

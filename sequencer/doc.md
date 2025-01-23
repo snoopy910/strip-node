@@ -123,10 +123,12 @@ The middleware validator checks if the URL path contains the `auth` query parame
 
 Example:
 
-oauth enabled and auth=`oauth`:
+oauth enabled and auth=`oauth`: Middleware will check if the user is authenticated and have a valid access token
+
 http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&auth=oauth
 
-oauth enabled or not enabled and auth is not `oauth`:
+oauth enabled or not enabled and auth is not `oauth` will keep the behavior as before without checking if the user is authenticated and have a valid access token
+
 http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa 
 
 

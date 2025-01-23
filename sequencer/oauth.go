@@ -53,7 +53,7 @@ type Tokens struct {
 	IdToken      string `json:"id_token"`
 }
 
-type UserTokensData struct {
+type UserTokensInfo struct {
 	ID           string `json:"id"`
 	Email        string `json:"email"`
 	Name         string `json:"name"`
@@ -287,19 +287,20 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
-
-	var tokensData *UserTokensData
-	err := json.NewDecoder(r.Body).Decode(&tokensData)
+	fmt.Println("handleIdentityVerification-1")
+	fmt.Println("r.Body", r.Body)
+	tokensData, err := extractUserTokensInfo(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
+	fmt.Println("handleIdentityVerification-2")
+	fmt.Println("tokensData handleIdentityVerification", tokensData)
 	identity := r.URL.Query().Get("identity")
 	identityCurve := r.URL.Query().Get("identityCurve")
 	signature := tokensData.Signature
 	message := oauthInfo.message
-
+	fmt.Println("handleIdentityVerification-3")
 	userInfo := &UserInfo{
 		ID:            tokensData.ID,
 		Name:          tokensData.Name,
@@ -318,6 +319,7 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	fmt.Println("handleIdentityVerification-4")
 	//get the old access and id token
 	if verified {
 		idToken, _ := generateIdToken(*userInfo, identity, identityCurve, signature)
@@ -329,7 +331,12 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 			RefreshToken: refreshToken,
 			IdToken:      idToken,
 		}
-		json.NewEncoder(w).Encode(tokens)
+		err = json.NewEncoder(w).Encode(tokens)
+		fmt.Println("tokens handleIdentityVerification-5", tokens)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		// http.Redirect(w, r, "/", http.StatusSeeOther)
 	} else {
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
@@ -337,6 +344,7 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 }
 
 func requestAccess(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("request access-1")
 	tokens, err := getAccess(r)
 	if err != nil {
 		if errors.Is(err, ErrNotAuthenticated) {
@@ -346,19 +354,22 @@ func requestAccess(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(*tokens)
+	err = json.NewEncoder(w).Encode(*tokens)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	fmt.Println("request access", w)
 }
 
 func getAccess(r *http.Request) (*Tokens, error) {
-
-	var tokensData *UserTokensData
-	err := json.NewDecoder(r.Body).Decode(&tokensData)
+	fmt.Println("get access-1")
+	tokensData, err := extractUserTokensInfo(r)
 	if err != nil {
 		return nil, err
 	}
-
 	refreshToken := tokensData.RefreshToken
+	fmt.Println("get access-2", refreshToken)
 	if refreshToken == "" {
 		return nil, fmt.Errorf("refresh token not found")
 	}
@@ -370,15 +381,16 @@ func getAccess(r *http.Request) (*Tokens, error) {
 		}
 		return nil, err
 	}
+	fmt.Println("get access-3")
 	accessToken := tokensData.AccessToken
 	if accessToken == "" {
 		return nil, fmt.Errorf("access token not found")
 	}
-	fmt.Println("handle access-2")
+	fmt.Println("get access-4", accessToken)
 	_, err = verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
 	if err != nil {
 		if errors.Is(err, ErrTokenExpired) {
-			fmt.Println("handle access-3")
+			fmt.Println("handle access-5")
 			accessToken, err = generateAccessToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
 			if err != nil {
 				return nil, err
@@ -390,10 +402,8 @@ func getAccess(r *http.Request) (*Tokens, error) {
 			}
 		}
 	}
-	idCookie, _ := r.Cookie("id_token")
-	idToken := idCookie.Value
-	fmt.Println("handle tokens", idToken, accessToken, refreshToken)
-	return &Tokens{IdToken: idToken, AccessToken: accessToken, RefreshToken: refreshToken}, nil
+	fmt.Println("handle tokens", accessToken, refreshToken)
+	return &Tokens{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
 func logout(w http.ResponseWriter, r *http.Request) {
@@ -431,23 +441,12 @@ func ValidateAccessMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		log.Printf("Auth middleware triggered for: %s\n", r.URL.Path)
-		session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
+		tokensData, err := extractUserTokensInfo(r)
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			http.Error(w, "Unauthorized", http.StatusBadRequest)
 			return
 		}
-		authenticated, ok := session.Values["authenticated"].(bool)
-		if !ok || !authenticated {
-			http.Error(w, ErrNotAuthenticated.Error(), http.StatusUnauthorized)
-			return
-		}
-		accessCookie, err := r.Cookie("access_token")
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		accessToken := accessCookie.Value
-		claims, err := verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
+		claims, err := verifyToken(tokensData.AccessToken, "access_token", true, oauthInfo.jwtSecret)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -525,6 +524,15 @@ func verifyIdentity(r *http.Request) (bool, error) {
 	return true, nil
 }
 
+func extractUserTokensInfo(r *http.Request) (*UserTokensInfo, error) {
+	var tokensData *UserTokensInfo
+	err := json.NewDecoder(r.Body).Decode(&tokensData)
+	if err != nil {
+		return nil, err
+	}
+	return tokensData, nil
+}
+
 func generateState() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -537,4 +545,4 @@ func generateState() string {
 // http://localhost/oauth/verifySignature?identity=0x76C09917EF1A6E885affCb8B14c0E09df271F393&identityCurve=ecdsa&signature=0x2b7fe067cf63bbfff8df636002eb6f71f4610b3958e75e759a2f6633c75c0a03147da8cbcbf788174b3c771e829ac5089a3cbc6511f9b76f2575ba2dd64dbfdd1b
 // http://localhost/oauth/verifySignature?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&signature=0xbc490764bf20e3e55f100555d9e1fd84c41fa658850332c388cd8f40d554983b68db49713591539f24cf7d4bcb68f17c89930c314ef7581cf7805b247683b8561b
 // http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&auth=oauth
-// http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa
+// http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&auth=oauth

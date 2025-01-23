@@ -549,8 +549,8 @@ func startHTTPServer(port string, oauthEnabled bool) {
 
 	router.HandleFunc("/oauth/accessToken", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
-		requestAccess(w, r)
 		fmt.Println("/oauth/accessToken")
+		requestAccess(w, r)
 	})
 
 	router.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
@@ -566,7 +566,6 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	})
 
 	router.HandleFunc("/oauth/verifySignature", func(w http.ResponseWriter, r *http.Request) {
-		// store it in db
 		enableCors(&w)
 		handleIdentityVerification(w, r)
 	})

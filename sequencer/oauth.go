@@ -53,6 +53,17 @@ type Tokens struct {
 	IdToken      string `json:"id_token"`
 }
 
+type UserTokensData struct {
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	Name         string `json:"name"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	IdToken      string `json:"id_token"`
+	Expiry       uint64 `json:"expiry"`
+	Signature    string `json:"signature"`
+}
+
 type ClaimsWithIdentity struct {
 	Email             string `json:"email"`
 	Name              string `json:"name"`
@@ -276,42 +287,27 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
-	session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
+
+	var tokensData *UserTokensData
+	err := json.NewDecoder(r.Body).Decode(&tokensData)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	// check if authenticated
-	authenticated, ok := session.Values["authenticated"].(bool)
-	if !ok || !authenticated {
-		http.Error(w, ErrNotAuthenticated.Error(), http.StatusUnauthorized)
-		return
-	}
-	accessCookie, err := r.Cookie("access_token")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	accessToken := accessCookie.Value
-	_, err = verifyToken(accessToken, "access_token", false, oauthInfo.jwtSecret)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	identity := r.URL.Query().Get("identity")
 	identityCurve := r.URL.Query().Get("identityCurve")
-	signature := r.URL.Query().Get("signature")
+	signature := tokensData.Signature
 	message := oauthInfo.message
 
 	userInfo := &UserInfo{
-		ID:            session.Values["user"].(*UserInfo).ID,
-		Name:          session.Values["user"].(*UserInfo).Name,
-		Email:         session.Values["user"].(*UserInfo).Email,
+		ID:            tokensData.ID,
+		Name:          tokensData.Name,
+		Email:         tokensData.Email,
 		Identity:      identity,
 		IdentityCurve: identityCurve,
 	}
-	fmt.Println("userInfo", userInfo)
+
 	verified, err := common.VerifySignature(
 		identity,
 		identityCurve,
@@ -325,13 +321,8 @@ func handleIdentityVerification(w http.ResponseWriter, r *http.Request) {
 	//get the old access and id token
 	if verified {
 		idToken, _ := generateIdToken(*userInfo, identity, identityCurve, signature)
-		accessToken, _ = generateAccessToken(userInfo.ID, identity, identityCurve)
+		accessToken, _ := generateAccessToken(userInfo.ID, identity, identityCurve)
 		refreshToken, _ := generateRefreshToken(userInfo.ID, identity, identityCurve)
-		session.Values["user"] = &userInfo
-		session.Save(r, w)
-		SetTokenCookie(w, accessToken, "access_token")
-		SetTokenCookie(w, idToken, "id_token")
-		SetTokenCookie(w, refreshToken, "refresh_token")
 
 		tokens := Tokens{
 			AccessToken:  accessToken,
@@ -360,20 +351,18 @@ func requestAccess(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAccess(r *http.Request) (*Tokens, error) {
-	session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
+
+	var tokensData *UserTokensData
+	err := json.NewDecoder(r.Body).Decode(&tokensData)
 	if err != nil {
 		return nil, err
 	}
-	authenticated, ok := session.Values["authenticated"].(bool)
-	if !ok || !authenticated {
-		return nil, ErrNotAuthenticated
+
+	refreshToken := tokensData.RefreshToken
+	if refreshToken == "" {
+		return nil, fmt.Errorf("refresh token not found")
 	}
-	fmt.Println("get-access-2")
-	refreshCookie, err := r.Cookie("refresh_token")
-	if err != nil {
-		return nil, err
-	}
-	refreshToken := refreshCookie.Value
+
 	refreshClaims, err := verifyToken(refreshToken, "refresh_token", true, oauthInfo.jwtSecret)
 	if err != nil {
 		if errors.Is(err, ErrTokenExpired) {
@@ -381,12 +370,11 @@ func getAccess(r *http.Request) (*Tokens, error) {
 		}
 		return nil, err
 	}
-	accessCookie, err := r.Cookie("access_token")
-	if err != nil {
-		return nil, err
+	accessToken := tokensData.AccessToken
+	if accessToken == "" {
+		return nil, fmt.Errorf("access token not found")
 	}
 	fmt.Println("handle access-2")
-	accessToken := accessCookie.Value
 	_, err = verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
 	if err != nil {
 		if errors.Is(err, ErrTokenExpired) {
@@ -548,4 +536,5 @@ func generateState() string {
 // https://www.unicorn.studio/embed/SaCYz48FXaFwo5ifY36I?preview=true
 // http://localhost/oauth/verifySignature?identity=0x76C09917EF1A6E885affCb8B14c0E09df271F393&identityCurve=ecdsa&signature=0x2b7fe067cf63bbfff8df636002eb6f71f4610b3958e75e759a2f6633c75c0a03147da8cbcbf788174b3c771e829ac5089a3cbc6511f9b76f2575ba2dd64dbfdd1b
 // http://localhost/oauth/verifySignature?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&signature=0xbc490764bf20e3e55f100555d9e1fd84c41fa658850332c388cd8f40d554983b68db49713591539f24cf7d4bcb68f17c89930c314ef7581cf7805b247683b8561b
-// http://localhost/oauth/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa
+// http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&auth=oauth
+// http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa

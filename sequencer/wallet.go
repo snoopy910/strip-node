@@ -69,6 +69,31 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
+	// create the wallet whose keycurve is eddsa here
+	createWalletRequest = CreateWalletRequest{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		KeyCurve:      "aptos_eddsa",
+		Signers:       signersPublicKeyList,
+	}
+
+	marshalled, err = json.Marshal(createWalletRequest)
+	if err != nil {
+		return err
+	}
+
+	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client = http.Client{Timeout: 3 * time.Minute}
+	_, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+
 	// create the wallet whose keycurve is ecdsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
@@ -116,6 +141,26 @@ func createWallet(identity string, identityCurve string) error {
 
 	eddsaAddress := getAddressResponse.Address
 
+	// get the address of the wallet whose keycurve is aptos_eddsa here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=aptos_eddsa")
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(body, &getAddressResponse)
+	if err != nil {
+		return err
+	}
+
+	aptosEddsaAddress := getAddressResponse.Address
+
 	// get the address of the wallet whose keycurve is ecdsa here
 	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=ecdsa")
 	if err != nil {
@@ -139,11 +184,12 @@ func createWallet(identity string, identityCurve string) error {
 
 	// add created wallet to the store
 	wallet := WalletSchema{
-		Identity:       identity,
-		IdentityCurve:  identityCurve,
-		Signers:        strings.Join(signersPublicKeyList, ","),
-		EDDSAPublicKey: eddsaAddress,
-		ECDSAPublicKey: ecdsaAddress,
+		Identity:            identity,
+		IdentityCurve:       identityCurve,
+		Signers:             strings.Join(signersPublicKeyList, ","),
+		EDDSAPublicKey:      eddsaAddress,
+		AptosEDDSAPublicKey: aptosEddsaAddress,
+		ECDSAPublicKey:      ecdsaAddress,
 	}
 
 	_, err = AddWallet(&wallet)

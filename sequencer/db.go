@@ -39,12 +39,13 @@ type OperationSchema struct {
 }
 
 type WalletSchema struct {
-	Id             int64  `json:"id"`
-	Identity       string `json:"identity"`
-	IdentityCurve  string `json:"identityCurve"`
-	EDDSAPublicKey string `json:"eddsaPublicKey"`
-	ECDSAPublicKey string `json:"ecdsaPublicKey"`
-	Signers        string `json:"signers"`
+	Id                  int64  `json:"id"`
+	Identity            string `json:"identity"`
+	IdentityCurve       string `json:"identityCurve"`
+	EDDSAPublicKey      string `json:"eddsaPublicKey"`
+	AptosEDDSAPublicKey string `json:"aptosEddsaPublicKey"`
+	ECDSAPublicKey      string `json:"ecdsaPublicKey"`
+	Signers             string `json:"signers"`
 }
 
 type LockSchema struct {

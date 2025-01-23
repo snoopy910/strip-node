@@ -3,8 +3,6 @@ package sequencer
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"filippo.io/edwards25519"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/util"
@@ -149,7 +146,7 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
 
-					} else if operation.KeyCurve == "eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
 						chain, err := GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -176,7 +173,14 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "aptos" {
-							txnHash, err = sendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							// Convert public key
+							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Printf("error getting public key: %v", err)
+								break
+							}
+							txnHash, err = sendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.AptosEDDSAPublicKey, signature)
+							fmt.Println(txnHash)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -827,7 +831,7 @@ func ProcessIntent(intentId int64) {
 							fmt.Println(err)
 							break
 						}
-					} else if operation.KeyCurve == "eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
 						chain, err := GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1334,7 +1338,7 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	return hash.String(), nil
 }
 
-func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
+func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string, publicKey string, signatureHex string) (string, error) {
 	chain, err := GetChain(chainId)
 	if err != nil {
 		return "", fmt.Errorf("error getting chain: %v", err)
@@ -1342,44 +1346,41 @@ func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string,
 
 	client := aptosClient.NewAptosClient(chain.ChainUrl)
 
+	// Construct the transaction from seralizedTxn
+	tx := &aptosModels.Transaction{}
+
+	rawTxn := &aptosModels.RawTransaction{}
+
 	serializedTxn = strings.TrimPrefix(serializedTxn, "0x")
 	decodedTransactionData, err := hex.DecodeString(serializedTxn)
 	if err != nil {
 		return "", fmt.Errorf("error decoding transaction data: %v", err)
 	}
 
-	rawTxn := &aptosModels.RawTransaction{}
-
 	err = lcs.Unmarshal(decodedTransactionData, rawTxn)
 	if err != nil {
 		fmt.Println("error unmarshalling raw transaction: ", err)
 	}
 
-	tx := &aptosModels.Transaction{}
 	tx.RawTransaction = *rawTxn
 
-	convertedSignature, err := convertEdDSASignatureForAptos(signatureBase58)
-	if err != nil {
-		return "", fmt.Errorf("error converting signature: %v", err)
-	}
-
-	signature, err := hex.DecodeString(convertedSignature)
+	// Retreive signatureHex
+	signature, err := hex.DecodeString(signatureHex)
 	if err != nil {
 		return "", fmt.Errorf("error decoding signature: %v", err)
 	}
 
-	accInfo, err := client.GetAccount(context.Background(), tx.Sender.ToHex())
+	// Sign transaction with pubKey and signature
+	publicKeyBytes, err := hex.DecodeString(strings.TrimPrefix(publicKey, "0x"))
 	if err != nil {
-		return "", fmt.Errorf("failed to get account resources: %v", err)
+		return "", fmt.Errorf("error decoding public key: %v", err)
 	}
-
-	publicKey, _ := hex.DecodeString(strings.TrimPrefix(accInfo.AuthenticationKey, "0x"))
-
 	signedTx := tx.SetAuthenticator(aptosModels.TransactionAuthenticatorEd25519{
-		PublicKey: publicKey,
+		PublicKey: publicKeyBytes,
 		Signature: signature,
 	})
 
+	// Submit transaction
 	response, err := client.SubmitTransaction(context.Background(), signedTx.UserTransaction)
 	if err != nil {
 		return "", fmt.Errorf("error submitting transaction: %v", err)
@@ -1388,57 +1389,4 @@ func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string,
 	fmt.Println("Submitted aptos transaction with hash:", response.Hash)
 
 	return response.Hash, nil
-}
-
-func convertEdDSASignatureForAptos(signature string) (string, error) {
-	// Convert EdDSA signature to hex format for Aptos
-	decodedSignature, err := base58.Decode(signature)
-	if err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(decodedSignature), nil
-}
-
-func Verify(publicKey ed25519.PublicKey, message, sig []byte) bool {
-	if l := len(publicKey); l != 32 {
-		panic("ed25519: bad public key length: " + strconv.Itoa(l))
-	}
-
-	if len(sig) != 64 || sig[63]&224 != 0 {
-		fmt.Println("sig?")
-		return false
-	}
-
-	A, err := (&edwards25519.Point{}).SetBytes(publicKey)
-	if err != nil {
-		fmt.Println("A?")
-		return false
-	}
-
-	kh := sha512.New()
-	kh.Write(sig[:32])
-	kh.Write(publicKey)
-	kh.Write(message)
-	hramDigest := make([]byte, 0, sha512.Size)
-	hramDigest = kh.Sum(hramDigest)
-	k, err := edwards25519.NewScalar().SetUniformBytes(hramDigest)
-	if err != nil {
-		fmt.Println("here?")
-		panic("ed25519: internal error: setting scalar failed")
-	}
-
-	S, err := edwards25519.NewScalar().SetCanonicalBytes(sig[32:])
-	if err != nil {
-		fmt.Println("final?")
-		return false
-	}
-
-	// [S]B = R + [k]A --> [k](-A) + [S]B = R
-	minusA := (&edwards25519.Point{}).Negate(A)
-	R := (&edwards25519.Point{}).VarTimeDoubleScalarBaseMult(k, minusA, S)
-
-	fmt.Println("R: ", R.Bytes())
-	fmt.Println("Sig: ", sig[:32])
-	return bytes.Equal(sig[:32], R.Bytes())
 }

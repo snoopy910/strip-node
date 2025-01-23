@@ -99,15 +99,8 @@ func handleIncomingMessage(message []byte) {
 		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
 		if msg.KeyCurve == EDDSA_CURVE {
-			hashStr := string(msg.Hash)
-			if strings.HasPrefix(hashStr, "0x") {
-				if val, ok := messageChan[hashStr]; ok {
-					val <- msg
-				}
-			} else {
-				if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
-					val <- msg
-				}
+			if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
+				val <- msg
 			}
 		} else {
 			if val, ok := messageChan[string(msg.Hash)]; ok {

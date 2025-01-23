@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	identityVerification "github.com/StripChain/strip-node/identity"
@@ -23,9 +22,10 @@ import (
 var messageChan = make(map[string]chan (Message))
 var keygenGeneratedChan = make(map[string]chan (string))
 
-var (
-	ECDSA_CURVE = "ecdsa"
-	EDDSA_CURVE = "eddsa"
+const (
+	ECDSA_CURVE       = "ecdsa"
+	EDDSA_CURVE       = "eddsa"
+	APTOS_EDDSA_CURVE = "aptos_eddsa"
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -123,6 +123,24 @@ func startHTTPServer(port string) {
 
 			getAddressResponse := GetAddressResponse{
 				Address: publicKeyStr,
+			}
+			err := json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
+		} else if keyCurve == APTOS_EDDSA_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+			getAddressResponse := GetAddressResponse{
+				Address: "0x" + publicKeyStr,
 			}
 			err := json.NewEncoder(w).Encode(getAddressResponse)
 			if err != nil {
@@ -230,20 +248,11 @@ func startHTTPServer(port string) {
 		}
 
 		if keyCurve == EDDSA_CURVE {
-			var msgBytes []byte
-			var err error
-
-			// If starts with 0x, treat as hex
-			if strings.HasPrefix(msg, "0x") {
-				msgBytes = []byte(msg)
-			} else {
-				msgBytes, err = base58.Decode(msg)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-					return
-				}
+			msgBytes, err := base58.Decode(msg)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+				return
 			}
-
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else if keyCurve == ECDSA_CURVE {
 			if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT ||
@@ -254,6 +263,8 @@ func startHTTPServer(port string) {
 			} else {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 			}
+		} else if keyCurve == APTOS_EDDSA_CURVE {
+			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else {
 			http.Error(w, "invalid key curve", http.StatusBadRequest)
 			return
@@ -269,6 +280,10 @@ func startHTTPServer(port string) {
 
 		if keyCurve == ECDSA_CURVE {
 			signatureResponse.Signature = string(sig.Message)
+			signatureResponse.Address = sig.Address
+		} else if keyCurve == APTOS_EDDSA_CURVE {
+			signatureResponse.Signature = hex.EncodeToString(sig.Message)
+			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address
 		} else {
 			signatureResponse.Signature = base58.Encode(sig.Message)

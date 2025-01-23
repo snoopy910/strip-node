@@ -1,4 +1,4 @@
-package sequencer
+package common
 
 import "fmt"
 
@@ -63,7 +63,7 @@ var Chains = []Chain{
 	{
 		ChainId:     "167",
 		ChainType:   "aptos",
-		ChainUrl:    "https://fullnode.devnet.aptoslabs.com",
+		ChainUrl:    "https://fullnode.testnet.aptoslabs.com",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "APT",
 	},

@@ -14,10 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bridge"
+	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/util"
-	"github.com/ethereum/go-ethereum/common"
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -25,9 +27,6 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/mr-tron/base58"
-	aptosClient "github.com/portto/aptos-go-sdk/client"
-	aptosModels "github.com/portto/aptos-go-sdk/models"
-	"github.com/the729/lcs"
 )
 
 type MintOutput struct {
@@ -147,7 +146,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
-						chain, err := GetChain(operation.ChainId)
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -179,7 +178,7 @@ func ProcessIntent(intentId int64) {
 								fmt.Printf("error getting public key: %v", err)
 								break
 							}
-							txnHash, err = sendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.AptosEDDSAPublicKey, signature)
+							txnHash, err = aptos.SendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.AptosEDDSAPublicKey, signature)
 							fmt.Println(txnHash)
 							if err != nil {
 								fmt.Println(err)
@@ -375,14 +374,14 @@ func ProcessIntent(intentId int64) {
 
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
-					} else if depositOperation.KeyCurve == "eddsa" {
-						chain, err := GetChain(operation.ChainId)
+					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
 
-						var transfers []Transfer
+						var transfers []common.Transfer
 
 						if chain.ChainType == "solana" {
 							transfers, err = GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
@@ -393,7 +392,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "aptos" {
-							transfers, err = GetAptosTransfers(depositOperation.ChainId, depositOperation.Result)
+							transfers, err = aptos.GetAptosTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -636,7 +635,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					withdrawalChain, err := GetChain(operation.ChainId)
+					withdrawalChain, err := common.GetChain(operation.ChainId)
 
 					if err != nil {
 						fmt.Println(err)
@@ -832,7 +831,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
-						chain, err := GetChain(operation.ChainId)
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -847,7 +846,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "aptos" {
-							confirmed, err = checkAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -875,8 +874,8 @@ func ProcessIntent(intentId int64) {
 							fmt.Println(err)
 							break
 						}
-					} else if operation.KeyCurve == "eddsa" {
-						chain, err := GetChain(operation.ChainId)
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -891,7 +890,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "aptos" {
-							confirmed, err = checkAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1016,8 +1015,8 @@ func ProcessIntent(intentId int64) {
 							fmt.Println(err)
 							break
 						}
-					} else if operation.KeyCurve == "eddsa" {
-						chain, err := GetChain(operation.ChainId)
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -1032,7 +1031,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "aptos" {
-							confirmed, err = checkAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1073,8 +1072,8 @@ func ProcessIntent(intentId int64) {
 									break
 								}
 							}
-						} else if depositOperation.KeyCurve == "eddsa" {
-							chain, err := GetChain(depositOperation.ChainId)
+						} else if depositOperation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1098,7 +1097,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							if chain.ChainType == "aptos" {
-								txnConfirmed, err := checkAptosTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := aptos.CheckAptosTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -1192,7 +1191,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 }
 
 func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return false, err
 	}
@@ -1202,7 +1201,7 @@ func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) 
 		log.Fatal(err)
 	}
 
-	_, isPending, err := client.TransactionByHash(context.Background(), common.HexToHash(txnHash))
+	_, isPending, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))
 	if err != nil {
 		return false, err
 	}
@@ -1211,7 +1210,7 @@ func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) 
 }
 
 func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return false, err
 	}
@@ -1237,28 +1236,8 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 
 }
 
-func checkAptosTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := GetChain(chainId)
-	if err != nil {
-		return false, err
-	}
-
-	client := aptosClient.NewAptosClient(chain.ChainUrl)
-
-	tx, err := client.GetTransactionByHash(context.Background(), txnHash)
-	if err != nil {
-		return false, err
-	}
-
-	if tx.Success {
-		return true, nil
-	} else {
-		return false, nil
-	}
-}
-
 func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
 	}
@@ -1298,7 +1277,7 @@ func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, d
 }
 
 func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
 	}
@@ -1336,57 +1315,4 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	}
 
 	return hash.String(), nil
-}
-
-func sendAptosTransaction(serializedTxn string, chainId string, keyCurve string, publicKey string, signatureHex string) (string, error) {
-	chain, err := GetChain(chainId)
-	if err != nil {
-		return "", fmt.Errorf("error getting chain: %v", err)
-	}
-
-	client := aptosClient.NewAptosClient(chain.ChainUrl)
-
-	// Construct the transaction from seralizedTxn
-	tx := &aptosModels.Transaction{}
-
-	rawTxn := &aptosModels.RawTransaction{}
-
-	serializedTxn = strings.TrimPrefix(serializedTxn, "0x")
-	decodedTransactionData, err := hex.DecodeString(serializedTxn)
-	if err != nil {
-		return "", fmt.Errorf("error decoding transaction data: %v", err)
-	}
-
-	err = lcs.Unmarshal(decodedTransactionData, rawTxn)
-	if err != nil {
-		fmt.Println("error unmarshalling raw transaction: ", err)
-	}
-
-	tx.RawTransaction = *rawTxn
-
-	// Retreive signatureHex
-	signature, err := hex.DecodeString(signatureHex)
-	if err != nil {
-		return "", fmt.Errorf("error decoding signature: %v", err)
-	}
-
-	// Sign transaction with pubKey and signature
-	publicKeyBytes, err := hex.DecodeString(strings.TrimPrefix(publicKey, "0x"))
-	if err != nil {
-		return "", fmt.Errorf("error decoding public key: %v", err)
-	}
-	signedTx := tx.SetAuthenticator(aptosModels.TransactionAuthenticatorEd25519{
-		PublicKey: publicKeyBytes,
-		Signature: signature,
-	})
-
-	// Submit transaction
-	response, err := client.SubmitTransaction(context.Background(), signedTx.UserTransaction)
-	if err != nil {
-		return "", fmt.Errorf("error submitting transaction: %v", err)
-	}
-
-	fmt.Println("Submitted aptos transaction with hash:", response.Hash)
-
-	return response.Hash, nil
 }

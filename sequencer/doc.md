@@ -85,15 +85,52 @@ curl --location 'localhost:8082/getIntents?status=processing'
 ### Setup
 
 
+
+Steps to setup Google oauth2 login require the following:
+
+** Creating the credentials - Client ID and Client Secret - described in https://developers.google.com/workspace/guides/create-credentials
+
+** Creating the oauth consent screen - described in https://developers.google.com/workspace/guides/configure-oauth-consent
+
+Example for an oauth instance for StripChain:
+
+Credentials: https://console.cloud.google.com/apis/credentials?inv=1&invt=AbnkgA&project=stripchain
+OAuth consent screen: https://console.cloud.google.com/apis/credentials/consent?inv=1&invt=AbnkgA&project=stripchain
+
+
 ### Endpoints
 
 `/oauth/login`: Login with Google
 
-`/oauth/callback`: Callback from Google - checks if the user is authenticated and have a valid access token otherwise it will authenticate the user
+`/oauth/callback`: Callback from Google - checks if the user is authenticated and have a valid access token otherwise it will authenticate the user and redirect to the `/oauth/verifySignature` to verify the identity wallet
 
-`/oauth/verifySignature`: Verifies the signature of the predefined message signed by the user's identity wallet and creates a new id,access and refresh tokens including the identity and identity curve.
+`/oauth/verifySignature`: Verifies the signature of the predefined message signed by the user's identity wallet and creates a new id, access and refresh tokens including the identity and identity curve.
 
-`/oauth/accessToken`: Get a new access token when the refresh token is still valid.
+`/oauth/accessToken`: Generates a new access token when the current refresh token is still valid. It will return the new access token and the new refresh token
+
+`/oauth/logout`: Logs out the user
+
+A middleware validator is used at the router level to check if the user is authenticated and have a valid access token. It is activated if oauth authentication is enabled by setting the environment variable `ENABLE_OAUTH=true` or the `--enableOauth` flag.
+
+Endpoints `/oauth/*` are exempt from the middleware validator.
+
+The middleware validator checks if the URL path contains the `auth` query parameter with the value `oauth`. If it does, the middleware will check if the user is authenticated and have a valid access token. If the `auth` query parameter with the value `oauth` is not present, the middleware will pass the request to the next handler without checking if the user is authenticated and have a valid access token (to be validated with Nikolay)
+
 
 
 ### Environment Variables
+
+* `CLIENT_ID` - The client ID of the Google OAuth 2.0 application.
+
+* `CLIENT_SECRET` - The client secret of the Google OAuth 2.0 application.
+
+* `REDIRECT_URL` - The redirect URI for the Google OAuth 2.0 application.
+
+* `JWT_SECRET` - The secret key used to sign and verify JWT tokens.
+
+* `SESSION_SECRET` - The secret key used to encrypt and decrypt session data.
+
+* `MESSAGE` - The message to be signed by the identity wallet.
+
+* `ENABLE_OAUTH` - If set to true, the OAuth endpoints will be enabled.
+

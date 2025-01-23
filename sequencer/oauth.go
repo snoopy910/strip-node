@@ -437,6 +437,11 @@ func ValidateAccessMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		auth := r.URL.Query().Get("auth")
+		if auth != "oauth" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		log.Printf("Auth middleware triggered for: %s\n", r.URL.Path)
 		session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
 		if err != nil {

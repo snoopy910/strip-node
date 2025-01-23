@@ -88,13 +88,18 @@ curl --location 'localhost:8082/getIntents?status=processing'
 
 Steps to setup Google oauth2 login require the following:
 
-** Creating the credentials - Client ID and Client Secret - described in https://developers.google.com/workspace/guides/create-credentials
+* Creating the credentials - Client ID and Client Secret - described in:
 
-** Creating the oauth consent screen - described in https://developers.google.com/workspace/guides/configure-oauth-consent
+ https://developers.google.com/workspace/guides/create-credentials
+
+* Creating the oauth consent screen - described in:
+
+ https://developers.google.com/workspace/guides/configure-oauth-consent
 
 Example for an oauth instance for StripChain:
 
 Credentials: https://console.cloud.google.com/apis/credentials?inv=1&invt=AbnkgA&project=stripchain
+
 OAuth consent screen: https://console.cloud.google.com/apis/credentials/consent?inv=1&invt=AbnkgA&project=stripchain
 
 
@@ -114,8 +119,15 @@ A middleware validator is used at the router level to check if the user is authe
 
 Endpoints `/oauth/*` are exempt from the middleware validator.
 
-The middleware validator checks if the URL path contains the `auth` query parameter with the value `oauth`. If it does, the middleware will check if the user is authenticated and have a valid access token. If the `auth` query parameter with the value `oauth` is not present, the middleware will pass the request to the next handler without checking if the user is authenticated and have a valid access token (to be validated with Nikolay)
+The middleware validator checks if the URL path contains the `auth` query parameter with the value `oauth`. If it does, the middleware will check if the user is authenticated and have a valid access token. If the `auth` query parameter with the value `oauth` is not present, the middleware will pass the request to the next handler without checking if the user is authenticated and have a valid access token (to be validated with Nikolay).
 
+Example:
+
+oauth enabled and auth=`oauth`:
+http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa&auth=oauth
+
+oauth enabled or not enabled and auth is not `oauth`:
+http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff93&identityCurve=ecdsa 
 
 
 ### Environment Variables

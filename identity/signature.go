@@ -132,8 +132,9 @@ func VerifySignature(
 		r := new(big.Int).SetBytes(sigBytes[:32])
 		s := new(big.Int).SetBytes(sigBytes[32:64])
 
-		// Hash the message using SHA-256
-		hash := sha256.Sum256([]byte(message))
+		// Hash the message using double SHA-256 (as required by Bitcoin)
+		firstHash := sha256.Sum256([]byte(message))
+		hash := sha256.Sum256(firstHash[:]) // Second round of SHA-256
 
 		// Verify the signature using ECDSA
 		valid := ecdsa.Verify(pubKey, hash[:], r, s)

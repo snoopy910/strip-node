@@ -25,8 +25,9 @@ func TestVerifySignatureSecp256k1Success(t *testing.T) {
 	// Create a message to sign
 	message := "Hello, Bitcoin!"
 
-	// Hash the message using SHA-256
-	hash := sha256.Sum256([]byte(message))
+	// Hash the message using double SHA-256 (as required by Bitcoin)
+	firstHash := sha256.Sum256([]byte(message))
+	hash := sha256.Sum256(firstHash[:])
 
 	// Sign the hash
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
@@ -64,8 +65,9 @@ func TestVerifySignatureSecp256k1Fail(t *testing.T) {
 	// Create a message to sign
 	message := "Hello, Bitcoin!"
 
-	// Hash the message using SHA-256
-	hash := sha256.Sum256([]byte(message))
+	// Hash the message using double SHA-256 (as required by Bitcoin)
+	firstHash := sha256.Sum256([]byte(message))
+	hash := sha256.Sum256(firstHash[:])
 
 	// Sign the hash
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])

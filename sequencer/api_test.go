@@ -3,10 +3,16 @@ package sequencer
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/gorilla/mux"
 )
 
 // TestCreateWalletEndpoint tests the /createWallet endpoint for creating a wallet.
@@ -104,6 +110,7 @@ func TestGetWalletEndpoint(t *testing.T) {
 // TestCreateIntent tests the /createIntent endpoint for creating an intent.
 // It verifies the JSON payload and response status code.
 func TestCreateIntent(t *testing.T) {
+	fmt.Println("TestCreateIntent")
 	// Create a test intent
 	testIntent := Intent{
 		Identity:      "testIdentity",
@@ -118,7 +125,7 @@ func TestCreateIntent(t *testing.T) {
 			},
 		},
 	}
-
+	fmt.Println(testIntent)
 	// Convert intent to JSON
 	intentJSON, err := json.Marshal(testIntent)
 	if err != nil {
@@ -164,6 +171,7 @@ func TestCreateIntent(t *testing.T) {
 // It checks the response status code and verifies the returned intent data.
 func TestGetIntent(t *testing.T) {
 	// Create test request
+	fmt.Println("TestGetIntent")
 	req := httptest.NewRequest("GET", "/getIntent?id=1", nil)
 	w := httptest.NewRecorder()
 
@@ -395,5 +403,159 @@ func TestStatusEndpoint(t *testing.T) {
 
 	if w.Body.String() != "OK" {
 		t.Errorf("Status endpoint returned wrong body: got %v want OK", w.Body.String())
+	}
+}
+
+// OAuth tests
+
+func testHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println(r)
+	id, ok := r.Context().Value(identityAccess).(*IdentityAccess)
+	if !ok {
+		http.Error(w, "id not found in context", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ID: " + id.Identity))
+}
+
+func generateTestToken(userId string, expiryAt time.Time, identity string, identityCurve string) (string, error) {
+	claims := ClaimsWithIdentity{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expiryAt), // Token expires after 10min
+			Issuer:    tokenIssuer,
+			Subject:   userId,
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	// Create the token using HS256 signing method
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Sign and get the complete encoded token as a string
+	return token.SignedString([]byte(oauthInfo.jwtSecret))
+}
+
+func TestValidateAccessMiddleware(t *testing.T) {
+	router := mux.NewRouter()
+	router.Use(ValidateAccessMiddleware)
+	router.HandleFunc("/testOAuth", testHandler)
+
+	oauthInfo = initializeGoogleOauth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "message")
+
+	// Valid token
+	accessTokenValid, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
+	// Invalid Expired token
+	accessTokenExpired, _ := generateTestToken("1", time.Now(), "0xa", "ecdsa")
+	// Invalid No Identity token
+	accessTokenNoIdentity, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "", "")
+
+	tests := []struct {
+		name           string
+		token          string
+		expectedStatus int
+		expectedBody   string
+		tokens         *Tokens
+	}{
+		{
+			name:           "Valid Token",
+			token:          "validtoken",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "ID: 0xa",
+			tokens: &Tokens{
+				AccessToken: accessTokenValid,
+			},
+		},
+		{
+			name:           "Invalid Token: Expired",
+			token:          "invalidtokenexpired",
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   ErrTokenExpired.Error(),
+			tokens: &Tokens{
+				AccessToken: accessTokenExpired,
+			},
+		},
+		{
+			name:           "Invalid Token: No Identity",
+			token:          "validtokennoidentity",
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   ErrInvalidTokenIdentityRequired.Error(),
+			tokens: &Tokens{
+				AccessToken: accessTokenNoIdentity,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		payloadBuf := new(bytes.Buffer)
+		json.NewEncoder(payloadBuf).Encode(tt.tokens)
+		req, err := http.NewRequest("GET", "/testOAuth?auth=oauth", payloadBuf)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		id := req.Context().Value(identityAccess)
+		fmt.Println("id from Context in test", id)
+		if w.Code != tt.expectedStatus {
+			t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+		}
+
+		// Check the response body
+		if strings.TrimSpace(w.Body.String()) != strings.TrimSpace(tt.expectedBody) {
+			t.Errorf("Expected body to be '%s', got '%s'", strings.TrimSpace(tt.expectedBody), strings.TrimSpace(w.Body.String()))
+		}
+
+	}
+
+}
+
+func TestGetWalletEndpointWithOAuth(t *testing.T) {
+	router := mux.NewRouter()
+	router.Use(ValidateAccessMiddleware)
+
+	tests := []struct {
+		name          string
+		identity      string
+		identityCurve string
+		wantStatus    int
+	}{
+		{
+			name:          "Valid wallet creation",
+			identity:      "testIdentity",
+			identityCurve: "ecdsa",
+			wantStatus:    http.StatusOK,
+		},
+		{
+			name:          "Missing identity",
+			identity:      "",
+			identityCurve: "ecdsa",
+			wantStatus:    http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/createWallet?identity="+tt.identity+"&identityCurve="+tt.identityCurve, nil)
+			w := httptest.NewRecorder()
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if tt.identity == "" {
+						http.Error(w, "identity required", http.StatusInternalServerError)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
+				}).ServeHTTP(w, r)
+			})
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("CreateWallet returned wrong status code: got %v want %v", w.Code, tt.wantStatus)
+			}
+		})
 	}
 }

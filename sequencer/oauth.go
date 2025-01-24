@@ -14,7 +14,6 @@ import (
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -40,7 +39,6 @@ type M map[string]interface{}
 
 type OAuthParameters struct {
 	config     *oauth2.Config
-	session    *sessions.CookieStore
 	jwtSecret  string
 	oauthState string
 	verifier   string
@@ -105,23 +103,12 @@ func initializeGoogleOauth(redirectUrl string, clientId string, clientSecret str
 	// use PKCE to protect against CSRF attacks
 	verifier := oauth2.GenerateVerifier()
 
-	sessionStore := sessions.NewCookieStore([]byte(sessionSecret))
-
-	sessionStore.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   86400 * 30, // 30 days
-		HttpOnly: true,
-		// Secure:   true,                   // Ensures cookie is sent over HTTPS
-		Secure:   false,                   // for localhost testing
-		SameSite: http.SameSiteStrictMode, // CSRF protection
-	}
-
 	gob.Register(&UserInfo{})
 	gob.Register(&M{})
 
 	// State string for CSRF protection
 	oauthState := generateState()
-	return &OAuthParameters{googleOauthConfig, sessionStore, jwtSecret, oauthState, verifier, message}
+	return &OAuthParameters{googleOauthConfig, jwtSecret, oauthState, verifier, message}
 
 }
 func generateIdToken(user UserInfo, identity string, identityCurve string, signedMessage string) (string, error) {
@@ -242,40 +229,26 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Println("userInfo", userInfo)
 		// generate the idToken here without identity and identityCurve
-		session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		session.Values["authenticated"] = true
-		session.Values["user"] = &userInfo
-		session.Save(r, w)
-		fmt.Println("session", session.Values["user"])
-
-		// Generate a JWT id token
 		idToken, err = generateIdToken(userInfo, "", "", "")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Generate a JWT access token
+		// Generate a JWT access token without identity and identityCurve
 		accessToken, err = generateAccessToken(userInfo.ID, "", "")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Generate a JWT access token
+		// Generate a JWT refresh token without identity and identityCurve
 		refreshToken, err = generateRefreshToken(userInfo.ID, "", "")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
-	SetTokenCookie(w, idToken, "id_token")
-	SetTokenCookie(w, accessToken, "access_token")
-	SetTokenCookie(w, refreshToken, "refresh_token")
 
 	tokens = &Tokens{
 		AccessToken:  accessToken,
@@ -406,29 +379,6 @@ func getAccess(r *http.Request) (*Tokens, error) {
 	return &Tokens{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
-func logout(w http.ResponseWriter, r *http.Request) {
-	session, err := oauthInfo.session.Get(r, stripchainGoogleSession)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	// check if authenticated
-	authenticated, ok := session.Values["authenticated"].(bool)
-	if !ok || !authenticated {
-		http.Error(w, ErrNotAuthenticated.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	// Revoke users authentication
-	session.Values["authenticated"] = false
-	session.Values["user"] = nil
-	session.Options.MaxAge = -1 // Delete session
-	session.Save(r, w)
-	SetTokenCookie(w, "", "access_token")
-	SetTokenCookie(w, "", "id_token")
-	SetTokenCookie(w, "", "refresh_token")
-}
-
 func ValidateAccessMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/verifySignature" || r.URL.Path == "/oauth/accessToken" || r.URL.Path == "/oauth/logout" {
@@ -461,19 +411,6 @@ func ValidateAccessMiddleware(next http.Handler) http.Handler {
 
 		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
-	})
-}
-
-func SetTokenCookie(w http.ResponseWriter, token string, tokenType string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     tokenType,
-		Value:    token,
-		HttpOnly: true, // Prevents JavaScript access
-		Secure:   true, // Ensures cookie is sent over HTTPS
-		// Secure:   false,                         // just for localhost testing
-		SameSite: http.SameSiteStrictMode,       // CSRF protection
-		Path:     "/",                           // Cookie path
-		Expires:  time.Now().Add(time.Hour * 1), // Matches token expiration
 	})
 }
 

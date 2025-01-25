@@ -559,15 +559,9 @@ func startHTTPServer(port string, oauthEnabled bool) {
 		handleCallback(w, r)
 	})
 
-	router.HandleFunc("/oauth/logout", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/oauth/sign", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
-		logout(w, r)
-		fmt.Println("/oauth/logout")
-	})
-
-	router.HandleFunc("/oauth/verifySignature", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
-		handleIdentityVerification(w, r)
+		handleSigning(w, r)
 	})
 
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, router))

@@ -12,7 +12,7 @@ var MaximumSigners int
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress string
 var HeliusApiKey string
 var PrivateKey string
-var oauthInfo *OAuthParameters
+var oauthInfo *GoogleAuth
 
 func StartSequencer(
 	httpPort string,
@@ -28,7 +28,7 @@ func StartSequencer(
 	redirectUrl string,
 	jwtSecret string,
 	sessionSecret string,
-	message string,
+	salt string,
 ) {
 	keepAlive := make(chan string)
 
@@ -63,8 +63,8 @@ func StartSequencer(
 
 	if enableOAuth {
 		fmt.Println("Initializing Google OAuth")
-		if redirectUrl != "" && clientId != "" && clientSecret != "" && sessionSecret != "" && jwtSecret != "" && message != "" {
-			oauthInfo = initializeGoogleOauth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, message)
+		if redirectUrl != "" && clientId != "" && clientSecret != "" && sessionSecret != "" && jwtSecret != "" && salt != "" {
+			oauthInfo = NewGoogleAuth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, salt)
 			fmt.Println("Initializing Google OAuth done")
 		} else {
 			panic("Missing OAuth parameters")

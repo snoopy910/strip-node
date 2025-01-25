@@ -443,7 +443,7 @@ func TestValidateAccessMiddleware(t *testing.T) {
 	router.Use(ValidateAccessMiddleware)
 	router.HandleFunc("/testOAuth", testHandler)
 
-	oauthInfo = initializeGoogleOauth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "message")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "message")
 
 	// Valid token
 	accessTokenValid, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
@@ -508,54 +508,5 @@ func TestValidateAccessMiddleware(t *testing.T) {
 			t.Errorf("Expected body to be '%s', got '%s'", strings.TrimSpace(tt.expectedBody), strings.TrimSpace(w.Body.String()))
 		}
 
-	}
-
-}
-
-func TestGetWalletEndpointWithOAuth(t *testing.T) {
-	router := mux.NewRouter()
-	router.Use(ValidateAccessMiddleware)
-
-	tests := []struct {
-		name          string
-		identity      string
-		identityCurve string
-		wantStatus    int
-	}{
-		{
-			name:          "Valid wallet creation",
-			identity:      "testIdentity",
-			identityCurve: "ecdsa",
-			wantStatus:    http.StatusOK,
-		},
-		{
-			name:          "Missing identity",
-			identity:      "",
-			identityCurve: "ecdsa",
-			wantStatus:    http.StatusInternalServerError,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/createWallet?identity="+tt.identity+"&identityCurve="+tt.identityCurve, nil)
-			w := httptest.NewRecorder()
-
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if tt.identity == "" {
-						http.Error(w, "identity required", http.StatusInternalServerError)
-						return
-					}
-					w.WriteHeader(http.StatusOK)
-				}).ServeHTTP(w, r)
-			})
-
-			handler.ServeHTTP(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("CreateWallet returned wrong status code: got %v want %v", w.Code, tt.wantStatus)
-			}
-		})
 	}
 }

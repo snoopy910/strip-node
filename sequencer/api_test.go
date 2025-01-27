@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
 )
@@ -443,7 +444,7 @@ func TestValidateAccessMiddleware(t *testing.T) {
 	router.Use(ValidateAccessMiddleware)
 	router.HandleFunc("/testOAuth", testHandler)
 
-	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "message")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
 
 	// Valid token
 	accessTokenValid, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
@@ -509,4 +510,38 @@ func TestValidateAccessMiddleware(t *testing.T) {
 		}
 
 	}
+}
+
+func TestGoogleAuthWallet(t *testing.T) {
+	fmt.Println("TestGoogleAuthWallet")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	address, curve, _ := oauthInfo.deriveIdentity("1")
+	if 1 != 0 {
+		t.Logf("address: %s, curve: %s", address, curve)
+	}
+	expectedAddress := "0x55d456c10c9E350CD5bB40Ce7B09493aA8A01881"
+	expectedCurve := "ecdsa"
+	if address != expectedAddress || curve != expectedCurve {
+		t.Errorf("Expected address %s and curve %s, got %s and %s", expectedAddress, expectedCurve, address, curve)
+	}
+}
+
+func TestGoogleAuthSign(t *testing.T) {
+	fmt.Println("TestGoogleAuthSign")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	message := strings.TrimSpace("message to sign")
+	signature, _ := oauthInfo.sign("1", message)
+	expectedSignature := "90e6914dda3856a98388ab0fe0b1c86633357d82bdbdaecdac194db595a8ae1357282e1af5ad2015b843daa998a9dceb1d33f5d26eb35cf728156777cebf9a7601"
+	if signature != expectedSignature {
+		t.Errorf("Expected signature %s, got %s", expectedSignature, signature)
+	}
+
+	expectedAddress := "0x55d456c10c9E350CD5bB40Ce7B09493aA8A01881"
+	expectedCurve := "ecdsa"
+	ok, _ := common.VerifySignature(expectedSignature, message, expectedAddress, expectedCurve)
+	fmt.Println("ok", ok)
+	if !ok {
+		t.Errorf("Expected signature to be valid, got false")
+	}
+
 }

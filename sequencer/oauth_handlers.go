@@ -20,6 +20,11 @@ type Signature struct {
 	Signature string `json:"signature"`
 }
 
+type CallbackInfo struct {
+	Tokens *Tokens         `json:"tokens"`
+	Wallet *IdentityAccess `json:"wallet"`
+}
+
 func login(w http.ResponseWriter, r *http.Request) {
 	// adding nonce and hd
 	url := oauthInfo.config.AuthCodeURL(oauthInfo.oauthState, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(oauthInfo.verifier))
@@ -34,6 +39,8 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	var idToken string
 	var accessToken string
 	var refreshToken string
+	var identity string
+	var identityCurve string
 
 	if tokens != nil {
 		idToken = tokens.IdToken
@@ -78,7 +85,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Derive identity from Google ID
-		identity, identityCurve, err := oauthInfo.deriveIdentity(userInfo.ID)
+		identity, identityCurve, err = oauthInfo.deriveIdentity(userInfo.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -100,7 +107,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Generate a JWT refresh
-		refreshToken, err = oauthInfo.generateRefreshToken(userInfo.ID, "", "")
+		refreshToken, err = oauthInfo.generateRefreshToken(userInfo.ID, identity, identityCurve)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -112,7 +119,18 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: refreshToken,
 		IdToken:      idToken,
 	}
-	json.NewEncoder(w).Encode(*tokens)
+
+	id := &IdentityAccess{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+	}
+
+	response := &CallbackInfo{
+		Tokens: tokens,
+		Wallet: id,
+	}
+
+	json.NewEncoder(w).Encode(*response)
 	fmt.Println("tokens", tokens)
 }
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -115,32 +116,46 @@ func NewGoogleAuth(redirectUrl string, clientId string, clientSecret string, ses
 
 // DeriveIdentity derives a deterministic public key from a Google ID
 // This becomes the identity for the MPC wallet
-func (s *GoogleAuth) deriveIdentity(userId string) (publicKey string, curve string, err error) {
+func (s *GoogleAuth) deriveIdentity(userId string) (address string, curve string, err error) {
 	// Create deterministic seed from Google ID and server secret
 	seed := crypto.Keccak256([]byte(userId + s.walletSeedSalt))
 	// Generate private key deterministically
-	privateKey := crypto.ToECDSAUnsafe(seed)
+	privateKey, err := crypto.ToECDSA(seed)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to derive private key: %v", err)
+	}
 
 	// Get public key
-	publicKeyECDSA := privateKey.Public().(*ecdsa.PublicKey)
-	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
+	pubKey := privateKey.Public()
+	publicKeyECDSA, ok := pubKey.(*ecdsa.PublicKey)
+	if !ok {
+		return "", "", fmt.Errorf("error casting public key to ECDSA")
+	}
 
-	return hex.EncodeToString(publicKeyBytes), "ECDSA_CURVE", nil
+	address = crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+	fmt.Println("address google identity", address)
+	return address, "ecdsa", nil
 }
 
 func (s *GoogleAuth) sign(userId string, message string) (string, error) {
 	// Derive private key (same seed as identity derivation)
 	seed := crypto.Keccak256([]byte(userId + s.walletSeedSalt))
-	privateKey := crypto.ToECDSAUnsafe(seed)
+	privateKey, err := crypto.ToECDSA(seed)
+	if err != nil {
+		return "", fmt.Errorf("failed to derive private key: %v", err)
+	}
+	fmt.Println("private key", hex.EncodeToString(crypto.FromECDSA(privateKey)))
 
 	// Hash the message
-	messageHash := crypto.Keccak256Hash([]byte(message))
+	hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(message)) + message)
+	hash := crypto.Keccak256Hash(hashedMessage)
 
 	// Sign the hash
-	signature, err := crypto.Sign(messageHash.Bytes(), privateKey)
+	signature, err := crypto.Sign(hash.Bytes(), privateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign message: %v", err)
 	}
+	signature[64] += 27
 	return hex.EncodeToString(signature), nil
 }
 
@@ -203,7 +218,7 @@ func (s *GoogleAuth) generateRefreshToken(userId string, identity string, identi
 
 func verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretKey string) (*ClaimsWithIdentity, error) {
 	claims := &ClaimsWithIdentity{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) { //interface to define
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

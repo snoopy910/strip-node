@@ -63,7 +63,7 @@ var Chains = []Chain{
 	{
 		ChainId:     "167",
 		ChainType:   "aptos",
-		ChainUrl:    "https://fullnode.testnet.aptoslabs.com",
+		ChainUrl:    "https://fullnode.devnet.aptoslabs.com",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "APT",
 	},

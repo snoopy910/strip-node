@@ -107,9 +107,9 @@ OAuth consent screen: https://console.cloud.google.com/apis/credentials/consent?
 
 `/oauth/login`: Login with Google
 
-`/oauth/callback`: Callback from Google - checks if the user is authenticated and have a valid access token otherwise it will authenticate the user and redirect to the `/oauth/verifySignature` to verify the identity wallet
+`/oauth/callback`: Callback from Google - checks if the user is authenticated and have a valid access token otherwise it will authenticate the user. A wallet will be created for the user if it does not exist derived from the Google ID. This wallet will be used as the identity for the user when they login with the Google oauth.
 
-`/oauth/verifySignature`: Verifies the signature of the predefined message signed by the user's identity wallet and creates a new id, access and refresh tokens including the identity and identity curve.
+`/oauth/sign`: signs the message with the google wallet derived identity.
 
 `/oauth/accessToken`: Generates a new access token when the current refresh token is still valid. It will return the new access token and the new refresh token
 
@@ -144,7 +144,7 @@ http://localhost/createWallet?identity=0x2c8251052663244f37BAc7Bde1C6Cb02bBffff9
 
 * `SESSION_SECRET` - The secret key used to encrypt and decrypt session data.
 
-* `MESSAGE` - The message to be signed by the identity wallet.
+* `SALT` - The salt used to generate deterministic private keys for identity derivation from Google ID.
 
 * `ENABLE_OAUTH` - If set to true, the OAuth endpoints will be enabled.
 

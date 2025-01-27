@@ -3,6 +3,7 @@ package sequencer
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -418,7 +419,7 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ID: " + id.Identity))
 }
 
-func generateTestToken(userId string, expiryAt time.Time, identity string, identityCurve string) (string, error) {
+func generateTestToken(oauthInfo *GoogleAuth, userId string, expiryAt time.Time, identity string, identityCurve string) (string, error) {
 	claims := ClaimsWithIdentity{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
@@ -445,11 +446,11 @@ func TestValidateAccessMiddleware(t *testing.T) {
 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
 
 	// Valid token
-	accessTokenValid, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
+	accessTokenValid, _ := generateTestToken(oauthInfo, "1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
 	// Invalid Expired token
-	accessTokenExpired, _ := generateTestToken("1", time.Now(), "0xa", "ecdsa")
+	accessTokenExpired, _ := generateTestToken(oauthInfo, "1", time.Now(), "0xa", "ecdsa")
 	// Invalid No Identity token
-	accessTokenNoIdentity, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "", "")
+	accessTokenNoIdentity, _ := generateTestToken(oauthInfo, "1", time.Now().Add(time.Minute*10), "", "")
 
 	tests := []struct {
 		name           string
@@ -511,11 +512,9 @@ func TestValidateAccessMiddleware(t *testing.T) {
 }
 
 func TestGoogleAuthGenerateWallet(t *testing.T) {
-	fmt.Println("TestGoogleAuthGenerateWallet")
 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
 	address, curve, _ := oauthInfo.deriveIdentity("someone@gmail.com")
 	if address == "" || curve == "" {
-		fmt.Println("address", address)
 		t.Errorf("Expected address and curve to be set, got empty strings")
 	}
 	isValidAddress := gcommon.IsHexAddress(address)
@@ -530,7 +529,6 @@ func TestGoogleAuthGenerateWallet(t *testing.T) {
 }
 
 func TestGoogleAuthSign(t *testing.T) {
-	fmt.Println("TestGoogleAuthSign")
 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
 	message := strings.TrimSpace("message to sign")
 	signature, _ := oauthInfo.sign("someone@gmail.com", message)
@@ -548,7 +546,6 @@ func TestGoogleAuthSign(t *testing.T) {
 }
 
 func TestGoogleAuthSignEndpoint(t *testing.T) {
-	fmt.Println("TestGoogleAuthSignEndpoint")
 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
 	router := mux.NewRouter()
 	router.Use(ValidateAccessMiddleware)
@@ -557,7 +554,7 @@ func TestGoogleAuthSignEndpoint(t *testing.T) {
 	googleId := "someone_else123@gmail.com"
 	address, curve, _ := oauthInfo.deriveIdentity(googleId)
 	if address == "" || curve == "" {
-		fmt.Println("address", address)
+		t.Errorf("Expected address and curve to be set, got empty strings")
 	}
 	info := &SignInfo{
 		UserId:  googleId,
@@ -576,39 +573,214 @@ func TestGoogleAuthSignEndpoint(t *testing.T) {
 	signature := Signature{
 		Signature: "a38cf0d18db57af96c9a07e15c3ed422f2356e8eb436e93c3fca0d1c366f8aa32219539e978843393a7b9191c3f7e6a2935f4b05857d4aab373f7c2ae773ed6d1b",
 	}
-	ok, _ := common.VerifySignature(address, common.ECDSA_CURVE, strings.TrimSpace("message to sign"), "0x"+signature.Signature)
-	fmt.Println("ok", ok)
-	if !ok {
-		t.Errorf("Expected signature to be valid, got false")
-	}
 	j, _ := json.Marshal(signature)
 	if strings.TrimSpace(w.Body.String()) != strings.TrimSpace(string(j)) {
 		t.Errorf("Expected body %s, got %s", w.Body.String(), string(j))
 	}
+	ok, _ := common.VerifySignature(address, common.ECDSA_CURVE, strings.TrimSpace("message to sign"), "0x"+signature.Signature)
+	if !ok {
+		t.Errorf("Expected signature to be valid, got false")
+	}
 }
 
-// func TestGoogleRequestAcccessEndpoint(t *testing.T) {
-// 	fmt.Println("TestGoogleAuthSignEndpoint")
-// 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
-// 	router := mux.NewRouter()
-// 	router.Use(ValidateAccessMiddleware)
-// 	router.HandleFunc("/oauth/accessToken", requestAccess)
-// 	payloadBuf := new(bytes.Buffer)
+func TestGenerateRandomSalt(t *testing.T) {
+	salt, err := GenerateRandomSalt(32)
+	if err != nil {
+		t.Fatalf("Failed to generate salt: %v", err)
+	}
+	if len(salt) != 32 {
+		t.Errorf("Expected salt length to be 16, got %d", len(salt))
+	}
+}
 
-// 	accessToken, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
-// 	refreshToken, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
-// 	info := &UserTokensInfo{
-// 		AccessToken:  accessToken,
-// 		RefreshToken: refreshToken,
-// 	}
-// 	json.NewEncoder(payloadBuf).Encode(*info)
-// 	req, err := http.NewRequest("GET", "/oauth/accessToken", payloadBuf)
-// 	if err != nil {
-// 		t.Fatalf("Failed to create request: %v", err)
-// 	}
-// 	w := httptest.NewRecorder()
-// 	router.ServeHTTP(w, req)
-// 	if w.Code != http.StatusOK {
-// 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
-// 	}
-// }
+type MockGoogleAuth struct {
+	oauthInfo *GoogleAuth
+}
+
+func NewMockGoogleAuth() *MockGoogleAuth {
+	return &MockGoogleAuth{
+		oauthInfo: NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt"),
+	}
+}
+
+func (m *MockGoogleAuth) verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretKey string) (*ClaimsWithIdentity, error) {
+	fmt.Println("token from verifyToken", tokenStr, tokenType)
+	claims := &ClaimsWithIdentity{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return []byte(secretKey), nil
+	})
+	fmt.Println("token from verifyToken-here", token, err)
+	if err != nil {
+		if ve, ok := err.(*jwt.ValidationError); ok {
+			if ve.Errors&jwt.ValidationErrorExpired != 0 {
+				return nil, ErrTokenExpired
+			} else {
+				return nil, fmt.Errorf("token validation error: %v", err)
+			}
+		}
+		return nil, fmt.Errorf("could not parse token: %v", err)
+	}
+	if !token.Valid {
+		return nil, ErrInvalidToken
+	}
+	fmt.Println("claims from verifyToken-here", claims)
+	if verifyIdentity && (tokenType == "access_token" || tokenType == "refresh_token") && (claims.Identity == "" || claims.IdentityCurve == "") {
+		return nil, ErrInvalidTokenIdentityRequired
+	}
+	if tokenType == "refresh_token" {
+		fmt.Println("gettoken from db-1", token)
+		val, ok := refreshTokensMap[tokenStr]
+		fmt.Println("gettoken from db-2", val, ok)
+		if ok {
+			return nil, ErrInvalidToken
+		}
+	}
+	return claims, nil
+}
+
+func (m *MockGoogleAuth) generateAccessToken(_ string, _ string, _ string) (string, error) {
+	return "new_access_token", nil
+}
+
+func (m *MockGoogleAuth) generateRefreshToken(_ string, _ string, _ string) (string, error) {
+	return "new_refresh_token", nil
+}
+
+var oauthInfoMock *MockGoogleAuth
+var refreshTokensMap map[string]bool
+
+// identical as requestAccess but replacing getAccess with getAccessMock for local testing with mock oauth
+func requestAccessMock(w http.ResponseWriter, r *http.Request) {
+	tokens, err := getAccessMock(r)
+	if err != nil {
+		fmt.Println("requestAccessMock-1", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	err = json.NewEncoder(w).Encode(*tokens)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func getAccessMock(r *http.Request) (*Tokens, error) {
+	tokensData, err := extractUserTokensInfo(r)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken := tokensData.RefreshToken
+	if refreshToken == "" {
+		return nil, ErrRefreshTokenNotFound
+	}
+
+	refreshClaims, err := oauthInfoMock.verifyToken(refreshToken, "refresh_token", true, oauthInfoMock.oauthInfo.jwtSecret)
+	if err != nil {
+		if errors.Is(err, ErrTokenExpired) {
+			return nil, ErrRefreshTokenExpired
+		}
+		return nil, err
+	}
+	accessToken := tokensData.AccessToken
+	if accessToken == "" {
+		return nil, fmt.Errorf("access token not found")
+	}
+	_, err = oauthInfoMock.verifyToken(accessToken, "access_token", true, oauthInfoMock.oauthInfo.jwtSecret)
+	if err != nil {
+		if errors.Is(err, ErrTokenExpired) {
+			accessToken, err = oauthInfoMock.generateAccessToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
+			if err != nil {
+				return nil, err
+			}
+			refreshTokensMap[refreshToken] = true
+			refreshToken, err = oauthInfoMock.generateRefreshToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	fmt.Println("getAccessMock-2", accessToken, refreshToken)
+	return &Tokens{AccessToken: accessToken, RefreshToken: refreshToken}, nil
+}
+
+func TestGoogleRequestAcccessEndpoint(t *testing.T) {
+	refreshTokensMap = make(map[string]bool)
+	oauthInfoMock = NewMockGoogleAuth()
+	router := mux.NewRouter()
+	router.HandleFunc("/oauth/accessToken", requestAccessMock)
+
+	accessTokenValid, _ := generateTestToken(oauthInfoMock.oauthInfo, "1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
+	refreshTokenValid, _ := generateTestToken(oauthInfoMock.oauthInfo, "1", time.Now().Add(time.Hour*24*7), "0xa", "ecdsa")
+	accessTokenExpired, _ := generateTestToken(oauthInfoMock.oauthInfo, "1", time.Now(), "0xa", "ecdsa")
+	refreshTokenExpired, _ := generateTestToken(oauthInfoMock.oauthInfo, "1", time.Now(), "0xa", "ecdsa")
+	testA, _ := json.Marshal(&Tokens{
+		AccessToken:  accessTokenValid,
+		RefreshToken: refreshTokenValid,
+	})
+
+	testB, _ := json.Marshal(&Tokens{
+		AccessToken:  "new_access_token",
+		RefreshToken: "new_refresh_token",
+	})
+
+	tests := []struct {
+		name           string
+		token          string
+		expectedStatus int
+		expectedBody   string
+		tokens         *Tokens
+	}{
+		{
+			name:           "Valid Token",
+			token:          "validtoken",
+			expectedStatus: http.StatusOK,
+			expectedBody:   string(testA),
+			tokens: &Tokens{
+				AccessToken:  accessTokenValid,
+				RefreshToken: refreshTokenValid,
+			},
+		},
+		{
+			name:           "Invalid Token: Expired Access Token",
+			token:          "invalidtokenexpired",
+			expectedStatus: http.StatusOK,
+			expectedBody:   string(testB),
+			tokens: &Tokens{
+				AccessToken:  accessTokenExpired,
+				RefreshToken: refreshTokenValid,
+			},
+		},
+		{
+			name:           "Invalid Token: Expired Refresh Token",
+			token:          "invalidtokenexpired",
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   ErrRefreshTokenExpired.Error(),
+			tokens: &Tokens{
+				AccessToken:  accessTokenValid,
+				RefreshToken: refreshTokenExpired,
+			},
+		},
+	}
+	for _, tt := range tests {
+		payloadBuf := new(bytes.Buffer)
+		if err := json.NewEncoder(payloadBuf).Encode(tt.tokens); err != nil {
+			t.Fatalf("Failed to encode JSON: %v", err)
+		}
+		req, err := http.NewRequest("GET", "/oauth/accessToken", payloadBuf)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != tt.expectedStatus {
+			t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+		}
+		if strings.TrimSpace(w.Body.String()) != strings.TrimSpace(tt.expectedBody) {
+			t.Errorf("Expected body %s, got %s", tt.expectedBody, w.Body.String())
+		}
+	}
+}

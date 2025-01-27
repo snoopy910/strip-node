@@ -544,17 +544,14 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	router.HandleFunc("/oauth/login", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 		login(w, r)
-		fmt.Println("/oauth/login")
 	})
 
 	router.HandleFunc("/oauth/accessToken", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
-		fmt.Println("/oauth/accessToken")
 		requestAccess(w, r)
 	})
 
 	router.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("/oauth/callback")
 		enableCors(&w)
 		handleCallback(w, r)
 	})

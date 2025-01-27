@@ -11,6 +11,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var oauthInfo *GoogleAuth
+
 type SignInfo struct {
 	UserId  string `json:"userId"`
 	Message string `json:"message"`
@@ -123,7 +125,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 func requestAccess(w http.ResponseWriter, r *http.Request) {
 	tokens, err := getAccess(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	err = json.NewEncoder(w).Encode(*tokens)
@@ -143,7 +145,7 @@ func getAccess(r *http.Request) (*Tokens, error) {
 		return nil, ErrRefreshTokenNotFound
 	}
 
-	refreshClaims, err := verifyToken(refreshToken, "refresh_token", true, oauthInfo.jwtSecret)
+	refreshClaims, err := oauthInfo.verifyToken(refreshToken, "refresh_token", true, oauthInfo.jwtSecret)
 	if err != nil {
 		if errors.Is(err, ErrTokenExpired) {
 			return nil, ErrRefreshTokenExpired
@@ -156,7 +158,7 @@ func getAccess(r *http.Request) (*Tokens, error) {
 		return nil, fmt.Errorf("access token not found")
 	}
 
-	_, err = verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
+	_, err = oauthInfo.verifyToken(accessToken, "access_token", true, oauthInfo.jwtSecret)
 	if err != nil {
 		if errors.Is(err, ErrTokenExpired) {
 			accessToken, err = oauthInfo.generateAccessToken(refreshClaims.Subject, refreshClaims.Identity, refreshClaims.IdentityCurve)
@@ -210,7 +212,7 @@ func ValidateAccessMiddleware(next http.Handler) http.Handler {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			return
 		}
-		claims, err := verifyToken(tokensData.AccessToken, "access_token", true, oauthInfo.jwtSecret)
+		claims, err := oauthInfo.verifyToken(tokensData.AccessToken, "access_token", true, oauthInfo.jwtSecret)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return

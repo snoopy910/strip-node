@@ -12,7 +12,6 @@ var MaximumSigners int
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress string
 var HeliusApiKey string
 var PrivateKey string
-var oauthInfo *GoogleAuth
 
 func StartSequencer(
 	httpPort string,

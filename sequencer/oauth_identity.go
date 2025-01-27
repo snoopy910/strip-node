@@ -59,8 +59,6 @@ type UserTokensInfo struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	IdToken      string `json:"id_token"`
-	Expiry       uint64 `json:"expiry"`
-	Signature    string `json:"signature"`
 }
 
 type ClaimsWithIdentity struct {
@@ -133,7 +131,6 @@ func (s *GoogleAuth) deriveIdentity(userId string) (address string, curve string
 	}
 
 	address = crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
-	fmt.Println("address google identity", address)
 	return address, "ecdsa", nil
 }
 
@@ -141,14 +138,9 @@ func (s *GoogleAuth) sign(userId string, message string) (string, error) {
 	// Derive private key (same seed as identity derivation)
 	seed := crypto.Keccak256([]byte(userId + s.walletSeedSalt))
 	privateKey, err := crypto.ToECDSA(seed)
-	fmt.Println("private key-1", privateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to derive private key: %v", err)
 	}
-	fmt.Println("private key-2", hex.EncodeToString(crypto.FromECDSA(privateKey)))
-	fmt.Println("private key-3", hex.EncodeToString(privateKey.D.Bytes()))
-	fmt.Println("private key-4", crypto.PubkeyToAddress(privateKey.PublicKey))
-
 	// Hash the message
 	hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(message)) + message)
 	hash := crypto.Keccak256Hash(hashedMessage)
@@ -162,7 +154,6 @@ func (s *GoogleAuth) sign(userId string, message string) (string, error) {
 		return "", fmt.Errorf("invalid signature length")
 	}
 	signature[64] += 27
-	fmt.Println("signature", hex.EncodeToString(signature))
 	return hex.EncodeToString(signature), nil
 }
 
@@ -223,7 +214,7 @@ func (s *GoogleAuth) generateRefreshToken(userId string, identity string, identi
 	return token.SignedString([]byte(s.jwtSecret))
 }
 
-func verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretKey string) (*ClaimsWithIdentity, error) {
+func (s *GoogleAuth) verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretKey string) (*ClaimsWithIdentity, error) {
 	claims := &ClaimsWithIdentity{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -285,4 +276,13 @@ func generateState() string {
 		return "strip_chain"
 	}
 	return base64.URLEncoding.EncodeToString(b)
+}
+
+func GenerateRandomSalt(length int) ([]byte, error) {
+	salt := make([]byte, length)
+	_, err := rand.Read(salt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate random salt: %v", err)
+	}
+	return salt, nil
 }

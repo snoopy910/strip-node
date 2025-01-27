@@ -137,13 +137,34 @@ func createWallet(identity string, identityCurve string) error {
 
 	ecdsaAddress := getAddressResponse.Address
 
+	// get the address of the wallet whose keycurve is secp256k1 here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=secp256k1")
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(body, &getAddressResponse)
+	if err != nil {
+		return err
+	}
+
+	secp256k1Address := getAddressResponse.Address
+
 	// add created wallet to the store
 	wallet := WalletSchema{
-		Identity:       identity,
-		IdentityCurve:  identityCurve,
-		Signers:        strings.Join(signersPublicKeyList, ","),
-		EDDSAPublicKey: eddsaAddress,
-		ECDSAPublicKey: ecdsaAddress,
+		Identity:           identity,
+		IdentityCurve:      identityCurve,
+		Signers:            strings.Join(signersPublicKeyList, ","),
+		EDDSAPublicKey:     eddsaAddress,
+		ECDSAPublicKey:     ecdsaAddress,
+		SECP256K1PublicKey: secp256k1Address,
 	}
 
 	_, err = AddWallet(&wallet)

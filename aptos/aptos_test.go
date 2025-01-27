@@ -60,9 +60,9 @@ func TestGetAptosTransfers(t *testing.T) {
 		{
 			Name:         "Native APT Transfer on Devnet",
 			ChainID:      "167",
-			TxHash:       "0xed84af67094ebfe3bf5e531ec9ddda7dc2ebc439ed250e476836ce5a877e1ab6",
-			From:         "0x7e9983bf1e8a75e305d081bacc994cea4051ef0d40548f38e0fb2140f20be6d0",
-			To:           "0x82c076aaf063b09738b54b7277792252a3abc21a8e78e2422472892dc4c4a788",
+			TxHash:       "0x7f6fb178b1d6f2f57ac54bb39b3f778c1ec582ee7afa6004f82e1b6602f7c585",
+			From:         "0xe93dcd3dd5febf8d72bf8d33e1d85a6115300fedfe055c062834d264f103ce4c",
+			To:           "0xa2312d7ba5328b25f9fa7b9eed57911509946f90443283522c4e43ec30b35dcb",
 			Amount:       "0.00000001",
 			Token:        "APT",
 			IsNative:     true,

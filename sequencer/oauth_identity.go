@@ -141,10 +141,13 @@ func (s *GoogleAuth) sign(userId string, message string) (string, error) {
 	// Derive private key (same seed as identity derivation)
 	seed := crypto.Keccak256([]byte(userId + s.walletSeedSalt))
 	privateKey, err := crypto.ToECDSA(seed)
+	fmt.Println("private key-1", privateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to derive private key: %v", err)
 	}
-	fmt.Println("private key", hex.EncodeToString(crypto.FromECDSA(privateKey)))
+	fmt.Println("private key-2", hex.EncodeToString(crypto.FromECDSA(privateKey)))
+	fmt.Println("private key-3", hex.EncodeToString(privateKey.D.Bytes()))
+	fmt.Println("private key-4", crypto.PubkeyToAddress(privateKey.PublicKey))
 
 	// Hash the message
 	hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(message)) + message)
@@ -155,7 +158,11 @@ func (s *GoogleAuth) sign(userId string, message string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to sign message: %v", err)
 	}
+	if len(signature) != 65 {
+		return "", fmt.Errorf("invalid signature length")
+	}
 	signature[64] += 27
+	fmt.Println("signature", hex.EncodeToString(signature))
 	return hex.EncodeToString(signature), nil
 }
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	gcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
 )
@@ -512,8 +513,16 @@ func TestValidateAccessMiddleware(t *testing.T) {
 func TestGoogleAuthGenerateWallet(t *testing.T) {
 	fmt.Println("TestGoogleAuthGenerateWallet")
 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
-	address, curve, _ := oauthInfo.deriveIdentity("1")
-	expectedAddress := "0x55d456c10c9E350CD5bB40Ce7B09493aA8A01881"
+	address, curve, _ := oauthInfo.deriveIdentity("someone@gmail.com")
+	if address == "" || curve == "" {
+		fmt.Println("address", address)
+		t.Errorf("Expected address and curve to be set, got empty strings")
+	}
+	isValidAddress := gcommon.IsHexAddress(address)
+	if !isValidAddress {
+		t.Errorf("Expected address to be valid, got %s", address)
+	}
+	expectedAddress := "0x59f7C6dcceBd83ee56dB4F06D35E5E65F2247A1f"
 	expectedCurve := "ecdsa"
 	if address != expectedAddress || curve != expectedCurve {
 		t.Errorf("Expected address %s and curve %s, got %s and %s", expectedAddress, expectedCurve, address, curve)
@@ -524,15 +533,14 @@ func TestGoogleAuthSign(t *testing.T) {
 	fmt.Println("TestGoogleAuthSign")
 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
 	message := strings.TrimSpace("message to sign")
-	signature, _ := oauthInfo.sign("1", message)
-	expectedSignature := "90e6914dda3856a98388ab0fe0b1c86633357d82bdbdaecdac194db595a8ae1357282e1af5ad2015b843daa998a9dceb1d33f5d26eb35cf728156777cebf9a7601"
+	signature, _ := oauthInfo.sign("someone@gmail.com", message)
+	expectedSignature := "dad814b8c7b43d3b26f9621ce017f7c6bd3609596b3294d6b6dba9c58c0386035cfc7dd6dd704f67b46ebc381fffa8a45c98afbcee34a3a91a2b316fabc17a531b"
 	if signature != expectedSignature {
 		t.Errorf("Expected signature %s, got %s", expectedSignature, signature)
 	}
 
-	expectedAddress := "0x55d456c10c9E350CD5bB40Ce7B09493aA8A01881"
-	expectedCurve := "ecdsa"
-	ok, _ := common.VerifySignature(expectedSignature, message, expectedAddress, expectedCurve)
+	address := strings.TrimSpace("0x59f7C6dcceBd83ee56dB4F06D35E5E65F2247A1f")
+	ok, _ := common.VerifySignature(address, common.ECDSA_CURVE, message, "0x"+expectedSignature)
 	fmt.Println("ok", ok)
 	if !ok {
 		t.Errorf("Expected signature to be valid, got false")
@@ -546,10 +554,14 @@ func TestGoogleAuthSignEndpoint(t *testing.T) {
 	router.Use(ValidateAccessMiddleware)
 	router.HandleFunc("/oauth/sign", handleSigning)
 	payloadBuf := new(bytes.Buffer)
-
+	googleId := "someone_else123@gmail.com"
+	address, curve, _ := oauthInfo.deriveIdentity(googleId)
+	if address == "" || curve == "" {
+		fmt.Println("address", address)
+	}
 	info := &SignInfo{
-		UserId:  "1",
-		Message: "message to sign",
+		UserId:  googleId,
+		Message: strings.TrimSpace("message to sign"),
 	}
 	json.NewEncoder(payloadBuf).Encode(*info)
 	req, err := http.NewRequest("GET", "/oauth/sign", payloadBuf)
@@ -562,7 +574,12 @@ func TestGoogleAuthSignEndpoint(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 	signature := Signature{
-		Signature: "90e6914dda3856a98388ab0fe0b1c86633357d82bdbdaecdac194db595a8ae1357282e1af5ad2015b843daa998a9dceb1d33f5d26eb35cf728156777cebf9a761c",
+		Signature: "a38cf0d18db57af96c9a07e15c3ed422f2356e8eb436e93c3fca0d1c366f8aa32219539e978843393a7b9191c3f7e6a2935f4b05857d4aab373f7c2ae773ed6d1b",
+	}
+	ok, _ := common.VerifySignature(address, common.ECDSA_CURVE, strings.TrimSpace("message to sign"), "0x"+signature.Signature)
+	fmt.Println("ok", ok)
+	if !ok {
+		t.Errorf("Expected signature to be valid, got false")
 	}
 	j, _ := json.Marshal(signature)
 	if strings.TrimSpace(w.Body.String()) != strings.TrimSpace(string(j)) {

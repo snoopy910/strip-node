@@ -236,14 +236,12 @@ func (s *GoogleAuth) verifyToken(tokenStr string, tokenType string, verifyIdenti
 	if !token.Valid {
 		return nil, ErrInvalidToken
 	}
-	fmt.Println("claims from verifyToken", claims)
+	fmt.Println("claims", claims)
 	if verifyIdentity && (tokenType == "access_token" || tokenType == "refresh_token") && (claims.Identity == "" || claims.IdentityCurve == "") {
 		return nil, ErrInvalidTokenIdentityRequired
 	}
 	if tokenType == "refresh_token" {
-		fmt.Println("gettoken from db-1", token)
 		token, _ := GetRefreshToken(tokenStr)
-		fmt.Println("gettoken from db-2", token)
 		if token != nil {
 			return nil, ErrInvalidToken
 		}

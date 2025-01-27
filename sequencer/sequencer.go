@@ -64,7 +64,6 @@ func StartSequencer(
 		fmt.Println("Initializing Google OAuth")
 		if redirectUrl != "" && clientId != "" && clientSecret != "" && sessionSecret != "" && jwtSecret != "" && salt != "" {
 			oauthInfo = NewGoogleAuth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, salt)
-			fmt.Println("Initializing Google OAuth done")
 		} else {
 			panic("Missing OAuth parameters")
 		}

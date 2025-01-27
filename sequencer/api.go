@@ -124,7 +124,8 @@ func startHTTPServer(port string, oauthEnabled bool) {
 
 		_, err := verifyIdentity(r)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fmt.Println("verify identity", err)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
@@ -169,7 +170,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 
 		_, err := verifyIdentity(r)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 

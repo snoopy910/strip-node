@@ -751,11 +751,21 @@ func TestGoogleRequestAcccessEndpoint(t *testing.T) {
 		},
 		{
 			name:           "Invalid Token: Expired Refresh Token",
-			token:          "invalidtokenexpired",
+			token:          "invalidrefreshtokenexpired",
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   ErrRefreshTokenExpired.Error(),
 			tokens: &Tokens{
 				AccessToken:  accessTokenValid,
+				RefreshToken: refreshTokenExpired,
+			},
+		},
+		{
+			name:           "Invalid Token: Expired Refresh Token",
+			token:          "invalidtokensexpired",
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   ErrRefreshTokenExpired.Error(),
+			tokens: &Tokens{
+				AccessToken:  accessTokenExpired,
 				RefreshToken: refreshTokenExpired,
 			},
 		},

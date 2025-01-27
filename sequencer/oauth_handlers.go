@@ -119,7 +119,6 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(*response)
-	fmt.Println("tokens", tokens)
 }
 
 func requestAccess(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +213,7 @@ func ValidateAccessMiddleware(next http.Handler) http.Handler {
 		}
 		claims, err := oauthInfo.verifyToken(tokensData.AccessToken, "access_token", true, oauthInfo.jwtSecret)
 		if err != nil {
+			fmt.Println(err)
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}

@@ -225,7 +225,6 @@ func verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretK
 
 		return []byte(secretKey), nil
 	})
-	fmt.Println("token from verifyToken", token)
 	if err != nil {
 		if ve, ok := err.(*jwt.ValidationError); ok {
 			if ve.Errors&jwt.ValidationErrorExpired != 0 {

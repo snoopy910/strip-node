@@ -5,11 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/StripChain/strip-node/sequencer"
-)
-
-var (
-	ECDSA_CURVE = "ecdsa"
-	EDDSA_CURVE = "eddsa"
+	// Add this import
 )
 
 type OperationForSigning struct {

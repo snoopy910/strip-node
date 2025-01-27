@@ -111,7 +111,6 @@ func TestGetWalletEndpoint(t *testing.T) {
 // TestCreateIntent tests the /createIntent endpoint for creating an intent.
 // It verifies the JSON payload and response status code.
 func TestCreateIntent(t *testing.T) {
-	fmt.Println("TestCreateIntent")
 	// Create a test intent
 	testIntent := Intent{
 		Identity:      "testIdentity",
@@ -126,7 +125,6 @@ func TestCreateIntent(t *testing.T) {
 			},
 		},
 	}
-	fmt.Println(testIntent)
 	// Convert intent to JSON
 	intentJSON, err := json.Marshal(testIntent)
 	if err != nil {
@@ -172,7 +170,6 @@ func TestCreateIntent(t *testing.T) {
 // It checks the response status code and verifies the returned intent data.
 func TestGetIntent(t *testing.T) {
 	// Create test request
-	fmt.Println("TestGetIntent")
 	req := httptest.NewRequest("GET", "/getIntent?id=1", nil)
 	w := httptest.NewRecorder()
 
@@ -512,13 +509,10 @@ func TestValidateAccessMiddleware(t *testing.T) {
 	}
 }
 
-func TestGoogleAuthWallet(t *testing.T) {
-	fmt.Println("TestGoogleAuthWallet")
+func TestGoogleAuthGenerateWallet(t *testing.T) {
+	fmt.Println("TestGoogleAuthGenerateWallet")
 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
 	address, curve, _ := oauthInfo.deriveIdentity("1")
-	if 1 != 0 {
-		t.Logf("address: %s, curve: %s", address, curve)
-	}
 	expectedAddress := "0x55d456c10c9E350CD5bB40Ce7B09493aA8A01881"
 	expectedCurve := "ecdsa"
 	if address != expectedAddress || curve != expectedCurve {
@@ -543,5 +537,61 @@ func TestGoogleAuthSign(t *testing.T) {
 	if !ok {
 		t.Errorf("Expected signature to be valid, got false")
 	}
-
 }
+
+func TestGoogleAuthSignEndpoint(t *testing.T) {
+	fmt.Println("TestGoogleAuthSignEndpoint")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	router := mux.NewRouter()
+	router.Use(ValidateAccessMiddleware)
+	router.HandleFunc("/oauth/sign", handleSigning)
+	payloadBuf := new(bytes.Buffer)
+
+	info := &SignInfo{
+		UserId:  "1",
+		Message: "message to sign",
+	}
+	json.NewEncoder(payloadBuf).Encode(*info)
+	req, err := http.NewRequest("GET", "/oauth/sign", payloadBuf)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	}
+	signature := Signature{
+		Signature: "90e6914dda3856a98388ab0fe0b1c86633357d82bdbdaecdac194db595a8ae1357282e1af5ad2015b843daa998a9dceb1d33f5d26eb35cf728156777cebf9a761c",
+	}
+	j, _ := json.Marshal(signature)
+	if strings.TrimSpace(w.Body.String()) != strings.TrimSpace(string(j)) {
+		t.Errorf("Expected body %s, got %s", w.Body.String(), string(j))
+	}
+}
+
+// func TestGoogleRequestAcccessEndpoint(t *testing.T) {
+// 	fmt.Println("TestGoogleAuthSignEndpoint")
+// 	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+// 	router := mux.NewRouter()
+// 	router.Use(ValidateAccessMiddleware)
+// 	router.HandleFunc("/oauth/accessToken", requestAccess)
+// 	payloadBuf := new(bytes.Buffer)
+
+// 	accessToken, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
+// 	refreshToken, _ := generateTestToken("1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
+// 	info := &UserTokensInfo{
+// 		AccessToken:  accessToken,
+// 		RefreshToken: refreshToken,
+// 	}
+// 	json.NewEncoder(payloadBuf).Encode(*info)
+// 	req, err := http.NewRequest("GET", "/oauth/accessToken", payloadBuf)
+// 	if err != nil {
+// 		t.Fatalf("Failed to create request: %v", err)
+// 	}
+// 	w := httptest.NewRecorder()
+// 	router.ServeHTTP(w, req)
+// 	if w.Code != http.StatusOK {
+// 		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+// 	}
+// }

@@ -34,90 +34,73 @@ func login(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCallback(w http.ResponseWriter, r *http.Request) {
-	tokens, err := getAccess(r)
+	fmt.Println("handle google callback")
+	if r.FormValue("state") != oauthInfo.oauthState {
+		http.Error(w, "invalid state parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Verify the code exists
+	code := r.FormValue("code")
+	if code == "" {
+		http.Error(w, "code parameter not found", http.StatusBadRequest)
+		return
+	}
+
+	// Exchange the authorization code for an access token
+	token, err := oauthInfo.config.Exchange(context.Background(), code, oauth2.VerifierOption(oauthInfo.verifier))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	var idToken string
-	var accessToken string
-	var refreshToken string
-	var identity string
-	var identityCurve string
 
-	if tokens != nil {
-		idToken = tokens.IdToken
-		accessToken = tokens.AccessToken
-		refreshToken = tokens.RefreshToken
-	} else {
-		fmt.Println("acces token or refresh token empty")
-		if r.FormValue("state") != oauthInfo.oauthState {
-			http.Error(w, "invalid state parameter", http.StatusBadRequest)
-			return
-		}
-
-		// Verify the code exists
-		code := r.FormValue("code")
-		if code == "" {
-			http.Error(w, "code parameter not found", http.StatusBadRequest)
-			return
-		}
-
-		// Exchange the authorization code for an access token
-		token, err := oauthInfo.config.Exchange(context.Background(), code, oauth2.VerifierOption(oauthInfo.verifier))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Get user information from Google
-		client := oauthInfo.config.Client(context.Background(), token)
-		userInfoResponse, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		defer userInfoResponse.Body.Close()
-
-		var userInfo UserInfo
-		err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Derive identity from Google ID
-		identity, identityCurve, err = oauthInfo.deriveIdentity(userInfo.ID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		fmt.Println("userInfo", userInfo)
-		// generate the idToken
-		idToken, err = oauthInfo.generateIdToken(userInfo, identity, identityCurve)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Generate a JWT access token
-		accessToken, err = oauthInfo.generateAccessToken(userInfo.ID, identity, identityCurve)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Generate a JWT refresh
-		refreshToken, err = oauthInfo.generateRefreshToken(userInfo.ID, identity, identityCurve)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	// Get user information from Google
+	client := oauthInfo.config.Client(context.Background(), token)
+	userInfoResponse, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	tokens = &Tokens{
+	defer userInfoResponse.Body.Close()
+
+	var userInfo UserInfo
+	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Derive identity from Google ID
+	identity, identityCurve, err := oauthInfo.deriveIdentity(userInfo.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("userInfo", userInfo)
+	// generate the idToken
+	idToken, err := oauthInfo.generateIdToken(userInfo, identity, identityCurve)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate a JWT access token
+	accessToken, err := oauthInfo.generateAccessToken(userInfo.ID, identity, identityCurve)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate a JWT refresh
+	refreshToken, err := oauthInfo.generateRefreshToken(userInfo.ID, identity, identityCurve)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tokens := &Tokens{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		IdToken:      idToken,

@@ -409,7 +409,6 @@ func TestStatusEndpoint(t *testing.T) {
 // OAuth tests
 
 func testHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r)
 	id, ok := r.Context().Value(identityAccess).(*IdentityAccess)
 	if !ok {
 		http.Error(w, "id not found in context", http.StatusInternalServerError)
@@ -539,7 +538,6 @@ func TestGoogleAuthSign(t *testing.T) {
 
 	address := strings.TrimSpace("0x59f7C6dcceBd83ee56dB4F06D35E5E65F2247A1f")
 	ok, _ := common.VerifySignature(address, common.ECDSA_CURVE, message, "0x"+expectedSignature)
-	fmt.Println("ok", ok)
 	if !ok {
 		t.Errorf("Expected signature to be valid, got false")
 	}
@@ -603,8 +601,8 @@ func NewMockGoogleAuth() *MockGoogleAuth {
 	}
 }
 
+// Replacing db to store the refresh token by a map in memory
 func (m *MockGoogleAuth) verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretKey string) (*ClaimsWithIdentity, error) {
-	fmt.Println("token from verifyToken", tokenStr, tokenType)
 	claims := &ClaimsWithIdentity{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -613,7 +611,7 @@ func (m *MockGoogleAuth) verifyToken(tokenStr string, tokenType string, verifyId
 
 		return []byte(secretKey), nil
 	})
-	fmt.Println("token from verifyToken-here", token, err)
+
 	if err != nil {
 		if ve, ok := err.(*jwt.ValidationError); ok {
 			if ve.Errors&jwt.ValidationErrorExpired != 0 {
@@ -627,14 +625,12 @@ func (m *MockGoogleAuth) verifyToken(tokenStr string, tokenType string, verifyId
 	if !token.Valid {
 		return nil, ErrInvalidToken
 	}
-	fmt.Println("claims from verifyToken-here", claims)
+
 	if verifyIdentity && (tokenType == "access_token" || tokenType == "refresh_token") && (claims.Identity == "" || claims.IdentityCurve == "") {
 		return nil, ErrInvalidTokenIdentityRequired
 	}
 	if tokenType == "refresh_token" {
-		fmt.Println("gettoken from db-1", token)
-		val, ok := refreshTokensMap[tokenStr]
-		fmt.Println("gettoken from db-2", val, ok)
+		_, ok := refreshTokensMap[tokenStr]
 		if ok {
 			return nil, ErrInvalidToken
 		}
@@ -657,7 +653,6 @@ var refreshTokensMap map[string]bool
 func requestAccessMock(w http.ResponseWriter, r *http.Request) {
 	tokens, err := getAccessMock(r)
 	if err != nil {
-		fmt.Println("requestAccessMock-1", err.Error())
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -703,7 +698,6 @@ func getAccessMock(r *http.Request) (*Tokens, error) {
 			}
 		}
 	}
-	fmt.Println("getAccessMock-2", accessToken, refreshToken)
 	return &Tokens{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
@@ -711,6 +705,7 @@ func TestGoogleRequestAcccessEndpoint(t *testing.T) {
 	refreshTokensMap = make(map[string]bool)
 	oauthInfoMock = NewMockGoogleAuth()
 	router := mux.NewRouter()
+	router.Use(ValidateAccessMiddleware)
 	router.HandleFunc("/oauth/accessToken", requestAccessMock)
 
 	accessTokenValid, _ := generateTestToken(oauthInfoMock.oauthInfo, "1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")

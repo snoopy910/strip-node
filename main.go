@@ -70,7 +70,7 @@ func main() {
 	clientSecret := flag.String("clientSecret", LookupEnvOrString("CLIENT_SECRET", ""), "google client secret")
 	jwtSecret := flag.String("jwtSecret", LookupEnvOrString("JWT_SECRET", ""), "application secret for jwt")
 	sessionSecret := flag.String("sessionSecret", LookupEnvOrString("SESSION_SECRET", ""), "application secret for sessions")
-	googleWalletSalt := flag.String("googleWalletSalt", LookupEnvOrString("GOOGLE_WALLET_SALT", "hex salt:fa3aadf7"), "google wallet salt")
+	googleWalletSalt := flag.String("googleWalletSalt", LookupEnvOrString("WALLET_SEED_SALT", "fc80dc87c177dbec9379813fd5b55cfb7f63d19668cd58e40fd75e7b28d20984"), "google wallet salt")
 
 	defaultPath, err := os.Getwd()
 	if err != nil {

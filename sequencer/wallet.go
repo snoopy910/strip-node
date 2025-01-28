@@ -95,7 +95,7 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
-	// create the wallet whose keycurve is ecdsa here
+	// create the wallet whose keycurve is secp256k1 here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,

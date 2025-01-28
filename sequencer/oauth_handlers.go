@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/StripChain/strip-node/common"
 	"golang.org/x/oauth2"
 )
 
@@ -19,6 +20,12 @@ type SignInfo struct {
 }
 
 type Signature struct {
+	Signature string `json:"signature"`
+}
+
+type SignatureInfo struct {
+	UserId    string `json:"userId"`
+	Message   string `json:"message"`
 	Signature string `json:"signature"`
 }
 
@@ -189,6 +196,36 @@ func handleSigning(w http.ResponseWriter, r *http.Request) {
 
 	response := Signature{
 		Signature: signature,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func handleVerifySignature(w http.ResponseWriter, r *http.Request) {
+	var data *SignatureInfo
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	identity, identityCurve, err := oauthInfo.deriveIdentity(data.UserId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	isValid, err := common.VerifySignature(identity, identityCurve, data.Message, data.Signature)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !isValid {
+		http.Error(w, "invalid signature", http.StatusBadRequest)
+		return
+	}
+
+	response := Signature{
+		Signature: data.Signature,
 	}
 
 	json.NewEncoder(w).Encode(response)

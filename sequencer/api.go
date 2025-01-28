@@ -562,5 +562,10 @@ func startHTTPServer(port string, oauthEnabled bool) {
 		handleSigning(w, r)
 	})
 
+	router.HandleFunc("/oauth/verifySignature", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+		handleVerifySignature(w, r)
+	})
+
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, router))
 }

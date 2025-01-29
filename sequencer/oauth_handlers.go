@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/StripChain/strip-node/common"
 	"golang.org/x/oauth2"
@@ -207,13 +208,27 @@ func handleVerifySignature(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	signature := data.Signature
+	if strings.TrimSpace(signature) == "" {
+		http.Error(w, "empty signature", http.StatusBadRequest)
+		return
+	}
+	signature = strings.TrimSpace(signature)
+	if !strings.HasPrefix(signature, "0x") {
+		signature = "0x" + signature
+	}
+
+	if len([]byte(signature)) != 66 {
+		http.Error(w, "invalid signature", http.StatusBadRequest)
+		return
+	}
 
 	identity, identityCurve, err := oauthInfo.deriveIdentity(data.UserId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	isValid, err := common.VerifySignature(identity, identityCurve, data.Message, data.Signature)
+	isValid, err := common.VerifySignature(identity, identityCurve, data.Message, signature)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -225,7 +240,7 @@ func handleVerifySignature(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := Signature{
-		Signature: data.Signature,
+		Signature: signature,
 	}
 
 	json.NewEncoder(w).Encode(response)
@@ -233,7 +248,7 @@ func handleVerifySignature(w http.ResponseWriter, r *http.Request) {
 
 func ValidateAccessMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/sign" || r.URL.Path == "/oauth/accessToken" || r.URL.Path == "/oauth/logout" {
+		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/sign" || r.URL.Path == "/oauth/accessToken" || r.URL.Path == "/oauth/verifySignature" {
 			next.ServeHTTP(w, r)
 			return
 		}

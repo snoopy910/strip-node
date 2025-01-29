@@ -219,7 +219,11 @@ func handleVerifySignature(w http.ResponseWriter, r *http.Request) {
 		signature = "0x" + signature
 	}
 
-	sig, _ := hex.DecodeString(signature[2:])
+	sig, err := hex.DecodeString(signature[2:])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if len(sig) != 65 {
 		http.Error(w, "invalid signature", http.StatusBadRequest)
 		return

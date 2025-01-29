@@ -619,7 +619,13 @@ func TestGoogleAuthVerifySignatureEndpoint(t *testing.T) {
 		},
 		{
 			name:         "Invalid Signature",
-			signature:    "a32389999",
+			signature:    "a38cf0d",
+			expectedBody: "encoding/hex: odd length hex string",
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "Invalid Signature",
+			signature:    "a38cf0d1",
 			expectedBody: "invalid signature",
 			expectedCode: http.StatusBadRequest,
 		},
@@ -627,6 +633,12 @@ func TestGoogleAuthVerifySignatureEndpoint(t *testing.T) {
 			name:         "Empty Signature",
 			signature:    "",
 			expectedBody: "empty signature",
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "Invalid Signer",
+			signature:    "0xb2200a40a1dc7020f31452f27fc44524f2c085a5c91031a48d3bce4445658b2a49409ebaea317341344a5b0762f1c479f95db3f5b884b2540bfdbfb659c1205d1b",
+			expectedBody: "invalid signature",
 			expectedCode: http.StatusBadRequest,
 		},
 	}
@@ -648,8 +660,7 @@ func TestGoogleAuthVerifySignatureEndpoint(t *testing.T) {
 		if w.Code != tt.expectedCode {
 			t.Errorf("Expected status %d, got %d", tt.expectedCode, w.Code)
 		}
-
-		if strings.TrimSpace(w.Body.String()) != strings.TrimSpace(tt.expectedBody) {
+		if strings.TrimSpace(w.Body.String()) != tt.expectedBody {
 			t.Errorf("Expected body %s, got %s", tt.expectedBody, w.Body)
 		}
 	}

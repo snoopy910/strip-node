@@ -2,6 +2,7 @@ package sequencer
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -218,7 +219,8 @@ func handleVerifySignature(w http.ResponseWriter, r *http.Request) {
 		signature = "0x" + signature
 	}
 
-	if len([]byte(signature)) != 66 {
+	sig, _ := hex.DecodeString(signature[2:])
+	if len(sig) != 65 {
 		http.Error(w, "invalid signature", http.StatusBadRequest)
 		return
 	}

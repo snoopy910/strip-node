@@ -581,6 +581,80 @@ func TestGoogleAuthSignEndpoint(t *testing.T) {
 	}
 }
 
+func TestGoogleAuthVerifySignatureEndpoint(t *testing.T) {
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	router := mux.NewRouter()
+	router.Use(ValidateAccessMiddleware)
+	router.HandleFunc("/oauth/verifySignature", handleVerifySignature)
+	googleId := "someone_else123@gmail.com"
+	message := "message to sign"
+
+	test, _ := json.Marshal(Signature{
+		Signature: "0xa38cf0d18db57af96c9a07e15c3ed422f2356e8eb436e93c3fca0d1c366f8aa32219539e978843393a7b9191c3f7e6a2935f4b05857d4aab373f7c2ae773ed6d1b",
+	})
+
+	tests := []struct {
+		name         string
+		signature    string
+		expectedBody string
+		expectedCode int
+	}{
+		{
+			name:         "Valid Signature with no 0x prefix",
+			signature:    "a38cf0d18db57af96c9a07e15c3ed422f2356e8eb436e93c3fca0d1c366f8aa32219539e978843393a7b9191c3f7e6a2935f4b05857d4aab373f7c2ae773ed6d1b",
+			expectedBody: string(test),
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:         "Valid Signature with 0x prefix",
+			signature:    "0xa38cf0d18db57af96c9a07e15c3ed422f2356e8eb436e93c3fca0d1c366f8aa32219539e978843393a7b9191c3f7e6a2935f4b05857d4aab373f7c2ae773ed6d1b",
+			expectedBody: string(test),
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:         "Valid Signature with preceding spaces",
+			signature:    "   " + "0xa38cf0d18db57af96c9a07e15c3ed422f2356e8eb436e93c3fca0d1c366f8aa32219539e978843393a7b9191c3f7e6a2935f4b05857d4aab373f7c2ae773ed6d1b",
+			expectedBody: string(test),
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:         "Invalid Signature",
+			signature:    "a32389999",
+			expectedBody: "invalid signature",
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "Empty Signature",
+			signature:    "",
+			expectedBody: "empty signature",
+			expectedCode: http.StatusBadRequest,
+		},
+	}
+	for _, tt := range tests {
+		payloadBuf := new(bytes.Buffer)
+
+		info := &SignatureInfo{
+			UserId:    googleId,
+			Message:   strings.TrimSpace(message),
+			Signature: tt.signature,
+		}
+		json.NewEncoder(payloadBuf).Encode(*info)
+		req, err := http.NewRequest("GET", "/oauth/verifySignature", payloadBuf)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != tt.expectedCode {
+			t.Errorf("Expected status %d, got %d", tt.expectedCode, w.Code)
+		}
+
+		if strings.TrimSpace(w.Body.String()) != strings.TrimSpace(tt.expectedBody) {
+			t.Errorf("Expected body %s, got %s", tt.expectedBody, w.Body)
+		}
+	}
+}
+
 func TestGenerateRandomSalt(t *testing.T) {
 	salt, err := GenerateRandomSalt(32)
 	if err != nil {

@@ -113,7 +113,7 @@ OAuth consent screen: https://console.cloud.google.com/apis/credentials/consent?
 
 `/oauth/accessToken`: Generates a new access token when the current refresh token is still valid. It will return the new access token and the new refresh token
 
-`/oauth/logout`: Logs out the user
+`/oauth/verifySignature`: verifies the signature of the message with the google wallet derived identity.
 
 A middleware validator is used at the router level to check if the user is authenticated and have a valid access token. It is activated if oauth authentication is enabled by setting the environment variable `ENABLE_OAUTH=true` or the `--enableOauth` flag.
 

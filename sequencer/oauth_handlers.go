@@ -122,12 +122,33 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		IdentityCurve: identityCurve,
 	}
 
-	response := &CallbackInfo{
+	info := &CallbackInfo{
 		Tokens: tokens,
 		Wallet: id,
 	}
 
-	json.NewEncoder(w).Encode(*response)
+	fmt.Println("response", info)
+	// json.NewEncoder(w).Encode(*response)
+	// jsonData, err := json.Marshal(response)
+	// w.Header().Set("X-Auth-Info", string(jsonData))
+	// fmt.Println("jsonData", w)
+	// if err != nil {
+	// 	http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	// 	return
+	// }
+
+	ctx := context.WithValue(r.Context(), tokensCallbackInfoKey, info)
+
+	r = r.WithContext(ctx)
+
+	// TO REMOVE TO ADD A REDIRECT TO THE WALLET ENV VARIABLE
+	http.Redirect(w, r, "http://wallet.stripchain.xyz/", http.StatusMovedPermanently)
+}
+
+func handleRedirect(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("handle redirect")
+	// Get the access token from the request
+	http.Redirect(w, r, "http://wallet.stripchain.xyz/", http.StatusMovedPermanently)
 }
 
 func requestAccess(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +275,7 @@ func handleVerifySignature(w http.ResponseWriter, r *http.Request) {
 
 func ValidateAccessMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/sign" || r.URL.Path == "/oauth/accessToken" || r.URL.Path == "/oauth/verifySignature" {
+		if r.URL.Path == "/oauth/login" || r.URL.Path == "/oauth/callback" || r.URL.Path == "/oauth/sign" || r.URL.Path == "/oauth/accessToken" || r.URL.Path == "/oauth/verifySignature" || r.URL.Path == "/oauth/redirect" {
 			next.ServeHTTP(w, r)
 			return
 		}

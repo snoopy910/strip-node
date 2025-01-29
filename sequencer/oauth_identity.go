@@ -38,12 +38,14 @@ type UserInfo struct {
 type M map[string]interface{}
 
 type contextKey string
+type callbackKey string
 
 const (
 	// Key for the ID
-	identityAccess          contextKey = "identityAccess"
-	stripchainGoogleSession string     = "stripchain-google-session"
-	tokenIssuer             string     = "StripChain"
+	identityAccess          contextKey  = "identityAccess"
+	tokensCallbackInfoKey   callbackKey = "tokensCallbackInfo"
+	stripchainGoogleSession string      = "stripchain-google-session"
+	tokenIssuer             string      = "StripChain"
 )
 
 type Tokens struct {

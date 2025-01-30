@@ -137,7 +137,7 @@ func startHTTPServer(port string) {
 
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-			address := publicKeyToAddress(publicKeyBytes)
+			address := publicKeyToBitcoinAddress(publicKeyBytes)
 
 			getAddressResponse := GetAddressResponse{
 				Address: address,

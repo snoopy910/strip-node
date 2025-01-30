@@ -197,14 +197,14 @@ func SendAptosTransaction(serializedTxn string, chainId string, keyCurve string,
 func CheckAptosTransactionConfirmed(chainId string, txnHash string) (bool, error) {
 	chain, err := common.GetChain(chainId)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error getting chain: %v", err)
 	}
 
 	client := aptosClient.NewAptosClient(chain.ChainUrl)
 
 	tx, err := client.GetTransactionByHash(context.Background(), txnHash)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error getting transaction by hash: %v", err)
 	}
 
 	if tx.Success {

@@ -133,6 +133,14 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 		go localParty.Start()
 
+	} else if keyCurve == SECP256K1_CURVE {
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
+		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
 	} else {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
@@ -188,6 +196,28 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       save.Signature,
 					Address:       publicKeyStr,
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else if keyCurve == SECP256K1_CURVE {
+				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
+				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
+				publicKeyStr := "04" + x + y
+				publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+				address := publicKeyToAddress(publicKeyBytes)
+
+				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       []byte(final),
+					Address:       address,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

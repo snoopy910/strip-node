@@ -102,11 +102,21 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	outChanKeygen := make(chan tss.Message)
 
 	saveChanEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+	saveChanSecp256k1 := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 
 	if keyCurve == EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEddsa)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		go localParty.Start()
+	} else if keyCurve == SECP256K1_CURVE {
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
+		if err != nil {
+			panic(err)
+		}
+		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanSecp256k1, *preParams)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	} else {
@@ -159,6 +169,40 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			publicKeyStr := base58.Encode(pk.Serialize())
 
 			fmt.Println("new TSS Address is: ", publicKeyStr)
+
+			out, err := json.Marshal(save)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_json := string(out)
+			AddKeyShare(identity, identityCurve, keyCurve, _json)
+
+			signersOut, err := json.Marshal(signers)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
+
+			completed = true
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
+				val <- "generated keygen"
+			}
+
+			fmt.Println("completed saving of new keygen ", publicKeyStr)
+		case save := <-saveChanSecp256k1:
+			fmt.Println("saving key")
+
+			x := toHexInt(save.ECDSAPub.X())
+			y := toHexInt(save.ECDSAPub.Y())
+			publicKeyStr := "04" + x + y
+			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+			newTssAddressStr := publicKeyToAddress(publicKeyBytes)
+
+			fmt.Println("new TSS Address is: ", newTssAddressStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {

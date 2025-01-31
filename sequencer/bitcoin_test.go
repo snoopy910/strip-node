@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,11 +19,11 @@ func mockBlockCypherServer(t *testing.T, handler http.HandlerFunc) *httptest.Ser
 
 // mockGetChain creates a mock GetChain function for testing
 func mockGetChain(chainId string, chainUrl string) GetChainFunc {
-	return func(id string) (Chain, error) {
+	return func(id string) (common.Chain, error) {
 		if id != chainId {
-			return Chain{}, fmt.Errorf("chain not found")
+			return common.Chain{}, fmt.Errorf("chain not found")
 		}
-		return Chain{
+		return common.Chain{
 			ChainId:     id,
 			ChainType:   "bitcoin",
 			ChainUrl:    chainUrl,

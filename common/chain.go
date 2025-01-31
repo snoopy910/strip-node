@@ -67,6 +67,20 @@ var Chains = []Chain{
 		KeyCurve:    "eddsa",
 		TokenSymbol: "APT",
 	},
+	{
+		ChainId:     "1000",
+		ChainType:   "bitcoin",
+		ChainUrl:    "https://api.blockcypher.com/v1/btc/main",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "BTC",
+	},
+	{
+		ChainId:     "1001",
+		ChainType:   "bitcoin",
+		ChainUrl:    "https://api.blockcypher.com/v1/btc/test3",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "BTC",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

@@ -69,7 +69,7 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
-	// create the wallet whose keycurve is eddsa here
+	// create the wallet whose keycurve is aptos_eddsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
@@ -99,6 +99,32 @@ func createWallet(identity string, identityCurve string) error {
 		Identity:      identity,
 		IdentityCurve: identityCurve,
 		KeyCurve:      "ecdsa",
+		Signers:       signersPublicKeyList,
+	}
+
+	marshalled, err = json.Marshal(createWalletRequest)
+	if err != nil {
+		return err
+	}
+
+	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client = http.Client{Timeout: 3 * time.Minute}
+	_, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	// create the wallet whose keycurve is secp256k1 here
+	createWalletRequest = CreateWalletRequest{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		KeyCurve:      "secp256k1",
 		Signers:       signersPublicKeyList,
 	}
 
@@ -182,6 +208,26 @@ func createWallet(identity string, identityCurve string) error {
 
 	ecdsaAddress := getAddressResponse.Address
 
+	// get the address of the wallet whose keycurve is secp256k1 here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=secp256k1")
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(body, &getAddressResponse)
+	if err != nil {
+		return err
+	}
+
+	secp256k1Address := getAddressResponse.Address
+
 	// add created wallet to the store
 	wallet := WalletSchema{
 		Identity:            identity,
@@ -190,6 +236,7 @@ func createWallet(identity string, identityCurve string) error {
 		EDDSAPublicKey:      eddsaAddress,
 		AptosEDDSAPublicKey: aptosEddsaAddress,
 		ECDSAPublicKey:      ecdsaAddress,
+		SECP256K1PublicKey:  secp256k1Address,
 	}
 
 	_, err = AddWallet(&wallet)

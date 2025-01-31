@@ -1,18 +1,27 @@
 package sequencer
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
+	"net/http"
 	"strings"
+	"time"
+
+	"strconv"
 
 	"github.com/StripChain/strip-node/bridge"
-	"github.com/mr-tron/base58"
-
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +34,7 @@ import (
 	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/mr-tron/base58"
 )
 
 func initiaiseBridge() {
@@ -461,23 +471,6 @@ func withdrawEVMTxn(
 		return "", err
 	}
 
-	// ethSigHex := hexutil.Encode(signatureBytes[:])
-	// recoveryParam := ethSigHex[len(ethSigHex)-2:]
-	// ethSigHex = ethSigHex[:len(ethSigHex)-2]
-
-	// if recoveryParam == "00" {
-	// 	ethSigHex = ethSigHex + "1b"
-	// } else {
-	// 	ethSigHex = ethSigHex + "1c"
-	// }
-
-	// ethSigHex = strings.Replace(ethSigHex, "0x", "", -1)
-
-	// ethSigHexBytes, err := hex.DecodeString(ethSigHex)
-	// if err != nil {
-	// 	return "", err
-	// }
-
 	signedTx, err := tx.WithSignature(signer, signatureBytes)
 	if err != nil {
 		return "", err
@@ -490,7 +483,6 @@ func withdrawEVMTxn(
 
 	fmt.Printf("Signed transaction: 0x%x\n", signedTxBytes)
 
-	// Optionally, send the transaction
 	err = client.SendTransaction(context.Background(), signedTx)
 	if err != nil {
 		return "", err
@@ -699,4 +691,114 @@ func withdrawSolanaTxn(
 	}
 
 	return hash.String(), nil
+}
+
+func withdrawBitcoinGetSignature(
+	rpcURL string,
+	account string,
+	amount string,
+	recipient string,
+) (string, error) {
+	// Create a new Bitcoin transaction
+	var msgTx wire.MsgTx
+	msgTx.Version = wire.TxVersion
+
+	// Parse solver output for transaction details
+	amountFloat, err := strconv.ParseFloat(amount, 64)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse amount: %w", err)
+	}
+
+	// Convert amount to satoshis
+	amountSatoshis := int64(amountFloat * 100000000)
+
+	// Create transaction output
+	addr, err := btcutil.DecodeAddress(recipient, &chaincfg.MainNetParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode recipient address: %w", err)
+	}
+
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		return "", fmt.Errorf("failed to create output script: %w", err)
+	}
+
+	txOut := wire.NewTxOut(amountSatoshis, pkScript)
+	msgTx.AddTxOut(txOut)
+
+	// Serialize the transaction
+	var buf bytes.Buffer
+	if err := msgTx.Serialize(&buf); err != nil {
+		return "", fmt.Errorf("failed to serialize transaction: %w", err)
+	}
+
+	return hex.EncodeToString(buf.Bytes()), nil
+}
+
+func withdrawBitcoinTxn(
+	rpcURL string,
+	transaction string,
+	signature string,
+) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Decode and prepare transaction
+	txBytes, _ := hex.DecodeString(transaction)
+	sigBytes, _ := hex.DecodeString(signature)
+
+	msgTx := wire.NewMsgTx(wire.TxVersion)
+	msgTx.Deserialize(bytes.NewReader(txBytes))
+
+	// Create and apply signature script
+	builder := txscript.NewScriptBuilder()
+	builder.AddData(sigBytes)
+	builder.AddData(txBytes)
+	signatureScript, _ := builder.Script()
+
+	for i := range msgTx.TxIn {
+		msgTx.TxIn[i].SignatureScript = signatureScript
+	}
+
+	// Serialize signed transaction
+	var signedTxBuffer bytes.Buffer
+	msgTx.Serialize(&signedTxBuffer)
+	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
+
+	// Prepare and send RPC request
+	rpcRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "sendrawtransaction",
+		"params":  []interface{}{signedTxHex},
+	}
+
+	jsonData, _ := json.Marshal(rpcRequest)
+	req, _ := http.NewRequestWithContext(ctx, "POST", rpcURL, bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Parse response
+	var rpcResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	json.Unmarshal(body, &rpcResponse)
+
+	if rpcResponse.Error != nil {
+		return "", fmt.Errorf("RPC error: %v", rpcResponse.Error.Message)
+	}
+
+	return rpcResponse.Result, nil
 }

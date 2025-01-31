@@ -45,6 +45,7 @@ type WalletSchema struct {
 	EDDSAPublicKey      string `json:"eddsaPublicKey"`
 	AptosEDDSAPublicKey string `json:"aptosEddsaPublicKey"`
 	ECDSAPublicKey      string `json:"ecdsaPublicKey"`
+	SECP256K1PublicKey  string `json:"secp256k1PublicKey"`
 	Signers             string `json:"signers"`
 }
 

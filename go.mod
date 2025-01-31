@@ -15,7 +15,7 @@ require (
 	github.com/insight-chain/inb-go v1.1.2
 	github.com/libp2p/go-libp2p v0.27.8
 	github.com/libp2p/go-libp2p-core v0.20.1
-	github.com/libp2p/go-libp2p-kad-dht v0.21.0
+	github.com/libp2p/go-libp2p-kad-dht v0.21.1
 	github.com/libp2p/go-libp2p-pubsub v0.9.0
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.9.0

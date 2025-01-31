@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"net/http"
 	"regexp"
+
+	"github.com/StripChain/strip-node/common"
 )
 
 // Bitcoin integration constants
@@ -67,11 +69,11 @@ func FetchTransaction(chainUrl string, txHash string) (*BlockCypherTransaction, 
 }
 
 // GetChainFunc is a function type for getting chain information
-type GetChainFunc func(chainId string) (Chain, error)
+type GetChainFunc func(chainId string) (common.Chain, error)
 
 // defaultGetChain is the default implementation that uses the GetChain function
-var defaultGetChain = func(chainId string) (Chain, error) {
-	return GetChain(chainId)
+var defaultGetChain = func(chainId string) (common.Chain, error) {
+	return common.GetChain(chainId)
 }
 
 // FeeDetails represents the transaction fee information
@@ -84,7 +86,7 @@ type FeeDetails struct {
 
 // GetBitcoinTransfers fetches Bitcoin transaction details and parses them into transfers
 // This function processes a transaction and extracts transfers from inputs and outputs
-func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, *FeeDetails, error) {
+func GetBitcoinTransfers(chainId string, txHash string) ([]common.Transfer, *FeeDetails, error) {
 	// Get chain information
 	chain, err := defaultGetChain(chainId)
 	if err != nil {
@@ -103,7 +105,7 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, *FeeDetails
 	}
 
 	// Initialize slice to hold transfers and variables to calculate total input/output values
-	var transfers []Transfer
+	var transfers []common.Transfer
 	var totalInputValue int64
 	var totalOutputValue int64
 
@@ -141,7 +143,7 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]Transfer, *FeeDetails
 			}
 
 			// Append the transfer details to the transfers slice
-			transfers = append(transfers, Transfer{
+			transfers = append(transfers, common.Transfer{
 				From:         fromAddress,         // From address of the transfer
 				To:           output.Addresses[0], // To address of the transfer
 				Amount:       formattedAmount,     // Formatted transfer amount in BTC

@@ -15,12 +15,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bridge"
+	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/util"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/ethereum/go-ethereum/common"
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -115,7 +117,7 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if operation.KeyCurve == "ecdsa" {
-						chain, err := GetChain(operation.ChainId)
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -177,8 +179,8 @@ func ProcessIntent(intentId int64) {
 								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" {
-						chain, err := GetChain(operation.ChainId)
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -191,31 +193,50 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						if chain.ChainType == "solana" {
-							txnHash, err := sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						var txnHash string
 
+						if chain.ChainType == "solana" {
+							txnHash, err = sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
+						}
 
-							var lockMetadata LockMetadata
-							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
-
-							if lockMetadata.Lock {
-								err := LockIdentity(lockSchema.Id)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
-							} else {
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						if chain.ChainType == "aptos" {
+							// Convert public key
+							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Printf("error getting public key: %v", err)
+								break
+							}
+							txnHash, err = aptos.SendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.AptosEDDSAPublicKey, signature)
+							fmt.Println(txnHash)
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
 							}
 						}
+
+						var lockMetadata LockMetadata
+						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+						if lockMetadata.Lock {
+							err := LockIdentity(lockSchema.Id)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+						} else {
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						}
+
 					}
 				} else if operation.Type == OPERATION_TYPE_SOLVER {
 					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
@@ -387,11 +408,29 @@ func ProcessIntent(intentId int64) {
 
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
-					} else if depositOperation.KeyCurve == "eddsa" {
-						transfers, err := GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
+					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
+						}
+
+						var transfers []common.Transfer
+
+						if chain.ChainType == "solana" {
+							transfers, err = GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "aptos" {
+							transfers, err = aptos.GetAptosTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
 						}
 
 						if len(transfers) == 0 {
@@ -630,7 +669,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					withdrawalChain, err := GetChain(operation.ChainId)
+					withdrawalChain, err := common.GetChain(operation.ChainId)
 
 					if err != nil {
 						fmt.Println(err)
@@ -872,7 +911,7 @@ func ProcessIntent(intentId int64) {
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" {
-						chain, err := GetChain(operation.ChainId)
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -891,8 +930,8 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" {
-						chain, err := GetChain(operation.ChainId)
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -900,6 +939,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "solana" {
 							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "aptos" {
+							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -922,12 +969,11 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" {
-						chain, err := GetChain(operation.ChainId)
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
-
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -941,8 +987,8 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" {
-						chain, err := GetChain(operation.ChainId)
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -950,6 +996,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "solana" {
 							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "aptos" {
+							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1069,12 +1123,11 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" {
-						chain, err := GetChain(operation.ChainId)
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
-
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -1088,8 +1141,8 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" {
-						chain, err := GetChain(operation.ChainId)
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -1097,6 +1150,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "solana" {
 							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "aptos" {
+							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1123,7 +1184,7 @@ func ProcessIntent(intentId int64) {
 						// check for confirmations
 						confirmed = false
 						if depositOperation.KeyCurve == "ecdsa" {
-							chain, err := GetChain(depositOperation.ChainId)
+							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1160,8 +1221,8 @@ func ProcessIntent(intentId int64) {
 									}
 								}
 							}
-						} else if depositOperation.KeyCurve == "eddsa" {
-							chain, err := GetChain(depositOperation.ChainId)
+						} else if depositOperation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1169,6 +1230,23 @@ func ProcessIntent(intentId int64) {
 
 							if chain.ChainType == "solana" {
 								txnConfirmed, err := checkSolanaTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+								}
+							}
+
+							if chain.ChainType == "aptos" {
+								txnConfirmed, err := aptos.CheckAptosTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -1262,7 +1340,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 }
 
 func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return false, err
 	}
@@ -1272,7 +1350,7 @@ func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) 
 		log.Fatal(err)
 	}
 
-	_, isPending, err := client.TransactionByHash(context.Background(), common.HexToHash(txnHash))
+	_, isPending, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))
 	if err != nil {
 		return false, err
 	}
@@ -1281,7 +1359,7 @@ func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) 
 }
 
 func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return false, err
 	}
@@ -1307,7 +1385,7 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 }
 
 func checkBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return false, err
 	}
@@ -1326,7 +1404,7 @@ func checkBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, err
 }
 
 func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
 	}
@@ -1366,7 +1444,7 @@ func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, d
 }
 
 func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
 	}
@@ -1407,7 +1485,7 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 }
 
 func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
 	}

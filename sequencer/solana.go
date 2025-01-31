@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util"
 	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
@@ -121,7 +122,7 @@ type HeliusRequest struct {
 	Transactions []string `json:"transactions"`
 }
 
-func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transfer, error) {
+func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common.Transfer, error) {
 	var url string
 	if chainId == "901" {
 		url = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
@@ -129,7 +130,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 		return nil, fmt.Errorf("unsupported chainId: %s", chainId)
 	}
 
-	chain, err := GetChain(chainId)
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +170,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
 	}
 
-	var transfers []Transfer
+	var transfers []common.Transfer
 
 	for _, response := range heliusResponse {
 		for _, nativeTransfer := range response.NativeTransfers {
@@ -177,7 +178,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", nativeTransfer.Amount), 10)
 			formattedAmount, _ := FormatUnits(num, 9)
 
-			transfers = append(transfers, Transfer{
+			transfers = append(transfers, common.Transfer{
 				From:         nativeTransfer.FromUserAccount,
 				To:           nativeTransfer.ToUserAccount,
 				Amount:       formattedAmount,
@@ -220,7 +221,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]Transf
 				return nil, err
 			}
 
-			transfers = append(transfers, Transfer{
+			transfers = append(transfers, common.Transfer{
 				From:         tokenTransfer.FromUserAccount,
 				To:           tokenTransfer.ToUserAccount,
 				Amount:       formattedAmount,

@@ -1,4 +1,4 @@
-package sequencer
+package common
 
 import "fmt"
 
@@ -52,6 +52,20 @@ var Chains = []Chain{
 		ChainUrl:    "https://polygon-pokt.nodies.app",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "MATIC",
+	},
+	{
+		ChainId:     "11",
+		ChainType:   "aptos",
+		ChainUrl:    "https://fullnode.mainnet.aptoslabs.com",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "APT",
+	},
+	{
+		ChainId:     "167",
+		ChainType:   "aptos",
+		ChainUrl:    "https://fullnode.devnet.aptoslabs.com",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "APT",
 	},
 	{
 		ChainId:     "1000",

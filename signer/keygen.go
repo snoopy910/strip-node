@@ -102,11 +102,17 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	outChanKeygen := make(chan tss.Message)
 
 	saveChanEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+	saveChanAptosEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 
 	if keyCurve == EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEddsa)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		go localParty.Start()
+	} else if keyCurve == APTOS_EDDSA_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanAptosEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	} else {
@@ -157,6 +163,42 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			}
 
 			publicKeyStr := base58.Encode(pk.Serialize())
+
+			fmt.Println("new TSS Address is: ", publicKeyStr)
+
+			out, err := json.Marshal(save)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_json := string(out)
+			AddKeyShare(identity, identityCurve, keyCurve, _json)
+
+			signersOut, err := json.Marshal(signers)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
+
+			completed = true
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
+				val <- "generated keygen"
+			}
+
+			fmt.Println("completed saving of new keygen ", publicKeyStr)
+		case save := <-saveChanAptosEddsa:
+			fmt.Println("saving key")
+
+			pk := edwards.PublicKey{
+				Curve: save.EDDSAPub.Curve(),
+				X:     save.EDDSAPub.X(),
+				Y:     save.EDDSAPub.Y(),
+			}
+
+			publicKeyStr := hex.EncodeToString(pk.Serialize())
 
 			fmt.Println("new TSS Address is: ", publicKeyStr)
 

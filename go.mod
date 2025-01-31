@@ -19,7 +19,9 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.9.0
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.9.0
+	github.com/portto/aptos-go-sdk v0.0.0-20230807103729-9a5201cad72f
 	github.com/stretchr/testify v1.10.0
+	github.com/the729/lcs v0.1.5
 )
 
 require (
@@ -69,6 +71,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.2 // indirect
+	github.com/hasura/go-graphql-client v0.9.1 // indirect
 	github.com/holiman/uint256 v1.2.3 // indirect
 	github.com/huin/goupnp v1.1.0 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
@@ -142,6 +145,7 @@ require (
 	github.com/smartystreets/assertions v0.0.0-20190215210624-980c5ac6f3ac // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streamingfast/logging v0.0.0-20220405224725-2755dab2ce75 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/teris-io/shortid v0.0.0-20201117134242-e59966efd125 // indirect
 	github.com/tidwall/gjson v1.9.3 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

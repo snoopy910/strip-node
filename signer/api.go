@@ -24,9 +24,10 @@ var messageChan = make(map[string]chan (Message))
 var keygenGeneratedChan = make(map[string]chan (string))
 
 var (
-	ECDSA_CURVE     = "ecdsa"
-	EDDSA_CURVE     = "eddsa"
-	SECP256K1_CURVE = "secp256k1"
+	ECDSA_CURVE       = "ecdsa"
+	EDDSA_CURVE       = "eddsa"
+	APTOS_EDDSA_CURVE = "aptos_eddsa"
+	SECP256K1_CURVE   = "secp256k1"
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -146,6 +147,24 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
+		} else if keyCurve == APTOS_EDDSA_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+			getAddressResponse := GetAddressResponse{
+				Address: "0x" + publicKeyStr,
+			}
+			err := json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
 		} else {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
@@ -253,7 +272,6 @@ func startHTTPServer(port string) {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 				return
 			}
-
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else if keyCurve == ECDSA_CURVE {
 			if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT ||
@@ -276,6 +294,8 @@ func startHTTPServer(port string) {
 				msgHash := crypto.Keccak256([]byte(msg))
 				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
 			}
+		} else if keyCurve == APTOS_EDDSA_CURVE {
+			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else {
 			http.Error(w, "invalid key curve", http.StatusBadRequest)
 			return
@@ -294,6 +314,10 @@ func startHTTPServer(port string) {
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == SECP256K1_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
+			signatureResponse.Address = sig.Address
+		} else if keyCurve == APTOS_EDDSA_CURVE {
+			signatureResponse.Signature = hex.EncodeToString(sig.Message)
+			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address
 		} else {
 			signatureResponse.Signature = base58.Encode(sig.Message)

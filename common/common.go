@@ -8,6 +8,16 @@ import (
 	"unsafe"
 )
 
+type Transfer struct {
+	From         string `json:"from"`
+	To           string `json:"to"`
+	Amount       string `json:"amount"`
+	Token        string `json:"token"`
+	IsNative     bool   `json:"isNative"`
+	TokenAddress string `json:"tokenAddress"`
+	ScaledAmount string `json:"scaledAmount"`
+}
+
 func FileExists(name string) (bool, error) {
 	_, err := os.Stat(name)
 	if err == nil {

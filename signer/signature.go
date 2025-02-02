@@ -141,6 +141,15 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
+	} else if keyCurve == APTOS_EDDSA_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		msg, _ := new(big.Int).SetString(string(hash), 16)
+
+		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
 	} else {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
@@ -218,6 +227,28 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       []byte(final),
 					Address:       address,
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else if keyCurve == APTOS_EDDSA_CURVE {
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
+
+				publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       publicKeyStr,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

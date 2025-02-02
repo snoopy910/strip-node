@@ -5,25 +5,16 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-type Transfer struct {
-	From         string `json:"from"`
-	To           string `json:"to"`
-	Amount       string `json:"amount"`
-	Token        string `json:"token"`
-	IsNative     bool   `json:"isNative"`
-	TokenAddress string `json:"tokenAddress"`
-	ScaledAmount string `json:"scaledAmount"`
-}
-
-func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]Transfer, error) {
-	chain, err := GetChain(chainId)
+func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]common.Transfer, error) {
+	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return nil, err
 	}
@@ -33,19 +24,19 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 		return nil, err
 	}
 
-	receipt, err := client.TransactionReceipt(context.Background(), common.HexToHash(txnHash))
+	receipt, err := client.TransactionReceipt(context.Background(), ethCommon.HexToHash(txnHash))
 	if err != nil {
 		return nil, err
 	}
 
-	var transfers []Transfer
+	var transfers []common.Transfer
 
 	for _, log := range receipt.Logs {
 		if log.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" {
-			from := common.BytesToAddress(log.Topics[1].Bytes()).Hex()
-			to := common.BytesToAddress(log.Topics[2].Bytes()).Hex()
+			from := ethCommon.BytesToAddress(log.Topics[1].Bytes()).Hex()
+			to := ethCommon.BytesToAddress(log.Topics[2].Bytes()).Hex()
 
-			decimal, symbol, err := getERC20Details(client, common.BytesToAddress(log.Address.Bytes()))
+			decimal, symbol, err := getERC20Details(client, ethCommon.BytesToAddress(log.Address.Bytes()))
 
 			if err != nil {
 				return nil, err
@@ -57,7 +48,7 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 				return nil, err
 			}
 
-			transfers = append(transfers, Transfer{
+			transfers = append(transfers, common.Transfer{
 				From:         from,
 				To:           to,
 				Amount:       formattedAmount,
@@ -69,7 +60,7 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 		}
 	}
 
-	tx, _, err := client.TransactionByHash(context.Background(), common.HexToHash(txnHash))
+	tx, _, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +68,7 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]T
 	wei := tx.Value()
 
 	if wei.Cmp(big.NewInt(0)) != 0 {
-		transfers = append(transfers, Transfer{
+		transfers = append(transfers, common.Transfer{
 			From:         ecdsaAddr,
 			To:           tx.To().String(),
 			Amount:       WeiToEther(wei).String(),
@@ -115,7 +106,7 @@ const (
 	erc20ABI = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"_from","type":"address"},{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"},{"name":"_spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"payable":true,"stateMutability":"payable","type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"owner","type":"address"},{"indexed":true,"name":"spender","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Approval","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Transfer","type":"event"}]`
 )
 
-func getERC20Details(client *ethclient.Client, tokenAddress common.Address) (uint8, string, error) {
+func getERC20Details(client *ethclient.Client, tokenAddress ethCommon.Address) (uint8, string, error) {
 	contractABI, err := abi.JSON(strings.NewReader(erc20ABI))
 	if err != nil {
 		return 0, "", err

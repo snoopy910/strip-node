@@ -179,7 +179,7 @@ func TestSendAptosTransaction(t *testing.T) {
 			publicKey:     "0x2a6014ea3b423190c0040078b9659fa5ba6435d9f95e7e29982b7bedd0544570",
 			signatureHex:  "46790e862b45ca53d24e8f0605b4baf92b3bf924954b3758781b1f2d4e4673f4286817522d8970d03cacfd5678e0e5a7bfaaf56e38c95071824bdc5aa00b0800",
 			ExpectError:   true,
-			ErrorMessage:  ErrTxExpired,
+			ErrorMessage:  ErrOldNonce,
 		},
 	}
 

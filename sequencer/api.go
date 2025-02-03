@@ -70,6 +70,12 @@ type GetAddressResponse struct {
 	Address string `json:"address"`
 }
 
+type GetBitcoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
+	RegtestAddress string `json:"regtestAddress"`
+}
+
 type IntentsResult struct {
 	Intents []*Intent `json:"intents"`
 	Total   int       `json:"total"`

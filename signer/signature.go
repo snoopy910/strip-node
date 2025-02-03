@@ -218,7 +218,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y
 				publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-				address := publicKeyToBitcoinAddress(publicKeyBytes)
+				address, _, _ := publicKeyToBitcoinAddresses(publicKeyBytes)
 
 				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
 

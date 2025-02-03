@@ -138,12 +138,14 @@ func startHTTPServer(port string) {
 
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-			address := publicKeyToBitcoinAddress(publicKeyBytes)
+			mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
 
-			getAddressResponse := GetAddressResponse{
-				Address: address,
+			getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
+				MainnetAddress: mainnetAddress,
+				TestnetAddress: testnetAddress,
+				RegtestAddress: regtestAddress,
 			}
-			err := json.NewEncoder(w).Encode(getAddressResponse)
+			err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
@@ -342,4 +344,10 @@ type SignatureReponse struct {
 
 type GetAddressResponse struct {
 	Address string `json:"address"`
+}
+
+type GetBitcoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
+	RegtestAddress string `json:"regtestAddress"`
 }

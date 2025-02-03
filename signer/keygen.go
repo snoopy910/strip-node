@@ -206,7 +206,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			y := toHexInt(save.ECDSAPub.Y())
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-			bitcoinAddressStr := publicKeyToBitcoinAddress(publicKeyBytes)
+			bitcoinAddressStr, _, _ := publicKeyToBitcoinAddresses(publicKeyBytes)
 
 			fmt.Println("new TSS Address (BTC) is: ", bitcoinAddressStr)
 

@@ -35,12 +35,20 @@ func publicKeyToAddress(pubkey []byte) string {
 	return publicAddress
 }
 
-func publicKeyToBitcoinAddress(pubkey []byte) string {
-	pubKey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.MainNetParams)
+func publicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
+	mainnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.MainNetParams)
 	if err != nil {
-		return "" // Handle error appropriately in your application
+		return "", "", ""
 	}
-	return pubKey.EncodeAddress()
+	testnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.TestNet3Params)
+	if err != nil {
+		return "", "", ""
+	}
+	regtestPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.RegressionNetParams)
+	if err != nil {
+		return "", "", ""
+	}
+	return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), regtestPubkey.EncodeAddress()
 }
 
 func toHexInt(n *big.Int) string {

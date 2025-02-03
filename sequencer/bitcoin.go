@@ -7,7 +7,43 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/btcsuite/btcd/chaincfg"
+
 	"github.com/StripChain/strip-node/common"
+)
+
+type BitcoinNetworkConfig struct {
+	Name          string
+	NetworkType   string
+	AddressPrefix []string
+	RPCPort       int
+	Params        *chaincfg.Params
+}
+
+var (
+	MainnetConfig = BitcoinNetworkConfig{
+		Name:          "mainnet",
+		NetworkType:   "mainnet",
+		AddressPrefix: []string{"1", "3", "bc1"},
+		RPCPort:       8332,
+		Params:        &chaincfg.MainNetParams,
+	}
+
+	TestnetConfig = BitcoinNetworkConfig{
+		Name:          "testnet",
+		NetworkType:   "testnet3",
+		AddressPrefix: []string{"m", "n", "tb1"},
+		RPCPort:       18332,
+		Params:        &chaincfg.TestNet3Params,
+	}
+
+	RegtestConfig = BitcoinNetworkConfig{
+		Name:          "regtest",
+		NetworkType:   "regtest",
+		AddressPrefix: []string{"m", "n", "bcrt1"},
+		RPCPort:       18443,
+		Params:        &chaincfg.RegressionNetParams,
+	}
 )
 
 // Bitcoin integration constants

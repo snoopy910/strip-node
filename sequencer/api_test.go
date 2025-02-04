@@ -139,7 +139,7 @@ func TestCreateIntent(t *testing.T) {
 
 	// Create handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		var intent Intent
 		err := json.NewDecoder(r.Body).Decode(&intent)
@@ -177,7 +177,7 @@ func TestGetIntent(t *testing.T) {
 
 	// Create handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		// Verify query parameter
 		if id := r.URL.Query().Get("id"); id != "1" {

@@ -13,7 +13,7 @@ require (
 	github.com/gagliardetto/solana-go v1.8.4
 	github.com/go-pg/pg/v10 v10.12.0
 	github.com/golang-jwt/jwt/v4 v4.3.0
-	github.com/gorilla/sessions v1.3.0
+	github.com/gorilla/mux v1.8.1
 	github.com/insight-chain/inb-go v1.1.2
 	github.com/libp2p/go-libp2p v0.27.8
 	github.com/libp2p/go-libp2p-core v0.20.1
@@ -24,6 +24,7 @@ require (
 	github.com/portto/aptos-go-sdk v0.0.0-20230807103729-9a5201cad72f
 	github.com/stretchr/testify v1.10.0
 	github.com/the729/lcs v0.1.5
+	golang.org/x/oauth2 v0.26.0
 )
 
 require (
@@ -69,8 +70,6 @@ require (
 	github.com/google/pprof v0.0.0-20230405160723-4a4c7d95572b // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e // indirect
-	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -181,6 +180,7 @@ require (
 	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.19.0 // indirect
+	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

@@ -45,6 +45,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGoogleAuth(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Starting handleGoogleAuth")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -57,9 +58,12 @@ func handleGoogleAuth(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&body)
 	if err != nil || body.Code == "" {
+		fmt.Printf("Error decoding request body: %v\n", err)
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
+
+	fmt.Printf("Received code: %s\n", body.Code)
 
 	// // Validate state parameter
 	// if body.State != oauthInfo.oauthState {
@@ -70,15 +74,19 @@ func handleGoogleAuth(w http.ResponseWriter, r *http.Request) {
 	// Exchange the authorization code for tokens
 	token, err := oauthInfo.config.Exchange(r.Context(), body.Code)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to exchange token: %v", err), http.StatusInternalServerError)
+		fmt.Printf("Error exchanging code for token: %v\n", err)
+		http.Error(w, "Failed to exchange code", http.StatusInternalServerError)
 		return
 	}
+
+	fmt.Printf("Successfully exchanged code for token: %+v\n", token)
 
 	// Get user information from Google
 	client := oauthInfo.config.Client(r.Context(), token)
 	userInfoResponse, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get user info: %v", err), http.StatusInternalServerError)
+		fmt.Printf("Error getting user info: %v\n", err)
+		http.Error(w, "Failed to get user info", http.StatusInternalServerError)
 		return
 	}
 	defer userInfoResponse.Body.Close()
@@ -86,14 +94,16 @@ func handleGoogleAuth(w http.ResponseWriter, r *http.Request) {
 	var userInfo UserInfo
 	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to decode user info: %v", err), http.StatusInternalServerError)
+		fmt.Printf("Error decoding user info: %v\n", err)
+		http.Error(w, "Failed to decode user info", http.StatusInternalServerError)
 		return
 	}
 
 	// Derive identity from Google ID
 	identity, identityCurve, err := oauthInfo.deriveIdentity(userInfo.ID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to derive identity: %v", err), http.StatusInternalServerError)
+		fmt.Printf("Error deriving identity: %v\n", err)
+		http.Error(w, "Failed to derive identity", http.StatusInternalServerError)
 		return
 	}
 
@@ -107,13 +117,15 @@ func handleGoogleAuth(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := oauthInfo.generateAccessToken(userInfo.ID, identity, identityCurve)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
+		fmt.Printf("Error generating access token: %v\n", err)
+		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
 	}
 
 	refreshToken, err := oauthInfo.generateRefreshToken(userInfo.ID, identity, identityCurve)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to generate refresh token: %v", err), http.StatusInternalServerError)
+		fmt.Printf("Error generating refresh token: %v\n", err)
+		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
 		return
 	}
 

@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/gob"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,7 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-
+	"context"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/oauth2"
@@ -20,11 +19,17 @@ import (
 )
 
 type GoogleAuth struct {
-	config         *oauth2.Config
+	config         OAuthConfig
 	jwtSecret      string
 	oauthState     string
 	verifier       string
 	walletSeedSalt string
+}
+
+type OAuthConfig interface {
+	AuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string
+	Exchange(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error)
+	Client(ctx context.Context, t *oauth2.Token) *http.Client
 }
 
 type UserInfo struct {
@@ -89,29 +94,27 @@ var (
 )
 
 func NewGoogleAuth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, walletSeedSalt string) *GoogleAuth {
-
-	googleOauthConfig := &oauth2.Config{
+	config := &oauth2.Config{
 		RedirectURL:  redirectUrl,
 		ClientID:     clientId,
 		ClientSecret: clientSecret,
 		Scopes: []string{
-			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
-			"openid",
+			"https://www.googleapis.com/auth/userinfo.email",
 		},
 		Endpoint: google.Endpoint,
 	}
 
-	// use PKCE to protect against CSRF attacks
-	verifier := oauth2.GenerateVerifier()
+	state := generateState()
+	verifier := generateState()
 
-	gob.Register(&UserInfo{})
-	gob.Register(&M{})
-
-	// State string for CSRF protection
-	oauthState := generateState()
-	return &GoogleAuth{googleOauthConfig, jwtSecret, oauthState, verifier, walletSeedSalt}
-
+	return &GoogleAuth{
+		config:         config,
+		jwtSecret:      jwtSecret,
+		oauthState:     state,
+		verifier:       verifier,
+		walletSeedSalt: walletSeedSalt,
+	}
 }
 
 // DeriveIdentity derives a deterministic public key from a Google ID

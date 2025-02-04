@@ -87,10 +87,16 @@ type TotalStats struct {
 	TotalIntents uint `json:"totalIntents"`
 }
 
-func enableCors(w *http.ResponseWriter) {
+func enableCors(w *http.ResponseWriter, r *http.Request) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	// Handle preflight OPTIONS requests
+	if r.Method == http.MethodOptions {
+		(*w).WriteHeader(http.StatusOK)
+		return
+	}
 }
 
 func startHTTPServer(port string, oauthEnabled bool) {
@@ -106,7 +112,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	// Method: GET
 	// Response: Plain text "OK"
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 		fmt.Fprintf(w, "OK")
 	})
 
@@ -120,7 +126,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Success: Empty response if wallet created
 	//   - Error: 500 with error message
 	router.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		_, err := verifyIdentity(r)
 		if err != nil {
@@ -166,7 +172,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Success: JSON encoded wallet object
 	//   - Error: 500 with error message
 	router.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		_, err := verifyIdentity(r)
 		if err != nil {
@@ -196,7 +202,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Success: JSON encoded wallet object for the bridge contract
 	//   - Error: 500 with error message
 	router.HandleFunc("/getBridgeAddress", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		wallet, err := GetWallet(BridgeContractAddress, "ecdsa")
 		if err != nil {
@@ -220,12 +226,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Error: 500 for processing errors
 	// Notes: Triggers async intent processing after creation
 	router.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
+		enableCors(&w, r)
 
 		var intent Intent
 
@@ -255,7 +256,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Success: JSON encoded Intent object
 	//   - Error: 500 with error message
 	router.HandleFunc("/getIntent", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		intentId := r.URL.Query().Get("id")
 		i, _ := strconv.ParseInt(intentId, 10, 64)
@@ -282,7 +283,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Success: JSON encoded IntentsResult {intents: Intent[], total: number}
 	//   - Error: 500 with error message
 	router.HandleFunc("/getIntents", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		limit := r.URL.Query().Get("limit")
 		skip := r.URL.Query().Get("skip")
@@ -318,7 +319,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Success: JSON encoded IntentsResult
 	//   - Error: 500 with error message
 	router.HandleFunc("/getSolverIntents", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		limit := r.URL.Query().Get("limit")
 		skip := r.URL.Query().Get("skip")
@@ -355,7 +356,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Success: JSON encoded IntentsResult
 	//   - Error: 500 with error message
 	router.HandleFunc("/getIntentsOfAddress", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		limit := r.URL.Query().Get("limit")
 		skip := r.URL.Query().Get("skip")
@@ -394,7 +395,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//     }
 	//   - Error: 500 with error message
 	router.HandleFunc("/getStatsOfSolver", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		solver := r.URL.Query().Get("solver")
 
@@ -431,7 +432,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//     }
 	//   - Error: 500 with error message
 	router.HandleFunc("/getTotalStats", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		totalSolvers, err := solversRegistry.TotalSolvers(
 			RPC_URL,
@@ -473,7 +474,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	//   - Error: 500 if operation not completed or other errors
 	// Notes: Supports both Ethereum and Solana transfers
 	router.HandleFunc("/parseOperation", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		operationId := r.URL.Query().Get("operationId")
 		intentId := r.URL.Query().Get("intentId")
@@ -537,33 +538,43 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	// Method: GET
 	// Response: Plain text "OK"
 	router.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 
 		fmt.Fprintf(w, "OK")
 	})
 
 	router.HandleFunc("/oauth/login", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 		login(w, r)
 	})
 
+	router.HandleFunc("/oauth/google", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w, r)
+		handleGoogleAuth(w, r)
+	})
+
+	router.HandleFunc("/oauth/refresh", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w, r)
+		handleRefreshToken(w, r)
+	})
+
 	router.HandleFunc("/oauth/accessToken", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 		requestAccess(w, r)
 	})
 
 	router.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 		handleCallback(w, r)
 	})
 
 	router.HandleFunc("/oauth/sign", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 		handleSigning(w, r)
 	})
 
 	router.HandleFunc("/oauth/verifySignature", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 		handleVerifySignature(w, r)
 	})
 

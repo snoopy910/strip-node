@@ -44,6 +44,148 @@ func login(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+func handleGoogleAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body struct {
+		Code string `json:"code"`
+		// State string `json:"state"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil || body.Code == "" {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// // Validate state parameter
+	// if body.State != oauthInfo.oauthState {
+	// 	http.Error(w, "Invalid state parameter", http.StatusBadRequest)
+	// 	return
+	// }
+
+	// Exchange the authorization code for tokens
+	token, err := oauthInfo.config.Exchange(r.Context(), body.Code)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to exchange token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Get user information from Google
+	client := oauthInfo.config.Client(r.Context(), token)
+	userInfoResponse, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get user info: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer userInfoResponse.Body.Close()
+
+	var userInfo UserInfo
+	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to decode user info: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Derive identity from Google ID
+	identity, identityCurve, err := oauthInfo.deriveIdentity(userInfo.ID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to derive identity: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate our custom tokens
+	idToken := userInfo.ID
+	// idToken, err := oauthInfo.generateIdToken(userInfo, identity, identityCurve)
+	// if err != nil {
+	// 	http.Error(w, fmt.Sprintf("Failed to generate ID token: %v", err), http.StatusInternalServerError)
+	// 	return
+	// }
+
+	accessToken, err := oauthInfo.generateAccessToken(userInfo.ID, identity, identityCurve)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	refreshToken, err := oauthInfo.generateRefreshToken(userInfo.ID, identity, identityCurve)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate refresh token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		Tokens *Tokens         `json:"tokens"`
+		Wallet *IdentityAccess `json:"wallet"`
+		User   *UserInfo       `json:"user"`
+	}{
+		Tokens: &Tokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			IdToken:      idToken,
+		},
+		Wallet: &IdentityAccess{
+			Identity:      identity,
+			IdentityCurve: identityCurve,
+		},
+		User: &userInfo,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func handleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil || body.RefreshToken == "" {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Verify the refresh token and extract claims
+	claims, err := oauthInfo.verifyToken(body.RefreshToken, "refresh_token", true, oauthInfo.jwtSecret)
+	if err != nil {
+		if errors.Is(err, ErrTokenExpired) {
+			http.Error(w, "Refresh token expired", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+		}
+		return
+	}
+
+	// Generate new access token using claims from refresh token
+	accessToken, err := oauthInfo.generateAccessToken(claims.Subject, claims.Identity, claims.IdentityCurve)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		ExpiresIn   int    `json:"expires_in"`
+	}{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   600, // 10 minutes in seconds
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 func handleCallback(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("handle google callback")
 	if r.FormValue("state") != oauthInfo.oauthState {
@@ -72,7 +214,6 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	defer userInfoResponse.Body.Close()
 
 	var userInfo UserInfo
@@ -89,22 +230,19 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("userInfo", userInfo)
-	// generate the idToken
+	// Generate tokens
 	idToken, err := oauthInfo.generateIdToken(userInfo, identity, identityCurve)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Generate a JWT access token
 	accessToken, err := oauthInfo.generateAccessToken(userInfo.ID, identity, identityCurve)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Generate a JWT refresh
 	refreshToken, err := oauthInfo.generateRefreshToken(userInfo.ID, identity, identityCurve)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -127,28 +265,19 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		Wallet: id,
 	}
 
-	fmt.Println("response", info)
-	// json.NewEncoder(w).Encode(*response)
-	// jsonData, err := json.Marshal(response)
-	// w.Header().Set("X-Auth-Info", string(jsonData))
-	// fmt.Println("jsonData", w)
-	// if err != nil {
-	// 	http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	// 	return
-	// }
-
 	ctx := context.WithValue(r.Context(), tokensCallbackInfoKey, info)
-
 	r = r.WithContext(ctx)
 
-	// TO REMOVE TO ADD A REDIRECT TO THE WALLET ENV VARIABLE
-	http.Redirect(w, r, "http://wallet.stripchain.xyz/", http.StatusMovedPermanently)
+	// Redirect to the wallet application with tokens in URL fragment
+	redirectURL := fmt.Sprintf("http://localhost:5173/auth/callback#access_token=%s&refresh_token=%s&id_token=%s",
+		accessToken, refreshToken, idToken)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func handleRedirect(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("handle redirect")
 	// Get the access token from the request
-	http.Redirect(w, r, "http://wallet.stripchain.xyz/", http.StatusMovedPermanently)
+	http.Redirect(w, r, "http://localhost:5173", http.StatusMovedPermanently)
 }
 
 func requestAccess(w http.ResponseWriter, r *http.Request) {

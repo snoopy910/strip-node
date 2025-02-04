@@ -579,7 +579,7 @@ func startHTTPServer(port string, oauthEnabled bool) {
 	})
 
 	router.HandleFunc("/oauth/redirect", func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(&w, r)
 		handleRedirect(w, r)
 	})
 

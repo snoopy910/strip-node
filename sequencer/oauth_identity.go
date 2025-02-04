@@ -1,6 +1,7 @@
 package sequencer
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/base64"
@@ -11,7 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	"context"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/oauth2"
@@ -199,7 +200,13 @@ func (s *GoogleAuth) generateAccessToken(userId string, identity string, identit
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign and get the complete encoded token as a string
-	return token.SignedString([]byte(s.jwtSecret))
+	signedToken, err := token.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		fmt.Printf("generateAccessToken: failed to sign token: %v\n", err)
+		return "", err
+	}
+	fmt.Printf("generateAccessToken: successfully signed token\n")
+	return signedToken, nil
 }
 
 func (s *GoogleAuth) generateRefreshToken(userId string, identity string, identityCurve string) (string, error) {
@@ -207,7 +214,7 @@ func (s *GoogleAuth) generateRefreshToken(userId string, identity string, identi
 		Identity:      identity,
 		IdentityCurve: identityCurve,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 7)), // Token expires after 7 days
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 168)), // Token expires after 7 days
 			Issuer:    tokenIssuer,
 			Subject:   userId,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -216,7 +223,14 @@ func (s *GoogleAuth) generateRefreshToken(userId string, identity string, identi
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString([]byte(s.jwtSecret))
+	// Sign and get the complete encoded token as a string
+	signedToken, err := token.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		fmt.Printf("generateRefreshToken: failed to sign token: %v\n", err)
+		return "", err
+	}
+	fmt.Printf("generateRefreshToken: successfully signed token\n")
+	return signedToken, nil
 }
 
 func (s *GoogleAuth) verifyToken(tokenStr string, tokenType string, verifyIdentity bool, secretKey string) (*ClaimsWithIdentity, error) {

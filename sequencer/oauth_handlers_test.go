@@ -179,3 +179,154 @@ func TestHandleGoogleAuth(t *testing.T) {
 		t.Errorf("expected user name 'Test User', got '%s'", responseData.User.Name)
 	}
 }
+
+var mockRefreshTokens = make(map[string]*RefreshTokenSchema)
+
+func mockGetRefreshToken(token string) (*RefreshTokenSchema, error) {
+	if rt, ok := mockRefreshTokens[token]; ok {
+		return rt, nil
+	}
+	return nil, nil
+}
+
+func TestHandleRefreshToken(t *testing.T) {
+	// Save original functions to restore later
+	oldOauthInfo := oauthInfo
+	oldGetRefreshToken := GetRefreshToken
+	defer func() {
+		oauthInfo = oldOauthInfo
+		GetRefreshToken = oldGetRefreshToken
+	}()
+
+	// Set up mock
+	GetRefreshToken = mockGetRefreshToken
+
+	// Create a fake OAuth config template
+	fakeConfig := &fakeOAuthConfig{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		RedirectURL:  "http://localhost:8080/callback",
+		Scopes:       []string{"test.scope"},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://test.example.com/auth",
+			TokenURL: "https://test.example.com/token",
+		},
+	}
+
+	// Create a test instance template
+	testAuth := &GoogleAuth{
+		config:         fakeConfig, // Pass pointer to fakeOAuthConfig
+		jwtSecret:      "test-jwt-secret",
+		oauthState:     "test-state",
+		verifier:       "test-verifier",
+		walletSeedSalt: "test-salt",
+	}
+
+	// Generate a valid refresh token for testing
+	refreshToken, err := testAuth.generateRefreshToken("123456789", "0x623e01B359e01549Ffd21E7b7aC7853afc227803", "ecdsa")
+	if err != nil {
+		t.Fatalf("Failed to generate test refresh token: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		method         string
+		refreshToken   string
+		expectedStatus int
+		expectNewToken bool
+	}{
+		{
+			name:           "Valid refresh token",
+			method:         http.MethodPost,
+			refreshToken:   refreshToken,
+			expectedStatus: http.StatusOK,
+			expectNewToken: true,
+		},
+		{
+			name:           "Invalid method",
+			method:         http.MethodGet,
+			refreshToken:   "valid-token",
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectNewToken: false,
+		},
+		{
+			name:           "Empty refresh token",
+			method:         http.MethodPost,
+			refreshToken:   "",
+			expectedStatus: http.StatusBadRequest,
+			expectNewToken: false,
+		},
+		{
+			name:           "Invalid refresh token format",
+			method:         http.MethodPost,
+			refreshToken:   "invalid-token",
+			expectedStatus: http.StatusUnauthorized,
+			expectNewToken: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear mock refresh tokens for each test
+			mockRefreshTokens = make(map[string]*RefreshTokenSchema)
+
+			// Create a fresh instance of GoogleAuth for each test
+			oauthInfo = &GoogleAuth{
+				config:         fakeConfig, // Pass pointer to fakeOAuthConfig
+				jwtSecret:      "test-jwt-secret",
+				oauthState:     "test-state",
+				verifier:       "test-verifier",
+				walletSeedSalt: "test-salt",
+			}
+
+			// Create request body
+			body := struct {
+				RefreshToken string `json:"refresh_token"`
+			}{
+				RefreshToken: tt.refreshToken,
+			}
+			bodyBytes, err := json.Marshal(body)
+			if err != nil {
+				t.Fatalf("failed to marshal request body: %v", err)
+			}
+
+			fmt.Printf("Test case '%s': oauthInfo pointer before request: %p\n", tt.name, oauthInfo)
+
+			// Create request
+			req := httptest.NewRequest(tt.method, "/auth/refresh", bytes.NewReader(bodyBytes))
+			w := httptest.NewRecorder()
+
+			// Call the handler
+			handleRefreshToken(w, req)
+
+			// Check status code
+			if w.Code != tt.expectedStatus {
+				t.Errorf("expected status code %d, got %d", tt.expectedStatus, w.Code)
+			}
+
+			// For successful cases, verify the response
+			if tt.expectNewToken {
+				var response struct {
+					AccessToken string `json:"access_token"`
+					TokenType   string `json:"token_type"`
+					ExpiresIn   int    `json:"expires_in"`
+				}
+
+				err = json.NewDecoder(w.Body).Decode(&response)
+				if err != nil {
+					t.Fatalf("failed to decode response: %v", err)
+				}
+
+				if response.AccessToken == "" {
+					t.Error("expected non-empty access token")
+				}
+				if response.TokenType != "Bearer" {
+					t.Errorf("expected token type 'Bearer', got '%s'", response.TokenType)
+				}
+				if response.ExpiresIn != 600 {
+					t.Errorf("expected expires_in 600, got %d", response.ExpiresIn)
+				}
+			}
+		})
+	}
+}

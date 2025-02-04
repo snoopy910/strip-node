@@ -127,7 +127,8 @@ func AddRefreshToken(refreshToken string, invalidated bool) (int64, error) {
 	return token.Id, nil
 }
 
-func GetRefreshToken(token string) (*RefreshTokenSchema, error) {
+// GetRefreshToken is a variable that holds the function to get refresh token data
+var GetRefreshToken = func(token string) (*RefreshTokenSchema, error) {
 	var refreshTokenSchema RefreshTokenSchema
 	err := client.Model(&refreshTokenSchema).Where("RefreshToken = ?", token).Select()
 	if err != nil {
@@ -135,7 +136,6 @@ func GetRefreshToken(token string) (*RefreshTokenSchema, error) {
 	}
 
 	return &refreshTokenSchema, nil
-
 }
 
 func LockIdentity(id int64) error {

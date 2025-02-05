@@ -175,7 +175,7 @@ func TestHandleGoogleAuth(t *testing.T) {
 
 		return []byte(oauthInfo.jwtSecret), nil
 	})
-	fmt.Println("claims", claims.RegisteredClaims)
+
 	if claims.RegisteredClaims.Subject != "123456789" {
 		t.Errorf("expected id token '123456789', got '%s'", claims.RegisteredClaims.Subject)
 	}
@@ -312,9 +312,7 @@ func TestHandleRefreshToken(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			// Call the handler
-			fmt.Println("Call the handler-1")
 			handleRefreshTokenMock(w, req)
-			fmt.Println("Call the handler-2")
 			// Check status code
 			if w.Code != tt.expectedStatus {
 				t.Errorf("expected status code %d, got %d", tt.expectedStatus, w.Code)

@@ -108,12 +108,11 @@ func handleGoogleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate our custom tokens
-	idToken := userInfo.ID
-	// idToken, err := oauthInfo.generateIdToken(userInfo, identity, identityCurve)
-	// if err != nil {
-	// 	http.Error(w, fmt.Sprintf("Failed to generate ID token: %v", err), http.StatusInternalServerError)
-	// 	return
-	// }
+	idToken, err := oauthInfo.generateIdToken(userInfo, identity, identityCurve)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate ID token: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	accessToken, err := oauthInfo.generateAccessToken(userInfo.ID, identity, identityCurve)
 	if err != nil {

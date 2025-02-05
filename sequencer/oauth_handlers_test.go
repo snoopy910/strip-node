@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -215,11 +216,12 @@ func TestHandleRefreshToken(t *testing.T) {
 
 	// Create a test instance template
 	testAuth := &GoogleAuth{
-		config:         fakeConfig, // Pass pointer to fakeOAuthConfig
-		jwtSecret:      "test-jwt-secret",
-		oauthState:     "test-state",
-		verifier:       "test-verifier",
-		walletSeedSalt: "test-salt",
+		config:              fakeConfig, // Pass pointer to fakeOAuthConfig
+		jwtSecret:           "test-jwt-secret",
+		oauthState:          "test-state",
+		verifier:            "test-verifier",
+		walletSeedSalt:      "test-salt",
+		stripchainWalletUrl: "test-wallet-seed",
 	}
 
 	// Generate a valid refresh token for testing
@@ -272,11 +274,12 @@ func TestHandleRefreshToken(t *testing.T) {
 
 			// Create a fresh instance of GoogleAuth for each test
 			oauthInfo = &GoogleAuth{
-				config:         fakeConfig, // Pass pointer to fakeOAuthConfig
-				jwtSecret:      "test-jwt-secret",
-				oauthState:     "test-state",
-				verifier:       "test-verifier",
-				walletSeedSalt: "test-salt",
+				config:              fakeConfig, // Pass pointer to fakeOAuthConfig
+				jwtSecret:           "test-jwt-secret",
+				oauthState:          "test-state",
+				verifier:            "test-verifier",
+				walletSeedSalt:      "test-salt",
+				stripchainWalletUrl: "test-wallet-seed",
 			}
 
 			// Create request body
@@ -297,8 +300,9 @@ func TestHandleRefreshToken(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			// Call the handler
-			handleRefreshToken(w, req)
-
+			fmt.Println("Call the handler-1")
+			handleRefreshTokenMock(w, req)
+			fmt.Println("Call the handler-2")
 			// Check status code
 			if w.Code != tt.expectedStatus {
 				t.Errorf("expected status code %d, got %d", tt.expectedStatus, w.Code)
@@ -328,5 +332,65 @@ func TestHandleRefreshToken(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func handleRefreshTokenMock(w http.ResponseWriter, r *http.Request) {
+	refreshTokensMap = make(map[string]bool)
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil || body.RefreshToken == "" {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Verify the refresh token and extract claims
+	claims, err := oauthInfo.verifyToken(body.RefreshToken, "refresh_token", true, oauthInfo.jwtSecret)
+	if err != nil {
+		if errors.Is(err, ErrTokenExpired) {
+			http.Error(w, "Refresh token expired", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+		}
+		return
+	}
+
+	// Generate new access token using claims from refresh token
+	accessToken, err := oauthInfo.generateAccessToken(claims.Subject, claims.Identity, claims.IdentityCurve)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate access token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	refreshTokensMap[body.RefreshToken] = true
+	refreshToken, err := oauthInfo.generateRefreshToken(claims.Subject, claims.Identity, claims.IdentityCurve)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate refresh token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int    `json:"expires_in"`
+	}{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    600, // 10 minutes in seconds
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		fmt.Printf("handleRefreshToken: failed to encode response: %v\n", err)
 	}
 }

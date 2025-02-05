@@ -442,7 +442,7 @@ func TestValidateAccessMiddleware(t *testing.T) {
 	router.Use(ValidateAccessMiddleware)
 	router.HandleFunc("/testOAuth", testHandler)
 
-	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt", "walletUrl")
 
 	// Valid token
 	accessTokenValid, _ := generateTestToken(oauthInfo, "1", time.Now().Add(time.Minute*10), "0xa", "ecdsa")
@@ -511,7 +511,7 @@ func TestValidateAccessMiddleware(t *testing.T) {
 }
 
 func TestGoogleAuthGenerateWallet(t *testing.T) {
-	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt", "walletUrl")
 	address, curve, _ := oauthInfo.deriveIdentity("someone@gmail.com")
 	if address == "" || curve == "" {
 		t.Errorf("Expected address and curve to be set, got empty strings")
@@ -528,7 +528,7 @@ func TestGoogleAuthGenerateWallet(t *testing.T) {
 }
 
 func TestGoogleAuthSign(t *testing.T) {
-	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt", "walletUrl")
 	message := strings.TrimSpace("message to sign")
 	signature, _ := oauthInfo.sign("someone@gmail.com", message)
 	expectedSignature := "dad814b8c7b43d3b26f9621ce017f7c6bd3609596b3294d6b6dba9c58c0386035cfc7dd6dd704f67b46ebc381fffa8a45c98afbcee34a3a91a2b316fabc17a531b"
@@ -544,7 +544,7 @@ func TestGoogleAuthSign(t *testing.T) {
 }
 
 func TestGoogleAuthSignEndpoint(t *testing.T) {
-	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt", "walletUrl")
 	router := mux.NewRouter()
 	router.Use(ValidateAccessMiddleware)
 	router.HandleFunc("/oauth/sign", handleSigning)
@@ -582,7 +582,7 @@ func TestGoogleAuthSignEndpoint(t *testing.T) {
 }
 
 func TestGoogleAuthVerifySignatureEndpoint(t *testing.T) {
-	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt")
+	oauthInfo = NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt", "walletUrl")
 	router := mux.NewRouter()
 	router.Use(ValidateAccessMiddleware)
 	router.HandleFunc("/oauth/verifySignature", handleVerifySignature)
@@ -682,7 +682,7 @@ type MockGoogleAuth struct {
 
 func NewMockGoogleAuth() *MockGoogleAuth {
 	return &MockGoogleAuth{
-		oauthInfo: NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt"),
+		oauthInfo: NewGoogleAuth("/redirect", "clientId", "clientSecret", "sessionSecret", "jwtSecret", "salt", "walletUrl"),
 	}
 }
 

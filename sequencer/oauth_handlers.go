@@ -184,14 +184,23 @@ func handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	AddRefreshToken(body.RefreshToken, true)
+	refreshToken, err := oauthInfo.generateRefreshToken(claims.Subject, claims.Identity, claims.IdentityCurve)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to generate refresh token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
 	response := struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		ExpiresIn   int    `json:"expires_in"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int    `json:"expires_in"`
 	}{
-		AccessToken: accessToken,
-		TokenType:   "Bearer",
-		ExpiresIn:   600, // 10 minutes in seconds
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    600, // 10 minutes in seconds
 	}
 
 	w.Header().Set("Content-Type", "application/json")

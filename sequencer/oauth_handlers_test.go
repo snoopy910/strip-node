@@ -168,13 +168,16 @@ func TestHandleGoogleAuth(t *testing.T) {
 	}
 
 	claims := &ClaimsWithIdentity{}
-	_, _ = jwt.ParseWithClaims(responseData.Tokens.IdToken, claims, func(token *jwt.Token) (interface{}, error) {
+	_, err = jwt.ParseWithClaims(responseData.Tokens.IdToken, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
 		return []byte(oauthInfo.jwtSecret), nil
 	})
+	if err != nil {
+		t.Errorf("failed to parse id token: %v", err)
+	}
 
 	if claims.RegisteredClaims.Subject != "123456789" {
 		t.Errorf("expected id token '123456789', got '%s'", claims.RegisteredClaims.Subject)

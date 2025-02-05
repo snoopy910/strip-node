@@ -40,14 +40,20 @@ func publicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
 	if err != nil {
 		return "", "", ""
 	}
+	fmt.Println("mainnetPubkey: ", mainnetPubkey)
+
 	testnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.TestNet3Params)
 	if err != nil {
-		return "", "", ""
+		return mainnetPubkey.EncodeAddress(), "", ""
 	}
+	fmt.Println("testnetPubkey: ", testnetPubkey)
+
 	regtestPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.RegressionNetParams)
 	if err != nil {
-		return "", "", ""
+		return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), ""
 	}
+	fmt.Println("regtestPubkey: ", regtestPubkey)
+
 	return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), regtestPubkey.EncodeAddress()
 }
 

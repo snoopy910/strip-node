@@ -28,6 +28,7 @@ func StartSequencer(
 	jwtSecret string,
 	sessionSecret string,
 	salt string,
+	walletUrl string,
 ) {
 	keepAlive := make(chan string)
 
@@ -62,8 +63,8 @@ func StartSequencer(
 
 	if enableOAuth {
 		fmt.Println("Initializing Google OAuth")
-		if redirectUrl != "" && clientId != "" && clientSecret != "" && sessionSecret != "" && jwtSecret != "" && salt != "" {
-			oauthInfo = NewGoogleAuth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, salt)
+		if redirectUrl != "" && clientId != "" && clientSecret != "" && sessionSecret != "" && jwtSecret != "" && salt != "" && walletUrl != "" {
+			oauthInfo = NewGoogleAuth(redirectUrl, clientId, clientSecret, sessionSecret, jwtSecret, salt, walletUrl)
 		} else {
 			panic("Missing OAuth parameters")
 		}

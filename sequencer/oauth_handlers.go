@@ -292,15 +292,16 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(ctx)
 
 	// Redirect to the wallet application with tokens in URL fragment
-	redirectURL := fmt.Sprintf("http://localhost:5173/auth/callback#access_token=%s&refresh_token=%s&id_token=%s",
-		accessToken, refreshToken, idToken)
+	//"http://localhost:5173/auth/callback#access_token=%s&refresh_token=%s&id_token=%s"
+	redirectURL := fmt.Sprintf("%s/auth/callback#access_token=%s&refresh_token=%s&id_token=%s",
+		oauthInfo.stripchainWalletUrl, accessToken, refreshToken, idToken)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func handleRedirect(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("handle redirect")
 	// Get the access token from the request
-	http.Redirect(w, r, "http://localhost:5173", http.StatusMovedPermanently)
+	http.Redirect(w, r, oauthInfo.stripchainWalletUrl, http.StatusMovedPermanently)
 }
 
 func requestAccess(w http.ResponseWriter, r *http.Request) {

@@ -20,11 +20,12 @@ import (
 )
 
 type GoogleAuth struct {
-	config         OAuthConfig
-	jwtSecret      string
-	oauthState     string
-	verifier       string
-	walletSeedSalt string
+	config              OAuthConfig
+	jwtSecret           string
+	oauthState          string
+	verifier            string
+	walletSeedSalt      string
+	stripchainWalletUrl string
 }
 
 type OAuthConfig interface {
@@ -94,7 +95,7 @@ var (
 	ErrRefreshTokenNotFound         = errors.New("refresh token not found")
 )
 
-func NewGoogleAuth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, walletSeedSalt string) *GoogleAuth {
+func NewGoogleAuth(redirectUrl string, clientId string, clientSecret string, sessionSecret string, jwtSecret string, walletSeedSalt string, walletUrl string) *GoogleAuth {
 	config := &oauth2.Config{
 		RedirectURL:  redirectUrl,
 		ClientID:     clientId,
@@ -110,11 +111,12 @@ func NewGoogleAuth(redirectUrl string, clientId string, clientSecret string, ses
 	verifier := generateState()
 
 	return &GoogleAuth{
-		config:         config,
-		jwtSecret:      jwtSecret,
-		oauthState:     state,
-		verifier:       verifier,
-		walletSeedSalt: walletSeedSalt,
+		config:              config,
+		jwtSecret:           jwtSecret,
+		oauthState:          state,
+		verifier:            verifier,
+		walletSeedSalt:      walletSeedSalt,
+		stripchainWalletUrl: walletUrl,
 	}
 }
 

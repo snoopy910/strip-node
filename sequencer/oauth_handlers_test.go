@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/oauth2"
 )
 
@@ -108,11 +109,12 @@ func TestHandleGoogleAuth(t *testing.T) {
 		},
 	}
 	oauthInfo = &GoogleAuth{
-		config:         fakeConfig,
-		jwtSecret:      "test-jwt-secret",
-		oauthState:     "test-state",
-		verifier:       "test-verifier",
-		walletSeedSalt: "test-salt",
+		config:              fakeConfig,
+		jwtSecret:           "test-jwt-secret",
+		oauthState:          "test-state",
+		verifier:            "test-verifier",
+		walletSeedSalt:      "test-salt",
+		stripchainWalletUrl: "strip-chain-wallet",
 	}
 
 	// Prepare a valid POST request with a JSON body containing a valid code
@@ -164,8 +166,18 @@ func TestHandleGoogleAuth(t *testing.T) {
 	if responseData.Tokens.RefreshToken == "" {
 		t.Errorf("expected non-empty refresh token, got empty string")
 	}
-	if responseData.Tokens.IdToken != "123456789" { // since idToken is set to userInfo.ID
-		t.Errorf("expected id token '123456789', got '%s'", responseData.Tokens.IdToken)
+
+	claims := &ClaimsWithIdentity{}
+	_, _ = jwt.ParseWithClaims(responseData.Tokens.IdToken, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return []byte(oauthInfo.jwtSecret), nil
+	})
+	fmt.Println("claims", claims.RegisteredClaims)
+	if claims.RegisteredClaims.Subject != "123456789" {
+		t.Errorf("expected id token '123456789', got '%s'", claims.RegisteredClaims.Subject)
 	}
 	if responseData.Wallet.Identity != "0x623e01B359e01549Ffd21E7b7aC7853afc227803" {
 		t.Errorf("expected wallet identity '0x623e01B359e01549Ffd21E7b7aC7853afc227803', got '%s'", responseData.Wallet.Identity)

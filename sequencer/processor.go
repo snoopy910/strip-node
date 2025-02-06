@@ -116,7 +116,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if operation.KeyCurve == "ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -324,7 +324,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if depositOperation.KeyCurve == "ecdsa" {
+					if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "secp256k1" {
 						// find token transfer events and check if first transfer is a valid token
 						transfers, err := GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
 						if err != nil {
@@ -688,7 +688,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if withdrawalChain.KeyCurve == "ecdsa" {
+					if withdrawalChain.KeyCurve == "ecdsa" || withdrawalChain.KeyCurve == "secp256k1" {
 						if withdrawalChain.ChainType == "bitcoin" {
 							// handle bitcoin withdrawal
 							var solverData map[string]interface{}
@@ -910,7 +910,7 @@ func ProcessIntent(intentId int64) {
 				// check for confirmations and update the status to completed
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -968,7 +968,7 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1122,7 +1122,7 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1183,7 +1183,7 @@ func ProcessIntent(intentId int64) {
 						depositOperation := intent.Operations[i-4]
 						// check for confirmations
 						confirmed = false
-						if depositOperation.KeyCurve == "ecdsa" {
+						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "secp256k1" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)

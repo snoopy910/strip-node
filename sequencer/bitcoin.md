@@ -31,12 +31,16 @@ This module adds Bitcoin (BTC) support to the `strip-node` sequencer. It enables
 
 ### Chain Configuration
 
-Bitcoin chain configuration is managed through `chain.go`, which defines the following chain:
+Bitcoin chain configuration is managed through `chain.go`, which defines the following chains:
 - Mainnet (ChainId: "1000"): Uses "https://api.blockcypher.com/v1/btc/main"
+- Testnet (ChainId: "1001"): Uses "https://api.blockcypher.com/v1/btc/test3"
+- Regtest (ChainId: "1002"): Uses "http://localhost:18443/v1/btc/regtest"
 
 ### Transaction Processing
 1. **Chain Selection**
    - Mainnet (chainId: "1000"): Uses "https://api.blockcypher.com/v1/btc/main"
+   - Testnet (chainId: "1001"): Uses "https://api.blockcypher.com/v1/btc/test3"
+   - Regtest (chainId: "1002"): Uses "http://localhost:18443/v1/btc/regtest" (local development network)
 
 2. **UTXO Management**
    ```go
@@ -70,6 +74,14 @@ The module handles various error scenarios:
 5. Empty responses
 6. Missing input/output addresses
 7. Malformed JSON responses
+8. Rate limit exceeded errors
+9. Invalid address format
+10. Insufficient confirmations
+
+#### Rate Limiting
+- BlockCypher API has a rate limit of 200 requests per hour for free tier
+- Implements exponential backoff for rate limit errors
+- Provides clear error messages when rate limits are exceeded
 
 ### API Integration
 

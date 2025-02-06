@@ -16,16 +16,18 @@ import (
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
 )
 
 var messageChan = make(map[string]chan (Message))
 var keygenGeneratedChan = make(map[string]chan (string))
 
-const (
+var (
 	ECDSA_CURVE       = "ecdsa"
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
+	SECP256K1_CURVE   = "secp256k1"
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -125,6 +127,25 @@ func startHTTPServer(port string) {
 				Address: publicKeyStr,
 			}
 			err := json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
+		} else if keyCurve == SECP256K1_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+
+			x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
+			y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
+
+			publicKeyStr := "04" + x + y
+			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+			mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
+
+			getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
+				MainnetAddress: mainnetAddress,
+				TestnetAddress: testnetAddress,
+				RegtestAddress: regtestAddress,
+			}
+			err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
@@ -263,6 +284,18 @@ func startHTTPServer(port string) {
 			} else {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 			}
+		} else if keyCurve == SECP256K1_CURVE {
+			if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT ||
+				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SWAP ||
+				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BURN ||
+				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_WITHDRAW {
+				// For secp256k1, we need to hash the message first
+				msgHash := crypto.Keccak256([]byte(msg))
+				go generateSignatureMessage(BridgeContractAddress, "secp256k1", "secp256k1", msgHash)
+			} else {
+				msgHash := crypto.Keccak256([]byte(msg))
+				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
+			}
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else {
@@ -280,6 +313,9 @@ func startHTTPServer(port string) {
 
 		if keyCurve == ECDSA_CURVE {
 			signatureResponse.Signature = string(sig.Message)
+			signatureResponse.Address = sig.Address
+		} else if keyCurve == SECP256K1_CURVE {
+			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
@@ -308,4 +344,10 @@ type SignatureReponse struct {
 
 type GetAddressResponse struct {
 	Address string `json:"address"`
+}
+
+type GetBitcoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
+	RegtestAddress string `json:"regtestAddress"`
 }

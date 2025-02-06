@@ -221,22 +221,28 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
-	err = json.Unmarshal(body, &getAddressResponse)
+	var getBitcoinAddressesResponse GetBitcoinAddressesResponse
+
+	err = json.Unmarshal(body, &getBitcoinAddressesResponse)
 	if err != nil {
 		return err
 	}
 
-	secp256k1Address := getAddressResponse.Address
+	bitcoinMainnetAddress := getBitcoinAddressesResponse.MainnetAddress
+	bitcoinTestnetAddress := getBitcoinAddressesResponse.TestnetAddress
+	bitcoinRegtestAddress := getBitcoinAddressesResponse.RegtestAddress
 
 	// add created wallet to the store
 	wallet := WalletSchema{
-		Identity:            identity,
-		IdentityCurve:       identityCurve,
-		Signers:             strings.Join(signersPublicKeyList, ","),
-		EDDSAPublicKey:      eddsaAddress,
-		AptosEDDSAPublicKey: aptosEddsaAddress,
-		ECDSAPublicKey:      ecdsaAddress,
-		SECP256K1PublicKey:  secp256k1Address,
+		Identity:                identity,
+		IdentityCurve:           identityCurve,
+		Signers:                 strings.Join(signersPublicKeyList, ","),
+		EDDSAPublicKey:          eddsaAddress,
+		AptosEDDSAPublicKey:     aptosEddsaAddress,
+		ECDSAPublicKey:          ecdsaAddress,
+		BitcoinMainnetPublicKey: bitcoinMainnetAddress,
+		BitcoinTestnetPublicKey: bitcoinTestnetAddress,
+		BitcoinRegtestPublicKey: bitcoinRegtestAddress,
 	}
 
 	_, err = AddWallet(&wallet)

@@ -81,6 +81,13 @@ var Chains = []Chain{
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
 	},
+	{
+		ChainId:     "1002",
+		ChainType:   "bitcoin",
+		ChainUrl:    "http://127.0.0.1:18443",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "BTC",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

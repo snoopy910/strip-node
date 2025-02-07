@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -20,9 +21,10 @@ import (
 )
 
 var (
-	ECDSA_CURVE     = "ecdsa"
-	EDDSA_CURVE     = "eddsa"
-	SECP256K1_CURVE = "secp256k1"
+	ECDSA_CURVE       = "ecdsa"
+	EDDSA_CURVE       = "eddsa"
+	APTOS_EDDSA_CURVE = "aptos_eddsa"
+	SECP256K1_CURVE   = "secp256k1"
 )
 
 type OperationForSigning struct {
@@ -89,6 +91,18 @@ func VerifySignature(
 
 		messageBytes := []byte(message)
 
+		if ed25519.Verify(publicKeyBytes, messageBytes, signatureBytes) {
+			return true, nil
+		}
+
+		return false, nil
+	} else if identityCurve == APTOS_EDDSA_CURVE {
+		signatureBytes, _ := hex.DecodeString(strings.TrimPrefix(identity, "0x"))
+		publicKeyBytes, _ := hex.DecodeString(strings.TrimPrefix(identity, "0x"))
+
+		messageBytes := []byte(message)
+
+		// Verify signature
 		if ed25519.Verify(publicKeyBytes, messageBytes, signatureBytes) {
 			return true, nil
 		}

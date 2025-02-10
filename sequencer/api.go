@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/StripChain/strip-node/aptos"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 )
 
@@ -502,8 +503,34 @@ func startHTTPServer(port string) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-		} else {
+		} else if operation.KeyCurve == "eddsa" {
 			transfers, err := GetSolanaTransfers(operation.ChainId, operation.Result, HeliusApiKey)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "aptos_eddsa" {
+			transfers, err := aptos.GetAptosTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "secp256k1" {
+			transfers, _, err := GetBitcoinTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)

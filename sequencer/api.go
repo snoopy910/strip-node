@@ -219,6 +219,7 @@ func startHTTPServer(port string) {
 	//   - Error: 400 for invalid request body
 	//   - Error: 500 for processing errors
 	// Notes: Triggers async intent processing after creation
+	// TODO: Intent validation
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 

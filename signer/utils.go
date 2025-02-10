@@ -2,6 +2,7 @@ package signer
 
 import (
 	"fmt"
+	"log"
 	"math/big"
 	"strconv"
 
@@ -36,6 +37,7 @@ func publicKeyToAddress(pubkey []byte) string {
 }
 
 func publicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
+	log.Println("pubkey", pubkey) // NOTE: don't remove this log
 	mainnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.MainNetParams)
 	if err != nil {
 		return "", "", ""

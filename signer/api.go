@@ -16,7 +16,6 @@ import (
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
 )
 
@@ -285,17 +284,7 @@ func startHTTPServer(port string) {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 			}
 		} else if keyCurve == SECP256K1_CURVE {
-			if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT ||
-				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SWAP ||
-				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BURN ||
-				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_WITHDRAW {
-				// For secp256k1, we need to hash the message first
-				msgHash := crypto.Keccak256([]byte(msg))
-				go generateSignatureMessage(BridgeContractAddress, "secp256k1", "secp256k1", msgHash)
-			} else {
-				msgHash := crypto.Keccak256([]byte(msg))
-				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
-			}
+			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else {
@@ -315,7 +304,7 @@ func startHTTPServer(port string) {
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == SECP256K1_CURVE {
-			signatureResponse.Signature = hex.EncodeToString(sig.Message)
+			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)

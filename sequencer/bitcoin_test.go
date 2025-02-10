@@ -1,6 +1,7 @@
 package sequencer
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -581,4 +582,32 @@ func TestIsValidBitcoinAddress(t *testing.T) {
 		address := "InvalidAddress123"
 		require.False(t, isValidBitcoinAddress(address))
 	})
+}
+
+func TestBitcoinPsbtSerilizedTxn(t *testing.T) {
+	serializedTxn := "cHNidP8BAHQCAAAAAQrNIZka3cgdzRlhZXX1YwG5zwZCdmtwg/M3eiBjuJJHAAAAAAD/////AmQAAAAAAAAAFgAUhHfs0h8qvtrZ9eCDwcAAk7NR8j2SyZo7AAAAABl2qRTupX02brO38k+CEHq86KDosx1PUoisAAAAAAABASIAypo7AAAAABl2qRTupX02brO38k+CEHq86KDosx1PUoisAAAA"
+
+	unsignedTx, err := ParseSerializedTransaction(serializedTxn)
+	require.NoError(t, err)
+	require.NotNil(t, unsignedTx)
+
+	// Verify transaction details
+	require.Equal(t, 2, int(unsignedTx.Version))
+	require.Equal(t, 1, len(unsignedTx.TxIn))
+	require.Equal(t, 2, len(unsignedTx.TxOut))
+
+	// Verify input details
+	txIn := unsignedTx.TxIn[0]
+	require.Equal(t, "4792b863207a37f383706b764206cfb90163f575656119cd1dc8dd1a9921cd0a", txIn.PreviousOutPoint.Hash.String())
+	require.Equal(t, uint32(0), txIn.PreviousOutPoint.Index)
+	require.Equal(t, uint32(4294967295), txIn.Sequence)
+
+	// Verify output details
+	require.Equal(t, int64(100), unsignedTx.TxOut[0].Value)
+	require.Equal(t, 22, len(unsignedTx.TxOut[0].PkScript))
+	require.Equal(t, "00148477ecd21f2abedad9f5e083c1c00093b351f23d", hex.EncodeToString(unsignedTx.TxOut[0].PkScript))
+
+	require.Equal(t, int64(999999890), unsignedTx.TxOut[1].Value)
+	require.Equal(t, 25, len(unsignedTx.TxOut[1].PkScript))
+	require.Equal(t, "76a914eea57d366eb3b7f24f82107abce8a0e8b31d4f5288ac", hex.EncodeToString(unsignedTx.TxOut[1].PkScript))
 }

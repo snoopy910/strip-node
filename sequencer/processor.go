@@ -21,7 +21,6 @@ import (
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/util"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -1489,51 +1488,44 @@ func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 	if err != nil {
 		return "", err
 	}
+	log.Println("rpcURL", chain.ChainUrl)
 
-	// Decode the serialized transaction
-	serializedTx, err := hex.DecodeString(serializedTxn)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
-	}
-
-	// Create a new bitcoin transaction
-	var msgTx wire.MsgTx
-	err = msgTx.Deserialize(bytes.NewReader(serializedTx))
-	if err != nil {
-		return "", fmt.Errorf("failed to deserialize transaction: %v", err)
-	}
-
-	// Decode the signature
+	// Step 1: Decode the signature from hex
 	signature, err := hex.DecodeString(signatureHex)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode signature: %v", err)
+		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+	log.Println("Decoded signature length:", len(signature))
+
+	// Step 2: Parse the serialized transaction
+	msgTx, err := ParseSerializedTransaction(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("error parsing transaction: %v", err)
 	}
 
-	// Create signature script
+	// Step 3: Create proper signature script
+	if len(msgTx.TxIn) == 0 {
+		return "", fmt.Errorf("transaction has no inputs")
+	}
+
+	// Create a proper Bitcoin script that only contains push operations
 	builder := txscript.NewScriptBuilder()
-	builder.AddData(signature)
-	builder.AddData([]byte(dataToSign))
+	builder.AddData(signature)          // Push the signature
+	builder.AddData([]byte(dataToSign)) // Push the public key
 	signatureScript, err := builder.Script()
 	if err != nil {
-		return "", fmt.Errorf("failed to build signature script: %v", err)
+		return "", fmt.Errorf("error building signature script: %v", err)
 	}
+	msgTx.TxIn[0].SignatureScript = signatureScript
 
-	// Apply signature script to all inputs
-	for i := range msgTx.TxIn {
-		msgTx.TxIn[i].SignatureScript = signatureScript
-	}
-
-	// Serialize the signed transaction
+	// Step 4: Serialize the signed transaction
 	var signedTxBuffer bytes.Buffer
 	if err := msgTx.Serialize(&signedTxBuffer); err != nil {
-		return "", fmt.Errorf("failed to serialize signed transaction: %v", err)
+		return "", fmt.Errorf("error serializing signed transaction: %v", err)
 	}
-
-	// Convert to hex for broadcasting
 	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
 
-	// Prepare RPC request
-	rpcURL := chain.ChainUrl
+	// Step 5: Prepare and send RPC request
 	rpcRequest := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"id":      1,
@@ -1543,55 +1535,49 @@ func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 
 	jsonData, err := json.Marshal(rpcRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal RPC request: %v", err)
+		return "", fmt.Errorf("error marshaling RPC request: %v", err)
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", rpcURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", chain.ChainUrl, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", fmt.Errorf("failed to create HTTP request: %v", err)
+		return "", fmt.Errorf("error creating HTTP request: %v", err)
 	}
 
 	// Add headers
 	req.Header.Set("Content-Type", "application/json")
-	// if chain.ChainApiKey != "" {
-	// 	req.Header.Set("Authorization", "Bearer "+chain.ChainApiKey)
-	// }
+	req.SetBasicAuth("your_rpc_user", "your_rpc_password")
 
 	// Send request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %v", err)
+		return "", fmt.Errorf("error sending transaction: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response
+	// Read and parse response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %v", err)
+		return "", fmt.Errorf("error reading response: %v", err)
 	}
 
-	// Parse response
 	var rpcResponse struct {
-		Result string    `json:"result"`
-		Error  *RPCError `json:"error"`
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 
 	if err := json.Unmarshal(body, &rpcResponse); err != nil {
-		return "", fmt.Errorf("failed to parse response: %v", err)
+		return "", fmt.Errorf("error parsing response: %v", err)
 	}
 
 	// Check for RPC error
 	if rpcResponse.Error != nil {
-		return "", fmt.Errorf("RPC error: %v", rpcResponse.Error.Message)
+		return "", fmt.Errorf("RPC error %d: %s", rpcResponse.Error.Code, rpcResponse.Error.Message)
 	}
 
-	// Return the transaction hash from RPC response
 	return rpcResponse.Result, nil
-}
-
-type RPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
 }

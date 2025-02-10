@@ -1,6 +1,8 @@
 package sequencer
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -8,6 +10,7 @@ import (
 	"regexp"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/wire"
 
 	"github.com/StripChain/strip-node/common"
 )
@@ -275,4 +278,89 @@ func isValidBitcoinAddress(address string) bool {
 	// Basic regex to validate Bitcoin address format
 	re := regexp.MustCompile(`^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$`)
 	return re.MatchString(address)
+}
+
+// ParseSerializedTransaction parses a base64 encoded serialized transaction (PSBT or raw transaction)
+// and returns the unsigned transaction as a wire.MsgTx.
+// If the input is a PSBT, it extracts the unsigned transaction from the global map.
+// If the input is a raw transaction, it deserializes it directly.
+func ParseSerializedTransaction(serializedTxn string) (*wire.MsgTx, error) {
+	// Decode base64 transaction
+	txBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64 transaction: %v", err)
+	}
+
+	// Check if this is a PSBT by looking for magic bytes
+	if bytes.HasPrefix(txBytes, []byte("psbt\xff")) {
+		return parsePSBT(txBytes)
+	}
+
+	// If not a PSBT, try to parse as a raw transaction
+	return parseRawTransaction(txBytes)
+}
+
+// parsePSBT parses a Partially Signed Bitcoin Transaction and returns the unsigned transaction.
+func parsePSBT(txBytes []byte) (*wire.MsgTx, error) {
+	// Skip PSBT magic bytes and separator
+	txBytes = txBytes[len("psbt\xff"):]
+
+	// Extract the unsigned transaction from the global map
+	var unsignedTxBytes []byte
+	var offset int
+	for offset < len(txBytes) {
+		// Read key length
+		if offset >= len(txBytes) {
+			break
+		}
+		keyLen := int(txBytes[offset])
+		offset++
+
+		if keyLen == 0 {
+			// Separator to inputs map
+			offset++
+			break
+		}
+
+		// Read key
+		if offset+keyLen >= len(txBytes) {
+			return nil, fmt.Errorf("invalid key length")
+		}
+		key := txBytes[offset : offset+keyLen]
+		offset += keyLen
+
+		// Read value length
+		if offset >= len(txBytes) {
+			return nil, fmt.Errorf("no value length")
+		}
+		valueLen := int(txBytes[offset])
+		offset++
+
+		if offset+valueLen > len(txBytes) {
+			return nil, fmt.Errorf("invalid value length")
+		}
+		value := txBytes[offset : offset+valueLen]
+		offset += valueLen
+
+		// If this is the unsigned transaction (key = 0x00)
+		if len(key) == 1 && key[0] == 0x00 {
+			unsignedTxBytes = value
+		}
+	}
+
+	if unsignedTxBytes == nil {
+		return nil, fmt.Errorf("no unsigned transaction found in PSBT")
+	}
+
+	return parseRawTransaction(unsignedTxBytes)
+}
+
+// parseRawTransaction parses a raw transaction bytes into a wire.MsgTx.
+func parseRawTransaction(txBytes []byte) (*wire.MsgTx, error) {
+	tx := wire.NewMsgTx(wire.TxVersion)
+	err := tx.Deserialize(bytes.NewReader(txBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize transaction: %v", err)
+	}
+	return tx, nil
 }

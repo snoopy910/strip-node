@@ -97,7 +97,7 @@ func VerifySignature(
 
 		return false, nil
 	} else if identityCurve == APTOS_EDDSA_CURVE {
-		signatureBytes, _ := hex.DecodeString(strings.TrimPrefix(identity, "0x"))
+		signatureBytes, _ := hex.DecodeString(strings.TrimPrefix(signature, "0x"))
 		publicKeyBytes, _ := hex.DecodeString(strings.TrimPrefix(identity, "0x"))
 
 		messageBytes := []byte(message)

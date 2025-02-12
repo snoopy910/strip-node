@@ -324,7 +324,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "secp256k1" {
+					if depositOperation.KeyCurve == "ecdsa" {
 						// find token transfer events and check if first transfer is a valid token
 						transfers, err := GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
 						if err != nil {
@@ -408,7 +408,8 @@ func ProcessIntent(intentId int64) {
 
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
-					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" {
+					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" ||
+						depositOperation.KeyCurve == "secp256k1" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -427,6 +428,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "aptos" {
 							transfers, err = aptos.GetAptosTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "bitcoin" {
+							transfers, _, err = GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break

@@ -22,6 +22,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -97,7 +98,9 @@ func initiaiseBridge() {
 		log.Fatal("error casting public key to ECDSA")
 	}
 
-	instance, err := bridge.NewBridge(common.HexToAddress(BridgeContractAddress), client)
+	toAddress := common.HexToAddress(BridgeContractAddress)
+
+	instance, err := bridge.NewBridge(toAddress, client)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,11 +117,40 @@ func initiaiseBridge() {
 		log.Fatal(err)
 	}
 
+	abi, err := bridge.BridgeMetaData.GetAbi()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	data, err := abi.Pack("setAuthority", common.HexToAddress(wallet.ECDSAPublicKey))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(data)
+	msg := ethereum.CallMsg{
+		From:      fromAddress,
+		To:        &toAddress,
+		Value:     big.NewInt(0),
+		GasPrice:  gasPrice,
+		GasTipCap: nil,
+		GasFeeCap: nil,
+		Data:      data,
+	}
+	gas, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		log.Fatalf("failed to estimate gas: %v", err)
+	}
+
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
+	auth.GasLimit = uint64(float64(gas) * 1.5)
+	// auth.GasLimit = 972978
 
 	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
@@ -146,7 +178,9 @@ func mintBridge(amount string, account string, token string, signature string) (
 		return "", err
 	}
 
-	instance, err := bridge.NewBridge(common.HexToAddress(BridgeContractAddress), client)
+	toAddress := common.HexToAddress(BridgeContractAddress)
+
+	instance, err := bridge.NewBridge(toAddress, client)
 	if err != nil {
 		return "", err
 	}
@@ -173,24 +207,17 @@ func mintBridge(amount string, account string, token string, signature string) (
 		return "", err
 	}
 
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
 		return "", err
 	}
 
-	auth := bind.NewKeyedTransactor(privateKey)
-	auth.Value = big.NewInt(0) // in wei
-	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
-
-	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-
-	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	abi, err := bridge.BridgeMetaData.GetAbi()
 	if err != nil {
-		return "", err
+		log.Fatal(err)
 	}
-
-	auth.Nonce = big.NewInt(int64(txnNonce))
 
 	ethSigHex := hexutil.Encode(signatureBytes[:])
 	recoveryParam := ethSigHex[len(ethSigHex)-2:]
@@ -208,6 +235,42 @@ func mintBridge(amount string, account string, token string, signature string) (
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	data, err := abi.Pack("mint", amountBigInt, common.HexToAddress(token), common.HexToAddress(account), nonce, ethSigHexBytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(data)
+	msg := ethereum.CallMsg{
+		From:      fromAddress,
+		To:        &toAddress,
+		Value:     big.NewInt(0),
+		GasPrice:  gasPrice,
+		GasTipCap: nil,
+		GasFeeCap: nil,
+		Data:      data,
+	}
+	gas, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		log.Fatalf("failed to estimate gas in mintBridge: %v", err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Value = big.NewInt(0) // in wei
+	auth.GasPrice = gasPrice
+	auth.GasLimit = uint64(float64(gas) * 1.5)
+	// auth.GasLimit = 972978
+
+	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return "", err
+	}
+
+	auth.Nonce = big.NewInt(int64(txnNonce))
 
 	tx, err := instance.Mint(
 		auth,
@@ -238,7 +301,9 @@ func swapBridge(
 		return "", err
 	}
 
-	instance, err := bridge.NewBridge(common.HexToAddress(BridgeContractAddress), client)
+	toAddress := common.HexToAddress(BridgeContractAddress)
+
+	instance, err := bridge.NewBridge(toAddress, client)
 	if err != nil {
 		return "", err
 	}
@@ -264,24 +329,30 @@ func swapBridge(
 		return "", err
 	}
 
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
 		return "", err
 	}
 
-	auth := bind.NewKeyedTransactor(privateKey)
-	auth.Value = big.NewInt(0) // in wei
-	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
-
-	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-
-	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	abi, err := bridge.BridgeMetaData.GetAbi()
 	if err != nil {
-		return "", err
+		log.Fatal(err)
 	}
 
-	auth.Nonce = big.NewInt(int64(txnNonce))
+	_amountIn, _ := new(big.Int).SetString(amountIn, 10)
+
+	params := bridge.ISwapRouterExactInputSingleParams{
+		AmountIn:          _amountIn,
+		AmountOutMinimum:  big.NewInt(0),
+		TokenIn:           common.HexToAddress(tokenIn),
+		TokenOut:          common.HexToAddress(tokenOut),
+		Fee:               big.NewInt(500),
+		Recipient:         common.HexToAddress(account),
+		Deadline:          big.NewInt(0).SetInt64(deadline),
+		SqrtPriceLimitX96: big.NewInt(0),
+	}
 
 	ethSigHex := hexutil.Encode(signatureBytes[:])
 	recoveryParam := ethSigHex[len(ethSigHex)-2:]
@@ -300,18 +371,41 @@ func swapBridge(
 		log.Fatal(err)
 	}
 
-	_amountIn, _ := new(big.Int).SetString(amountIn, 10)
-
-	params := bridge.ISwapRouterExactInputSingleParams{
-		AmountIn:          _amountIn,
-		AmountOutMinimum:  big.NewInt(0),
-		TokenIn:           common.HexToAddress(tokenIn),
-		TokenOut:          common.HexToAddress(tokenOut),
-		Fee:               big.NewInt(500),
-		Recipient:         common.HexToAddress(account),
-		Deadline:          big.NewInt(0).SetInt64(deadline),
-		SqrtPriceLimitX96: big.NewInt(0),
+	data, err := abi.Pack("swap", params, common.HexToAddress(account), nonce, ethSigHexBytes)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(data)
+	msg := ethereum.CallMsg{
+		From:      fromAddress,
+		To:        &toAddress,
+		Value:     big.NewInt(0),
+		GasPrice:  gasPrice,
+		GasTipCap: nil,
+		GasFeeCap: nil,
+		Data:      data,
+	}
+	gas, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		log.Fatalf("failed to estimate gas: %v", err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Value = big.NewInt(0) // in wei
+	auth.GasPrice = gasPrice
+	auth.GasLimit = uint64(float64(gas) * 1.5)
+	// auth.GasLimit = 972978
+
+	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return "", err
+	}
+
+	auth.Nonce = big.NewInt(int64(txnNonce))
 
 	tx, err := instance.Swap(
 		auth,
@@ -339,7 +433,9 @@ func burnTokens(
 		return "", err
 	}
 
-	instance, err := bridge.NewBridge(common.HexToAddress(BridgeContractAddress), client)
+	toAddress := common.HexToAddress(BridgeContractAddress)
+
+	instance, err := bridge.NewBridge(toAddress, client)
 	if err != nil {
 		return "", err
 	}
@@ -366,24 +462,17 @@ func burnTokens(
 		return "", err
 	}
 
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
 		return "", err
 	}
 
-	auth := bind.NewKeyedTransactor(privateKey)
-	auth.Value = big.NewInt(0) // in wei
-	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
-
-	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-
-	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	abi, err := bridge.BridgeMetaData.GetAbi()
 	if err != nil {
-		return "", err
+		log.Fatal(err)
 	}
-
-	auth.Nonce = big.NewInt(int64(txnNonce))
 
 	ethSigHex := hexutil.Encode(signatureBytes[:])
 	recoveryParam := ethSigHex[len(ethSigHex)-2:]
@@ -401,6 +490,42 @@ func burnTokens(
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	data, err := abi.Pack("burn", common.HexToAddress(account), amountBigInt, common.HexToAddress(token), nonce, ethSigHexBytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(data)
+	msg := ethereum.CallMsg{
+		From:      fromAddress,
+		To:        &toAddress,
+		Value:     big.NewInt(0),
+		GasPrice:  gasPrice,
+		GasTipCap: nil,
+		GasFeeCap: nil,
+		Data:      data,
+	}
+	gas, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		log.Fatalf("failed to estimate gas: %v", err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Value = big.NewInt(0) // in wei
+	auth.GasPrice = gasPrice
+	auth.GasLimit = uint64(float64(gas) * 1.5)
+	// auth.GasLimit = 972978
+
+	txnNonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return "", err
+	}
+
+	auth.Nonce = big.NewInt(int64(txnNonce))
 
 	tx, err := instance.Burn(
 		auth,

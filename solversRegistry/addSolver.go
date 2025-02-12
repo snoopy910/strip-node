@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -51,11 +52,47 @@ func AddSolver(rpcURL string, contractAddress string, privKey string, solverDoma
 		log.Fatal(err)
 	}
 
+	toAddress := common.HexToAddress(contractAddress)
+
+	abi, err := SolversRegistryMetaData.GetAbi()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// big.int array of chain ids
+	chains := make([]*big.Int, 0)
+	chains = append(chains, big.NewInt(1))
+	chains = append(chains, big.NewInt(3))
+
+	data, err := abi.Pack("updateSolver", solverDomain, true, chains)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(data)
+	msg := ethereum.CallMsg{
+		From:      fromAddress,
+		To:        &toAddress,
+		Value:     big.NewInt(0),
+		GasPrice:  gasPrice,
+		GasTipCap: nil,
+		GasFeeCap: nil,
+		Data:      data,
+	}
+	gas, err := client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
+	auth.GasLimit = uint64(float64(gas) * 1.5)
+	// auth.GasLimit = 972978
 
 	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
@@ -63,11 +100,6 @@ func AddSolver(rpcURL string, contractAddress string, privKey string, solverDoma
 	}
 
 	auth.Nonce = big.NewInt(int64(nonce))
-
-	// big.int array of chain ids
-	chains := make([]*big.Int, 0)
-	chains = append(chains, big.NewInt(1))
-	chains = append(chains, big.NewInt(3))
 
 	tx, err := instance.UpdateSolver(auth, solverDomain, true, chains)
 	if err != nil {

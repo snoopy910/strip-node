@@ -561,6 +561,19 @@ func startHTTPServer(port string) {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 				return
 			}
+		} else if operation.KeyCurve == "algorand_eddsa" {
+			transfers, err := GetAlgorandTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
 		}
 	})
 

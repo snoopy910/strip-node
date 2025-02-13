@@ -1,6 +1,8 @@
 package signer
 
 import (
+	"crypto/sha512"
+	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -28,6 +30,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
+	ALGORAND_CURVE    = "algorand_eddsa"
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -167,6 +170,31 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
+		} else if keyCurve == ALGORAND_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			// Get the public key bytes
+			pkBytes := pk.Serialize()
+
+			// Convert to Algorand address format
+			// Algorand addresses are the last 32 bytes of the SHA512_256 of the public key
+			hash := sha512.Sum512_256(pkBytes)
+			// Add the prefix 'a' for Algorand address
+			address := "a" + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:])
+
+			getAddressResponse := GetAddressResponse{
+				Address: address,
+			}
+			err := json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
 		} else {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
@@ -298,13 +326,28 @@ func startHTTPServer(port string) {
 			}
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
+		} else if keyCurve == ALGORAND_CURVE {
+			// For Algorand, decode the base32 message first
+			msgBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(msg)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error decoding Algorand message: %v", err), http.StatusInternalServerError)
+				return
+			}
+			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else {
 			http.Error(w, "invalid key curve", http.StatusBadRequest)
 			return
 		}
 
+		// Create a channel using the message as the key. The key format varies by chain:
+		// - Solana: base58 encoded string (from client)
+		// - Bitcoin/Aptos: hex encoded string
+		// - Algorand: base32 encoded string (from client)
+		// - Ethereum: raw bytes as string
+		// This same format must be used in message.go when looking up the channel
 		messageChan[msg] = make(chan Message)
 
+		// Wait for the signature to be sent back through the channel
 		sig := <-messageChan[msg]
 
 		w.Header().Set("Content-Type", "application/json")
@@ -320,6 +363,10 @@ func startHTTPServer(port string) {
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
+			signatureResponse.Address = sig.Address
+		} else if keyCurve == ALGORAND_CURVE {
+			// For Algorand, encode the signature in base32 (Algorand's standard)
+			signatureResponse.Signature = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
 		} else {
 			signatureResponse.Signature = base58.Encode(sig.Message)

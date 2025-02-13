@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,9 +15,10 @@ import (
 	"strings"
 
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/algorand/go-algorand-sdk/v2/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1" // Add this import
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/mr-tron/base58"
 )
 
@@ -25,6 +27,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
+	ALGORAND_CURVE    = "algorand_eddsa"
 )
 
 type OperationForSigning struct {
@@ -153,6 +156,27 @@ func VerifySignature(
 		// Verify the signature using ECDSA
 		valid := ecdsa.Verify(pubKey, hash[:], r, s)
 		return valid, nil
+	} else if identityCurve == ALGORAND_CURVE {
+		// Decode the public key from the Algorand address (base32 encoded with checksum)
+		pk, err := types.DecodeAddress(identity)
+		if err != nil {
+			return false, fmt.Errorf("invalid Algorand address: %v", err)
+		}
+
+		// Convert message to bytes
+		msgBytes := []byte(message)
+
+		// Decode signature from base32 (Algorand standard)
+		sigBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
+		}
+
+		// Convert public key bytes to ed25519.PublicKey
+		pubKeyBytes := pk.GetPublicKey()
+		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+		copy(pubKey, pubKeyBytes)
+		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
 	} else {
 		return false, fmt.Errorf("unsupported curve: %s", identityCurve)
 	}

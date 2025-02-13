@@ -2,6 +2,8 @@ package signer
 
 import (
 	"context"
+	"encoding/base32"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -98,11 +100,37 @@ func handleIncomingMessage(message []byte) {
 	} else if msg.Type == MESSAGE_TYPE_SIGN {
 		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
-		if msg.KeyCurve == EDDSA_CURVE {
+		// When looking up the channel to send back the signature, we must encode the hash
+		// in the same format that was used when creating the channel in api.go.
+		// This ensures we find the correct channel for each chain's message format.
+		switch msg.KeyCurve {
+		case EDDSA_CURVE:
+			// Solana: Client sends base58 string -> decode -> process -> encode back to base58
+			// Channel key must match the original base58 format from client
 			if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
 				val <- msg
 			}
-		} else {
+		case SECP256K1_CURVE:
+			// Bitcoin: Client sends string -> hash -> process -> encode to hex
+			// Channel key must match the hex encoded hash
+			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
+		case APTOS_EDDSA_CURVE:
+			// Aptos: Client sends string -> process -> encode to hex
+			// Channel key must match the hex encoded format
+			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
+		case ALGORAND_CURVE:
+			// Algorand: Client sends base32 string -> decode -> process -> encode back to base32
+			// Channel key must match the original base32 format from client
+			if val, ok := messageChan[base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
+		default:
+			// Ethereum: Client sends string -> process raw bytes
+			// Channel key must match the raw bytes as string
 			if val, ok := messageChan[string(msg.Hash)]; ok {
 				val <- msg
 			}

@@ -179,7 +179,7 @@ func ProcessIntent(intentId int64) {
 								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -214,6 +214,16 @@ func ProcessIntent(intentId int64) {
 							}
 							txnHash, err = aptos.SendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.AptosEDDSAPublicKey, signature)
 							fmt.Println(txnHash)
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+						}
+
+						if chain.ChainType == "algorand" {
+							txnHash, err = sendAlgorandTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -409,7 +419,7 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" ||
-						depositOperation.KeyCurve == "secp256k1" {
+						depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -436,6 +446,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "bitcoin" {
 							transfers, _, err = GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "algorand" {
+							transfers, err = GetAlgorandTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -992,6 +1010,92 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
 						break
+					} else if withdrawalChain.KeyCurve == "algorand_eddsa" {
+						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						if err != nil {
+							fmt.Printf("error getting public key: %v", err)
+							break
+						}
+
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// handle native ALGO token
+							transaction, dataToSign, err := withdrawAlgorandNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.AlgorandEDDSAPublicKey,
+								burn.SolverOutput,
+								user.AlgorandEDDSAPublicKey,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := withdrawAlgorandTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								wallet.AlgorandEDDSAPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						} else {
+							// handle ASA (Algorand Standard Asset)
+							transaction, dataToSign, err := withdrawAlgorandASAGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.AlgorandEDDSAPublicKey,
+								burn.SolverOutput,
+								user.AlgorandEDDSAPublicKey,
+								tokenToWithdraw,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := withdrawAlgorandTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								wallet.AlgorandEDDSAPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						}
+						break
 					}
 				}
 
@@ -1022,7 +1126,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1044,6 +1148,15 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
+
+						if chain.ChainType == "algorand" {
+							confirmed, err = checkAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
 					}
 
 					if !confirmed {
@@ -1079,7 +1192,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1096,6 +1209,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "algorand" {
+							confirmed, err = checkAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1233,7 +1354,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1250,6 +1371,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "algorand" {
+							confirmed, err = checkAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1313,7 +1442,7 @@ func ProcessIntent(intentId int64) {
 									}
 								}
 							}
-						} else if depositOperation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
@@ -1339,6 +1468,23 @@ func ProcessIntent(intentId int64) {
 
 							if chain.ChainType == "aptos" {
 								txnConfirmed, err := aptos.CheckAptosTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+								}
+							}
+
+							if chain.ChainType == "algorand" {
+								txnConfirmed, err := checkAlgorandTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -1575,6 +1721,8 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 
 	return hash.String(), nil
 }
+
+
 
 func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
 	chain, err := common.GetChain(chainId)

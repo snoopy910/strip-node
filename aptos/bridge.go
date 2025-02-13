@@ -12,6 +12,11 @@ import (
 	"github.com/the729/lcs"
 )
 
+const (
+	DEFAULT_GAS_UNIT_PRICE = 100
+	DEFAULT_MAX_GAS_AMOUNT = 5000
+)
+
 var ctx = context.Background()
 
 // WithdrawAptosNativeGetSignature returns transaction and dataToSign for
@@ -55,8 +60,8 @@ func WithdrawAptosNativeGetSignature(
 			Arguments:     []interface{}{accountTo, amount},
 		}).
 		SetExpirationTimestampSecs(uint64(time.Now().Add(10 * time.Minute).Unix())).
-		SetGasUnitPrice(uint64(100)).
-		SetMaxGasAmount(uint64(5000)).
+		SetGasUnitPrice(DEFAULT_GAS_UNIT_PRICE).
+		SetMaxGasAmount(DEFAULT_MAX_GAS_AMOUNT).
 		SetSequenceNumber(accountInfo.SequenceNumber).Error()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to set transaction data: %v", err)
@@ -130,8 +135,8 @@ func WithdrawAptosTokenGetSignature(
 			Arguments:     []interface{}{accountTo, amount},
 		}).
 		SetExpirationTimestampSecs(uint64(time.Now().Add(10 * time.Minute).Unix())).
-		SetGasUnitPrice(uint64(100)).
-		SetMaxGasAmount(uint64(5000)).
+		SetGasUnitPrice(DEFAULT_GAS_UNIT_PRICE).
+		SetMaxGasAmount(DEFAULT_MAX_GAS_AMOUNT).
 		SetSequenceNumber(accountInfo.SequenceNumber).Error()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to set transaction data: %v", err)

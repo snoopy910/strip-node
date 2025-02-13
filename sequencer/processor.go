@@ -909,6 +909,89 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
 						break
+					} else if withdrawalChain.KeyCurve == "aptos_eddsa" {
+						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						if err != nil {
+							fmt.Printf("error getting public key: %v", err)
+							break
+						}
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// handle native token
+							transaction, dataToSign, err := aptos.WithdrawAptosNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.AptosEDDSAPublicKey,
+								burn.SolverOutput,
+								user.AptosEDDSAPublicKey,
+							)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := aptos.WithdrawAptosTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								wallet.AptosEDDSAPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						} else {
+							transaction, dataToSign, err := aptos.WithdrawAptosTokenGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.AptosEDDSAPublicKey,
+								burn.SolverOutput,
+								user.AptosEDDSAPublicKey,
+								tokenToWithdraw,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := aptos.WithdrawAptosTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								wallet.AptosEDDSAPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						}
+						break
 					}
 				}
 

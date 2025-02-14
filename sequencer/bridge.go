@@ -455,7 +455,7 @@ func burnTokens(
 
 	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	data, err := abi.Pack("burn", common.HexToAddress(account), amountBigInt, common.HexToAddress(token), nonce, ethSigHexBytes)

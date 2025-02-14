@@ -69,7 +69,6 @@ func AddSolver(rpcURL string, contractAddress string, privKey string, solverDoma
 		log.Fatal(err)
 	}
 
-	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
 		log.Fatalf("failed to estimate gas: %v", err)

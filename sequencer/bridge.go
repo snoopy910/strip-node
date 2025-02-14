@@ -127,7 +127,6 @@ func initiaiseBridge() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
 		log.Fatalf("failed to estimate gas: %v", err)
@@ -230,7 +229,6 @@ func mintBridge(amount string, account string, token string, signature string) (
 		return "", err
 	}
 
-	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
 		return "", fmt.Errorf("failed to estimate gas: %v", err)
@@ -354,7 +352,6 @@ func swapBridge(
 		return "", err
 	}
 
-	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
 		return "", fmt.Errorf("failed to estimate gas: %v", err)
@@ -463,7 +460,6 @@ func burnTokens(
 		return "", err
 	}
 
-	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
 		return "", fmt.Errorf("failed to estimate gas: %v", err)

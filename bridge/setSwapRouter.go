@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	tssCommon "github.com/StripChain/strip-node/common"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -69,29 +69,18 @@ func SetSwapRouter(
 		log.Fatal(err)
 	}
 
-	if err != nil {
-		log.Fatal(err)
-	}
 	fmt.Println(data)
-	msg := ethereum.CallMsg{
-		From:      fromAddress,
-		To:        &toAddress,
-		Value:     big.NewInt(0),
-		GasPrice:  gasPrice,
-		GasTipCap: nil,
-		GasFeeCap: nil,
-		Data:      data,
-	}
-	gas, err := client.EstimateGas(context.Background(), msg)
+	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
 		log.Fatalf("failed to estimate gas: %v", err)
 	}
+	fmt.Println("gas estimate ", gas)
 
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
-	auth.GasLimit = uint64(float64(gas) * 1.5)
+	auth.GasLimit = gas
 	// auth.GasLimit = 972978
 
 	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)

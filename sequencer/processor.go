@@ -3,6 +3,7 @@ package sequencer
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,8 @@ import (
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/util"
+	"github.com/algorand/go-algorand-sdk/client/algod"
+	"github.com/algorand/go-algorand-sdk/client/v2/indexer"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	ethCommon "github.com/ethereum/go-ethereum/common"
@@ -1722,8 +1725,6 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	return hash.String(), nil
 }
 
-
-
 func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
 	chain, err := common.GetChain(chainId)
 	if err != nil {
@@ -1835,3 +1836,94 @@ type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
+
+func checkAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	// First try using native Algod API (Priority 1)
+	algodClient, err := algod.MakeClient(chain.ChainUrl, chain.ChainApiKey)
+	if err == nil {
+		// Get pending transaction information
+		pendingTxn, _, err := algodClient.PendingTransactionInformation(txnHash).Do(context.Background())
+		if err == nil {
+			// If confirmed round is non-zero, transaction is confirmed
+			if pendingTxn.ConfirmedRound > 0 {
+				return true, nil
+			}
+			// If pool error is empty and confirmed round is zero, transaction is still pending
+			if pendingTxn.PoolError == "" {
+				return false, nil
+			}
+		}
+	}
+
+	// Fallback to Indexer if Algod fails or transaction not found (Priority 2)
+	indexerClient, err := indexer.MakeClient(chain.IndexerUrl, chain.ChainApiKey)
+	if err != nil {
+		return false, fmt.Errorf("failed to create indexer client: %v", err)
+	}
+
+	// Look up the transaction
+	txnResponse, err := indexerClient.LookupTransaction(txnHash).Do(context.Background())
+	if err != nil {
+		return false, fmt.Errorf("failed to lookup transaction: %v", err)
+	}
+
+	// If we can find the transaction in the indexer, it means it's confirmed
+	// The indexer only indexes confirmed transactions
+	return txnResponse.Transaction.ConfirmedRound > 0, nil
+}
+
+func sendAlgorandTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase64 string) (string, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	// Create an algod client
+	algodClient, err := algod.MakeClient(chain.ChainUrl, chain.ChainApiKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to create algod client: %v", err)
+	}
+
+	// Decode the serialized transaction
+	txnBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
+	}
+
+	// Decode the signature
+	sigBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode signature: %v", err)
+	}
+
+	// Deserialize the transaction
+	var txn types.Transaction
+	err = transaction.DecodeSignedTransaction(txnBytes, &txn)
+	if err != nil {
+		return "", fmt.Errorf("failed to deserialize transaction: %v", err)
+	}
+
+	// Create a signed transaction with the provided signature
+	signedTxn := types.SignedTxn{
+		Txn: txn,
+		Sig: types.Signature(sigBytes),
+	}
+
+	// Encode the signed transaction
+	stxnBytes := transaction.EncodeSignedTxn(signedTxn)
+
+	// Send the transaction
+	txid, err := algodClient.SendRawTransaction(stxnBytes).Do(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+
+	return txid, nil
+}
+
+

@@ -64,7 +64,7 @@ func SetSwapRouter(
 		log.Fatal(err)
 	}
 
-	data, err := abi.Pack("setSwapRouter", swapRouterAddress)
+	data, err := abi.Pack("setSwapRouter", common.HexToAddress(swapRouterAddress))
 	if err != nil {
 		log.Fatal(err)
 	}

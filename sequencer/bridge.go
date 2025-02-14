@@ -205,7 +205,7 @@ func mintBridge(amount string, account string, token string, signature string) (
 
 	abi, err := bridge.BridgeMetaData.GetAbi()
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	ethSigHex := hexutil.Encode(signatureBytes[:])
@@ -227,13 +227,13 @@ func mintBridge(amount string, account string, token string, signature string) (
 
 	data, err := abi.Pack("mint", amountBigInt, common.HexToAddress(token), common.HexToAddress(account), nonce, ethSigHexBytes)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
-		log.Fatalf("failed to estimate gas: %v", err)
+		return "", fmt.Errorf("failed to estimate gas: %v", err)
 	}
 	fmt.Println("gas estimate ", gas)
 
@@ -316,7 +316,7 @@ func swapBridge(
 
 	abi, err := bridge.BridgeMetaData.GetAbi()
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	_amountIn, _ := new(big.Int).SetString(amountIn, 10)
@@ -351,13 +351,13 @@ func swapBridge(
 
 	data, err := abi.Pack("swap", params, common.HexToAddress(account), nonce, ethSigHexBytes)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
-		log.Fatalf("failed to estimate gas: %v", err)
+		return "", fmt.Errorf("failed to estimate gas: %v", err)
 	}
 	fmt.Println("gas estimate ", gas)
 
@@ -438,7 +438,7 @@ func burnTokens(
 
 	abi, err := bridge.BridgeMetaData.GetAbi()
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	ethSigHex := hexutil.Encode(signatureBytes[:])
@@ -460,13 +460,13 @@ func burnTokens(
 
 	data, err := abi.Pack("burn", common.HexToAddress(account), amountBigInt, common.HexToAddress(token), nonce, ethSigHexBytes)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	fmt.Println(data)
 	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
 	if err != nil {
-		log.Fatalf("failed to estimate gas: %v", err)
+		return "", fmt.Errorf("failed to estimate gas: %v", err)
 	}
 	fmt.Println("gas estimate ", gas)
 

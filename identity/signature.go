@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/StripChain/strip-node/sequencer"
-	"github.com/algorand/go-algorand-sdk/v2/types"
+	"github.com/algorand/go-algorand-sdk/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"

@@ -232,6 +232,26 @@ func createWallet(identity string, identityCurve string) error {
 	bitcoinTestnetAddress := getBitcoinAddressesResponse.TestnetAddress
 	bitcoinRegtestAddress := getBitcoinAddressesResponse.RegtestAddress
 
+	// get the address of the wallet whose keycurve is aptos_eddsa here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=algorand_eddsa")
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(body, &getAddressResponse)
+	if err != nil {
+		return err
+	}
+
+	algorandEddsaAddress := getAddressResponse.Address
+
 	// add created wallet to the store
 	wallet := WalletSchema{
 		Identity:                identity,
@@ -243,6 +263,7 @@ func createWallet(identity string, identityCurve string) error {
 		BitcoinMainnetPublicKey: bitcoinMainnetAddress,
 		BitcoinTestnetPublicKey: bitcoinTestnetAddress,
 		BitcoinRegtestPublicKey: bitcoinRegtestAddress,
+		AlgorandEDDSAPublicKey:  algorandEddsaAddress,
 	}
 
 	_, err = AddWallet(&wallet)

@@ -154,8 +154,8 @@ func CheckAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, er
 }
 
 // SendAlgorandTransaction sends a signed Algorand transaction to the network
-func SendAlgorandTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase64 string) (string, error) {
-	chain, err := common.GetChain(chainId)
+func SendAlgorandTransaction(serializedTxn string, genesisHash string, keyCurve string, dataToSign string, signatureBase64 string) (string, error) {
+	chain, err := common.GetChain(genesisHash)
 	if err != nil {
 		return "", err
 	}
@@ -186,16 +186,16 @@ func SendAlgorandTransaction(serializedTxn string, chainId string, keyCurve stri
 	}
 
 	// Create a signed transaction with the provided signature
+	// In go1.19, we can't convert sigBytes directly to types.Signature
+	var sig types.Signature
+	copy(sig[:], sigBytes)
 	signedTxn := types.SignedTxn{
 		Txn: txn,
-		Sig: types.Signature(sigBytes),
+		Sig: sig,
 	}
 
 	// Encode the signed transaction using msgpack
-	stxnBytes, err := msgpack.Encode(signedTxn)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode signed transaction: %v", err)
-	}
+	stxnBytes := msgpack.Encode(signedTxn)
 
 	// Send the transaction
 	txid, err := algodClient.SendRawTransaction(stxnBytes).Do(context.Background())

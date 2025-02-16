@@ -3,7 +3,6 @@ package sequencer
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -226,7 +225,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							txnHash, err = sendAlgorandTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err = SendAlgorandTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -1876,54 +1875,3 @@ func checkAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, er
 	// The indexer only indexes confirmed transactions
 	return txnResponse.Transaction.ConfirmedRound > 0, nil
 }
-
-func sendAlgorandTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase64 string) (string, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return "", err
-	}
-
-	// Create an algod client
-	algodClient, err := algod.MakeClient(chain.ChainUrl, chain.ChainApiKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to create algod client: %v", err)
-	}
-
-	// Decode the serialized transaction
-	txnBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
-	}
-
-	// Decode the signature
-	sigBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode signature: %v", err)
-	}
-
-	// Deserialize the transaction
-	var txn types.Transaction
-	err = transaction.DecodeSignedTransaction(txnBytes, &txn)
-	if err != nil {
-		return "", fmt.Errorf("failed to deserialize transaction: %v", err)
-	}
-
-	// Create a signed transaction with the provided signature
-	signedTxn := types.SignedTxn{
-		Txn: txn,
-		Sig: types.Signature(sigBytes),
-	}
-
-	// Encode the signed transaction
-	stxnBytes := transaction.EncodeSignedTxn(signedTxn)
-
-	// Send the transaction
-	txid, err := algodClient.SendRawTransaction(stxnBytes).Do(context.Background())
-	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %v", err)
-	}
-
-	return txid, nil
-}
-
-

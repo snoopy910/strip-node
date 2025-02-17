@@ -151,9 +151,19 @@ func VerifySignature(
 		r := new(big.Int).SetBytes(sigBytes[:32])
 		s := new(big.Int).SetBytes(sigBytes[32:64])
 
-		// Hash the message using double SHA-256 (as required by Bitcoin)
-		firstHash := sha256.Sum256([]byte(message))
-		hash := sha256.Sum256(firstHash[:]) // Second round of SHA-256
+		// Check if this is a Dogecoin message
+		var hash [32]byte
+		if strings.HasPrefix(message, "DOGE:") {
+			// For Dogecoin, we use a special message prefix
+			messageBytes := []byte("Dogecoin Signed Message:\n" + strings.TrimPrefix(message, "DOGE:"))
+			firstHash := sha256.Sum256(messageBytes)
+			hash = sha256.Sum256(firstHash[:]) // Double SHA256 like Bitcoin
+			fmt.Println("[VERIFY SECP256K1] Using Dogecoin message format")
+		} else {
+			// Default Bitcoin double SHA-256
+			firstHash := sha256.Sum256([]byte(message))
+			hash = sha256.Sum256(firstHash[:]) // Second round of SHA-256
+		}
 
 		// Verify the signature using ECDSA
 		valid := ecdsa.Verify(pubKey, hash[:], r, s)

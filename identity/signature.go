@@ -158,10 +158,15 @@ func VerifySignature(
 		return valid, nil
 	} else if identityCurve == ALGORAND_CURVE {
 		// Decode the public key from the Algorand address (base32 encoded with checksum)
-		pk, err := types.DecodeAddress(identity)
+		address, err := types.DecodeAddress(identity)
 		if err != nil {
 			return false, fmt.Errorf("invalid Algorand address: %v", err)
 		}
+
+		// Convert public key bytes to ed25519.PublicKey
+		pubKeyBytes := address[:]
+		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+		copy(pubKey, pubKeyBytes)
 
 		// Convert message to bytes
 		msgBytes := []byte(message)
@@ -172,10 +177,6 @@ func VerifySignature(
 			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
 		}
 
-		// Convert public key bytes to ed25519.PublicKey
-		pubKeyBytes := pk.GetPublicKey()
-		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
-		copy(pubKey, pubKeyBytes)
 		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
 	} else {
 		return false, fmt.Errorf("unsupported curve: %s", identityCurve)

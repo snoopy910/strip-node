@@ -16,6 +16,7 @@ type Operation struct {
 	SerializedTxn    string `json:"serializedTxn"`
 	DataToSign       string `json:"dataToSign"`
 	ChainId          string `json:"chainId"`
+	GenesisHash      string  `json:"genesisHash"`
 	KeyCurve         string `json:"keyCurve"`
 	Status           string `json:"status"`
 	Result           string `json:"result"`

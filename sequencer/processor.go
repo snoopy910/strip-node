@@ -223,7 +223,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							txnHash, err = SendAlgorandTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err = SendAlgorandTransaction(operation.SerializedTxn, operation.GenesisHash, signature)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)

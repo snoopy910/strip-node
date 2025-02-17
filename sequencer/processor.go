@@ -1019,7 +1019,7 @@ func ProcessIntent(intentId int64) {
 
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native ALGO token
-							dataToSign, tx, err := WithdrawAlgorandNativeGetSignature(
+							dataToSign, tx, err := withdrawAlgorandNativeGetSignature(
 								withdrawalChain.ChainUrl,
 								bridgeWallet.AlgorandEDDSAPublicKey,
 								burn.SolverOutput,
@@ -1057,7 +1057,7 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						} else {
 							// handle ASA (Algorand Standard Asset)
-							transaction, dataToSign, err := withdrawAlgorandASAGetSignature(
+							dataToSign, tx, err := withdrawAlgorandASAGetSignature(
 								withdrawalChain.ChainUrl,
 								bridgeWallet.AlgorandEDDSAPublicKey,
 								burn.SolverOutput,
@@ -1081,7 +1081,7 @@ func ProcessIntent(intentId int64) {
 
 							result, err := withdrawAlgorandTxn(
 								withdrawalChain.ChainUrl,
-								transaction,
+								tx,
 								wallet.AlgorandEDDSAPublicKey,
 								signature,
 							)

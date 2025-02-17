@@ -211,7 +211,7 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, keyCurve 
 	return txid, nil
 }
 
-func WithdrawAlgorandNativeGetSignature(
+func withdrawAlgorandNativeGetSignature(
 	algodURL string,
 	account string,
 	amount string,
@@ -242,4 +242,44 @@ func WithdrawAlgorandNativeGetSignature(
 	txHash := crypto.TransactionID(tx)
 
 	return hex.EncodeToString(txHash), &tx, nil
+}
+
+func withdrawAlgorandASAGetSignature(
+	algodURL string,
+	account string,
+	amount string,
+	recipient string,
+	assetId string,
+) (string, *types.Transaction, error) {
+
+	client, err := algod.MakeClient(algodURL, "")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to make algod client: %w", err)
+	}
+
+	sp, err := client.SuggestedParams().Do(context.Background())
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get suggested params: %w", err)
+	}
+
+	amt, err := strconv.ParseUint(amount, 10, 64)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid amount: %w", err)
+	}
+
+	assetID, err := strconv.ParseUint(assetId, 10, 64)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid asset id: %w", err)
+	}
+
+	tx, err := future.MakeAssetTransferTxn(account, recipient, amt, []byte(""), sp, "", assetID)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create asset transfer transaction: %w", err)
+	}
+
+	// algorand sdk v1 doesn't support tx.ID()
+	txHash := crypto.TransactionID(tx)
+
+	return hex.EncodeToString(txHash), &tx, nil
+
 }

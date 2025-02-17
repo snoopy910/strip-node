@@ -54,67 +54,71 @@ func VerifySignature(
 	signature string,
 ) (bool, error) {
 
+	fmt.Printf("[VERIFY] Starting signature verification for identity: %s with curve: %s\n", identity, identityCurve)
 	fmt.Println(message, signature)
 
 	if identityCurve == ECDSA_CURVE {
+		fmt.Println("[VERIFY ECDSA] Verifying ECDSA signature")
 		// Hash the unsigned message using EIP-191
 		hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(message)) + message)
 		hash := crypto.Keccak256Hash(hashedMessage)
+		fmt.Printf("[VERIFY ECDSA] Message hash: %s\n", hash.Hex())
 
 		// Get the bytes of the signed message
 		decodedMessage := hexutil.MustDecode(signature)
+		fmt.Printf("[VERIFY ECDSA] Decoded signature length: %d bytes\n", len(decodedMessage))
 
 		// Handles cases where EIP-115 is not implemented (most wallets don't implement it)
 		if decodedMessage[64] == 27 || decodedMessage[64] == 28 {
+			fmt.Printf("[VERIFY ECDSA] Adjusting V value from: %d\n", decodedMessage[64])
 			decodedMessage[64] -= 27
+			fmt.Printf("[VERIFY ECDSA] New V value: %d\n", decodedMessage[64])
 		}
 
 		// Recover a public key from the signed message
 		sigPublicKeyECDSA, err := crypto.SigToPub(hash.Bytes(), decodedMessage)
 		if sigPublicKeyECDSA == nil {
+			fmt.Println("[VERIFY ECDSA] Failed to recover public key from signature")
 			err = errors.New("Could not get a public get from the message signature")
 		}
 		if err != nil {
+			fmt.Printf("[VERIFY ECDSA] Error recovering public key: %v\n", err)
 			return false, err
 		}
 
 		addr := crypto.PubkeyToAddress(*sigPublicKeyECDSA).String()
+		fmt.Printf("[VERIFY ECDSA] Recovered address: %s\n", addr)
+		fmt.Printf("[VERIFY ECDSA] Expected address: %s\n", identity)
 
 		if addr == identity {
-			fmt.Println("Signature is valid")
+			fmt.Println("[VERIFY ECDSA] Signature is valid")
 			return true, nil
 		}
 
-		fmt.Println("Signature is invalid")
+		fmt.Println("[VERIFY ECDSA] Signature is invalid")
 
 		return false, nil
+
 	} else if identityCurve == EDDSA_CURVE {
+		fmt.Println("[VERIFY EDDSA] Verifying EdDSA signature")
 		publicKeyBytes, _ := base58.Decode(identity)
 		signatureBytes, _ := base58.Decode(signature)
 
 		messageBytes := []byte(message)
 
 		if ed25519.Verify(publicKeyBytes, messageBytes, signatureBytes) {
+			fmt.Println("[VERIFY EDDSA] Signature is valid")
 			return true, nil
 		}
 
-		return false, nil
-	} else if identityCurve == APTOS_EDDSA_CURVE {
-		signatureBytes, _ := hex.DecodeString(strings.TrimPrefix(signature, "0x"))
-		publicKeyBytes, _ := hex.DecodeString(strings.TrimPrefix(identity, "0x"))
-
-		messageBytes := []byte(message)
-
-		// Verify signature
-		if ed25519.Verify(publicKeyBytes, messageBytes, signatureBytes) {
-			return true, nil
-		}
-
+		fmt.Println("[VERIFY EDDSA] Signature is invalid")
 		return false, nil
 	} else if identityCurve == SECP256K1_CURVE {
+		fmt.Println("[VERIFY SECP256K1] Verifying secp256k1 signature")
 		// Parse the public key
 		pubKeyBytes, err := hex.DecodeString(identity)
 		if err != nil {
+			fmt.Printf("[VERIFY SECP256K1] Error decoding public key: %v\n", err)
 			return false, fmt.Errorf("failed to decode public key: %v", err)
 		}
 
@@ -137,6 +141,7 @@ func VerifySignature(
 		// Parse the signature
 		sigBytes, err := hex.DecodeString(signature)
 		if err != nil {
+			fmt.Printf("[VERIFY SECP256K1] Error decoding signature: %v\n", err)
 			return false, fmt.Errorf("failed to decode signature: %v", err)
 		}
 
@@ -155,6 +160,12 @@ func VerifySignature(
 
 		// Verify the signature using ECDSA
 		valid := ecdsa.Verify(pubKey, hash[:], r, s)
+		fmt.Printf("[VERIFY SECP256K1] Signature is %svalid\n", func() string {
+			if valid {
+				return ""
+			}
+			return "in"
+		}())
 		return valid, nil
 	} else if identityCurve == ALGORAND_CURVE {
 		// Decode the public key from the Algorand address (base32 encoded with checksum)
@@ -178,7 +189,49 @@ func VerifySignature(
 		}
 
 		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
+	} else if identityCurve == APTOS_EDDSA_CURVE {
+		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
+
+		// Remove 0x prefix from public key
+		identity = strings.TrimPrefix(identity, "0x")
+		if len(identity) != 64 {
+			return false, fmt.Errorf("invalid public key length: expected 64 hex chars, got %d", len(identity))
+		}
+
+		// Create the prefix message format that matches Aptos wallet
+		// Note: we need to use \n not \r\n for line endings to match the client
+		// The message should be the raw JSON string without additional encoding
+		prefixedMsg := fmt.Sprintf("APTOS\nmessage: %s\nnonce: random_string", message)
+
+		// Convert message to bytes using TextEncoder equivalent
+		messageBytes := []byte(prefixedMsg)
+		fmt.Printf("[VERIFY APTOS_EDDSA] Message bytes: %x\n", messageBytes)
+		fmt.Printf("[VERIFY APTOS_EDDSA] Message string:\n%s\n", prefixedMsg)
+
+		// Decode the public key from hex
+		publicKeyBytes, err := hex.DecodeString(identity)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode public key: %v", err)
+		}
+		fmt.Printf("[VERIFY APTOS_EDDSA] Public key bytes: %x\n", publicKeyBytes)
+
+		// Remove 0x prefix from signature and decode
+		signature = strings.TrimPrefix(signature, "0x")
+		signatureBytes, err := hex.DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode signature: %v", err)
+		}
+		fmt.Printf("[VERIFY APTOS_EDDSA] Signature bytes: %x\n", signatureBytes)
+
+		// Verify using ed25519 which is equivalent to nacl.sign.detached.verify
+		// Both use the same Ed25519 verification algorithm
+		verified := ed25519.Verify(publicKeyBytes, messageBytes, signatureBytes)
+
+		fmt.Printf("[VERIFY APTOS_EDDSA] Verification result: %v\n", verified)
+		return verified, nil
+
 	} else {
+		fmt.Printf("unsupported curve: %s", identityCurve)
 		return false, fmt.Errorf("unsupported curve: %s", identityCurve)
 	}
 }

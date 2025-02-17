@@ -21,6 +21,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.9.0
 	github.com/portto/aptos-go-sdk v0.0.0-20230807103729-9a5201cad72f
 	github.com/stretchr/testify v1.10.0
+	github.com/test-go/testify v1.1.4
 	github.com/the729/lcs v0.1.5
 )
 

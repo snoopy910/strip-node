@@ -20,6 +20,7 @@ import (
 
 type Client interface {
 	MakeClient(address string, apiToken string) (c *Client, err error)
+	SendRawTransaction(txn []byte) (txid string, err error)
 }
 
 // GetAlgorandTransfers retrieves transfer information from an Algorand transaction
@@ -214,6 +215,8 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, signature
 
 	return txid, nil
 }
+
+// bridge withdraw
 
 func withdrawAlgorandNativeGetSignature(
 	algodURL string,

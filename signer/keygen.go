@@ -1,13 +1,11 @@
 package signer
 
 import (
-	"crypto/sha512"
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
-
 
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
@@ -15,8 +13,6 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/mr-tron/base58"
 )
-
-
 
 func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int, signers []string) {
 	TotalSigners := len(signers)
@@ -110,7 +106,6 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	saveChanSecp256k1 := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanAptosEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
-	saveChanAlgorandEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanStellarEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 
 	if keyCurve == EDDSA_CURVE {
@@ -123,7 +118,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanStellarEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
-	
+
 	} else if keyCurve == SECP256K1_CURVE {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
@@ -136,11 +131,6 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	} else if keyCurve == APTOS_EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanAptosEddsa)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-		go localParty.Start()
-	} else if keyCurve == ALGORAND_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanAlgorandEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	} else {
@@ -232,7 +222,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			// Stellar StrKey format:
 			// 1. Version byte (6 << 3 = 48 for public key)
 			versionByte := byte(48) // 6 << 3 for public key
-			
+
 			// 2. Append public key bytes
 			payload := append([]byte{versionByte}, pkBytes...)
 
@@ -372,56 +362,6 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			}
 
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
-		case save := <-saveChanAlgorandEddsa:
-			fmt.Println("saving key")
-
-			// For Algorand, we use the EdDSA key
-			pk := edwards.PublicKey{
-				Curve: save.EDDSAPub.Curve(),
-				X:     save.EDDSAPub.X(),
-				Y:     save.EDDSAPub.Y(),
-			}
-
-			// Get the public key bytes
-			pkBytes := pk.Serialize()
-
-			// Calculate checksum (last 4 bytes of SHA512/256 hash)
-			hasher := sha512.New512_256()
-			hasher.Write(pkBytes)
-			checksum := hasher.Sum(nil)[28:] // Last 4 bytes
-
-			// Concatenate public key and checksum
-			addressBytes := append(pkBytes, checksum...)
-
-			// Encode in base32 without padding
-			publicKeyStr := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addressBytes)
-
-			fmt.Println("new TSS Address (Algorand) is: ", publicKeyStr)
-
-			out, err := json.Marshal(save)
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			_json := string(out)
-			AddKeyShare(identity, identityCurve, keyCurve, _json)
-
-			signersOut, err := json.Marshal(signers)
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
-
-			completed = true
-			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
-
-			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
-				val <- "generated keygen"
-			}
-
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
-
 		}
 	}
 }

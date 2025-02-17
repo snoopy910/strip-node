@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"crypto/sha512"
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
@@ -152,15 +151,6 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
-	} else if keyCurve == ALGORAND_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		msg := new(big.Int).SetBytes(hash)
-
-		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
-		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
 	} else if keyCurve == STELLAR_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := new(big.Int).SetBytes(hash)
@@ -277,40 +267,6 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 				go broadcast(message)
-			} else if keyCurve == ALGORAND_CURVE {
-				pk := edwards.PublicKey{
-					Curve: tss.Edwards(),
-					X:     rawKeyEddsa.EDDSAPub.X(),
-					Y:     rawKeyEddsa.EDDSAPub.Y(),
-				}
-
-				// Get the public key bytes
-				pkBytes := pk.Serialize()
-
-				// Calculate checksum (last 4 bytes of SHA512/256 hash)
-				hasher := sha512.New512_256()
-				hasher.Write(pkBytes)
-				checksum := hasher.Sum(nil)[28:] // Last 4 bytes
-
-				// Concatenate public key and checksum
-				addressBytes := append(pkBytes, checksum...)
-
-				// Encode in base32 without padding
-				address := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addressBytes)
-
-				message := Message{
-					Type:          MESSAGE_TYPE_SIGNATURE,
-					Hash:          hash,
-					Message:       save.Signature,
-					Address:       address,
-					Identity:      identity,
-					IdentityCurve: identityCurve,
-					KeyCurve:      keyCurve,
-				}
-
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
-
-				go broadcast(message)
 			} else if keyCurve == STELLAR_CURVE {
 				pk := edwards.PublicKey{
 					Curve: tss.Edwards(),
@@ -324,7 +280,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				// Stellar StrKey format:
 				// 1. Version byte (6 << 3 = 48 for public key)
 				versionByte := byte(48) // 6 << 3 for public key
-				
+
 				// 2. Append public key bytes
 				payload := append([]byte{versionByte}, pkBytes...)
 

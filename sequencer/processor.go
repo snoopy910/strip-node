@@ -454,16 +454,8 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
-						if chain.ChainType == "algorand" {
-							transfers, err = GetAlgorandTransfers(depositOperation.ChainId, depositOperation.Result)
-							if err != nil {
-								fmt.Println(err)
-								break
-							}
-						}
-
 						if chain.ChainType == "stellar" {
-							transfers, err = GetStellarTransfers(depositOperation.ChainId, depositOperation.Result)
+							transfers, err = stellar.GetStellarTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1126,7 +1118,7 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
 						break
-					}		
+					}
 				}
 
 				break
@@ -1406,7 +1398,6 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
-
 					}
 
 					if !confirmed {
@@ -1465,7 +1456,7 @@ func ProcessIntent(intentId int64) {
 									}
 								}
 							}
-						} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa"  {
+						} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)

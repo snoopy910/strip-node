@@ -28,6 +28,7 @@ var (
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
 	ALGORAND_CURVE    = "algorand_eddsa"
+	STELLAR_CURVE     = "stellar_eddsa"
 )
 
 type OperationForSigning struct {
@@ -177,6 +178,51 @@ func VerifySignature(
 		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
 		copy(pubKey, pubKeyBytes)
 		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
+	} else if identityCurve == STELLAR_CURVE {
+		// Decode the Stellar public key from StrKey format (base32 encoded with checksum)
+		// Stellar public keys start with 'G' (version byte 6 << 3)
+		if !strings.HasPrefix(identity, "G") {
+			return false, fmt.Errorf("invalid Stellar public key: must start with 'G'")
+		}
+
+		// Decode base32 string
+		decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(identity)
+		if err != nil {
+			return false, fmt.Errorf("invalid Stellar public key encoding: %v", err)
+		}
+
+		// Check length: 1 byte version + 32 bytes key + 2 bytes checksum = 35 bytes
+		if len(decoded) != 35 {
+			return false, fmt.Errorf("invalid Stellar public key: wrong length")
+		}
+
+		// Verify version byte (should be 6 << 3 = 48 for public key)
+		if decoded[0] != 48 {
+			return false, fmt.Errorf("invalid Stellar public key: wrong version byte")
+		}
+
+		// Verify checksum
+		payload := decoded[:len(decoded)-2]
+		checksum := decoded[len(decoded)-2:]
+		expectedChecksum := crc16Checksum(payload)
+		if !bytes.Equal(checksum, expectedChecksum[:]) {
+			return false, fmt.Errorf("invalid Stellar public key: checksum mismatch")
+		}
+
+		// Extract the actual 32-byte public key (excluding version byte and checksum)
+		pubKeyBytes := decoded[1:33]
+		
+		// Convert message to bytes
+		msgBytes := []byte(message)
+
+		// Decode signature from base32
+		sigBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("invalid Stellar signature encoding: %v", err)
+		}
+
+		// Verify the Ed25519 signature
+		return ed25519.Verify(pubKeyBytes, msgBytes, sigBytes), nil
 	} else {
 		return false, fmt.Errorf("unsupported curve: %s", identityCurve)
 	}

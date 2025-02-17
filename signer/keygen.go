@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"time"
 
+
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/mr-tron/base58"
 )
+
+
 
 func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int, signers []string) {
 	TotalSigners := len(signers)
@@ -108,12 +111,19 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	saveChanAptosEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanAlgorandEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+	saveChanStellarEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 
 	if keyCurve == EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
+	} else if keyCurve == STELLAR_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanStellarEddsa)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		go localParty.Start()
+	
 	} else if keyCurve == SECP256K1_CURVE {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
@@ -183,6 +193,57 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			publicKeyStr := base58.Encode(pk.Serialize())
 
 			fmt.Println("new TSS Address is: ", publicKeyStr)
+
+			out, err := json.Marshal(save)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_json := string(out)
+			AddKeyShare(identity, identityCurve, keyCurve, _json)
+
+			signersOut, err := json.Marshal(signers)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
+
+			completed = true
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
+				val <- "generated keygen"
+			}
+
+			fmt.Println("completed saving of new keygen ", publicKeyStr)
+		case save := <-saveChanStellarEddsa:
+			fmt.Println("saving key")
+
+			pk := edwards.PublicKey{
+				Curve: save.EDDSAPub.Curve(),
+				X:     save.EDDSAPub.X(),
+				Y:     save.EDDSAPub.Y(),
+			}
+
+			// Get the public key bytes
+			pkBytes := pk.Serialize()
+
+			// Stellar StrKey format:
+			// 1. Version byte (6 << 3 = 48 for public key)
+			versionByte := byte(48) // 6 << 3 for public key
+			
+			// 2. Append public key bytes
+			payload := append([]byte{versionByte}, pkBytes...)
+
+			// 3. Calculate CRC16 checksum
+			checksum := CRC16(payload)
+			payload = append(payload, byte(checksum>>8), byte(checksum))
+
+			// 4. Base32 encode without padding
+			publicKeyStr := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(payload)
+
+			fmt.Println("new TSS Address (Stellar) is: ", publicKeyStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
@@ -360,6 +421,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			}
 
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
+
 		}
 	}
 }

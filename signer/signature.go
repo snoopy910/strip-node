@@ -161,6 +161,15 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
+	} else if keyCurve == STELLAR_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		msg := new(big.Int).SetBytes(hash)
+
+		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
 	} else {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
@@ -288,6 +297,43 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 				// Encode in base32 without padding
 				address := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addressBytes)
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       address,
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else if keyCurve == STELLAR_CURVE {
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
+
+				// Get the public key bytes
+				pkBytes := pk.Serialize()
+
+				// Stellar StrKey format:
+				// 1. Version byte (6 << 3 = 48 for public key)
+				versionByte := byte(48) // 6 << 3 for public key
+				
+				// 2. Append public key bytes
+				payload := append([]byte{versionByte}, pkBytes...)
+
+				// 3. Calculate CRC16 checksum
+				checksum := CRC16(payload)
+				payload = append(payload, byte(checksum>>8), byte(checksum))
+
+				// 4. Base32 encode without padding
+				address := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(payload)
 
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,

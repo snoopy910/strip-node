@@ -216,7 +216,6 @@ func WithdrawAlgorandNativeGetSignature(
 	account string,
 	amount string,
 	recipient string,
-	genesisHash string,
 ) (string, *types.Transaction, error) {
 
 	client, err := algod.MakeClient(algodURL, "")

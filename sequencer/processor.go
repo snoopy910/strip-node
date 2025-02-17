@@ -1836,8 +1836,8 @@ type RPCError struct {
 	Message string `json:"message"`
 }
 
-func checkAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := common.GetChain(chainId)
+func checkAlgorandTransactionConfirmed(genesisHash string, txnHash string) (bool, error) {
+	chain, err := common.GetChain(genesisHash)
 	if err != nil {
 		return false, err
 	}
@@ -1846,7 +1846,8 @@ func checkAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, er
 	algodClient, err := algod.MakeClient(chain.ChainUrl, chain.ChainApiKey)
 	if err == nil {
 		// Get pending transaction information
-		pendingTxn, _, err := algodClient.PendingTransactionInformation(txnHash).Do(context.Background())
+		pendingTxn, err := algodClient.PendingTransactionInformation(txnHash)
+		// pendingTxn, _, err = algodClient.PendingTransactionInformation(txnHash).Do(context.Background())
 		if err == nil {
 			// If confirmed round is non-zero, transaction is confirmed
 			if pendingTxn.ConfirmedRound > 0 {

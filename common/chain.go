@@ -7,6 +7,7 @@ type Chain struct {
 	GenesisId   string
 	GenesisHash string
 	IndexerUrl  string
+	ChainApiKey string
 	ChainType   string
 	ChainUrl    string
 	KeyCurve    string
@@ -122,7 +123,7 @@ var Chains = []Chain{
 
 func GetChain(chainId string) (Chain, error) {
 	for _, chain := range Chains {
-		if chain.ChainId == chainId {
+		if chain.ChainId == chainId || chain.GenesisHash == chainId {
 			return chain, nil
 		}
 	}

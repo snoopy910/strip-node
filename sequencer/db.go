@@ -49,6 +49,8 @@ type WalletSchema struct {
 	ECDSAPublicKey          string `json:"ecdsaPublicKey"`
 	BitcoinMainnetPublicKey string `json:"bitcoinMainnetPublicKey"`
 	BitcoinTestnetPublicKey string `json:"bitcoinTestnetPublicKey"`
+	DogecoinMainnetPublicKey string `json:"dogecoinMainnetPublicKey"`
+	DogecoinTestnetPublicKey string `json:"dogecoinTestnetPublicKey"`
 	BitcoinRegtestPublicKey string `json:"bitcoinRegtestPublicKey"`
 	Signers                 string `json:"signers"`
 }

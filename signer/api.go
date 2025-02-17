@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/dogecoin"
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/StripChain/strip-node/solver"
@@ -138,16 +140,73 @@ func startHTTPServer(port string) {
 
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-			mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
 
-			getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
-				MainnetAddress: mainnetAddress,
-				TestnetAddress: testnetAddress,
-				RegtestAddress: regtestAddress,
-			}
-			err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
+			// Get chain information from chainId parameter
+			chainId := r.URL.Query().Get("chainId")
+			chain, err := common.GetChain(chainId)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+				// Default to Bitcoin if chain not found
+				mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
+				getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
+					MainnetAddress: mainnetAddress,
+					TestnetAddress: testnetAddress,
+					RegtestAddress: regtestAddress,
+				}
+				err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+				}
+				return
+			}
+
+			// Handle different chain types
+			switch chain.ChainType {
+			case "dogecoin":
+				mainnetAddress, err := dogecoin.PublicKeyToAddress(publicKeyStr)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("error generating Dogecoin mainnet address: %v", err), http.StatusInternalServerError)
+					return
+				}
+
+				testnetAddress, err := dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("error generating Dogecoin testnet address: %v", err), http.StatusInternalServerError)
+					return
+				}
+
+				getDogecoinAddressesResponse := GetDogecoinAddressesResponse{
+					MainnetAddress: mainnetAddress,
+					TestnetAddress: testnetAddress,
+				}
+				err = json.NewEncoder(w).Encode(getDogecoinAddressesResponse)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+				}
+
+			case "bitcoin":
+				mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
+				getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
+					MainnetAddress: mainnetAddress,
+					TestnetAddress: testnetAddress,
+					RegtestAddress: regtestAddress,
+				}
+				err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+				}
+
+			default:
+				// Default to Bitcoin addresses for unknown chains
+				mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
+				getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
+					MainnetAddress: mainnetAddress,
+					TestnetAddress: testnetAddress,
+					RegtestAddress: regtestAddress,
+				}
+				err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+				}
 			}
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
@@ -285,15 +344,28 @@ func startHTTPServer(port string) {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 			}
 		} else if keyCurve == SECP256K1_CURVE {
-			if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT ||
-				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SWAP ||
-				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_BURN ||
-				intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_WITHDRAW {
-				// For secp256k1, we need to hash the message first
-				msgHash := crypto.Keccak256([]byte(msg))
-				go generateSignatureMessage(BridgeContractAddress, "secp256k1", "secp256k1", msgHash)
+			msgHash := crypto.Keccak256([]byte(msg))
+			// Get chain information from the operation
+			chainId := intent.Operations[operationIndexInt].ChainId
+			
+			// For UTXO-based chains (Bitcoin, Dogecoin), include chain information in metadata
+			chain, err := common.GetChain(chainId)
+			if err != nil {
+				fmt.Printf("Error getting chain info: %v\n", err)
+				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
+				return
+			}
+
+			// For UTXO-based chains, include chain information in metadata
+			if chain.ChainType == "bitcoin" || chain.ChainType == "dogecoin" {
+				metadata := map[string]interface{}{
+					"chainId": chainId,
+					"msg":    hex.EncodeToString(msgHash),
+				}
+				metadataBytes, _ := json.Marshal(metadata)
+				go generateSignatureMessage(identity, identityCurve, keyCurve, metadataBytes)
 			} else {
-				msgHash := crypto.Keccak256([]byte(msg))
+				// For other chains, just pass the hash
 				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
 			}
 		} else if keyCurve == APTOS_EDDSA_CURVE {
@@ -350,4 +422,9 @@ type GetBitcoinAddressesResponse struct {
 	MainnetAddress string `json:"mainnetAddress"`
 	TestnetAddress string `json:"testnetAddress"`
 	RegtestAddress string `json:"regtestAddress"`
+}
+
+type GetDogecoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
 }

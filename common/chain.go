@@ -12,6 +12,20 @@ type Chain struct {
 
 var Chains = []Chain{
 	{
+		ChainId:     "2000",
+		ChainType:   "dogecoin",
+		ChainUrl:    "https://api.blockcypher.com/v1/doge/main",
+		KeyCurve:    "secp256k1",
+		TokenSymbol: "DOGE",
+	},
+	{
+		ChainId:     "2001",
+		ChainType:   "dogecoin",
+		ChainUrl:    "https://api.blockcypher.com/v1/doge/test3",
+		KeyCurve:    "secp256k1",
+		TokenSymbol: "DOGE",
+	},
+	{
 		ChainId:     "1337",
 		ChainType:   "evm",
 		ChainUrl:    "http://ganache:8545",

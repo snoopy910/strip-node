@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StripChain/strip-node/dogecoin"
+
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -207,8 +209,13 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
 			bitcoinAddressStr, _, _ := publicKeyToBitcoinAddresses(publicKeyBytes)
+			dogecoinAddressStr, err := dogecoin.PublicKeyToAddress(publicKeyStr)
+			if err != nil {
+				fmt.Println("Error generating Dogecoin address:", err)
+			}
 
 			fmt.Println("new TSS Address (BTC) is: ", bitcoinAddressStr)
+			fmt.Println("new TSS Address (DOGE) is: ", dogecoinAddressStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {

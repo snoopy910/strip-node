@@ -6,6 +6,11 @@ import (
 	"fmt"
 	"math/big"
 	"time"
+	"strings"
+
+
+	"github.com/StripChain/strip-node/dogecoin"
+	"github.com/StripChain/strip-node/common"
 
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -218,7 +223,46 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y
 				publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-				address, _, _ := publicKeyToBitcoinAddresses(publicKeyBytes)
+
+				// Get chain information from metadata
+				var address string
+				var metadata map[string]interface{}
+				if err := json.Unmarshal(hash, &metadata); err != nil {
+					fmt.Println("Error parsing metadata:", err)
+					// Default to Bitcoin address format if metadata is invalid
+					address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
+				} else {
+					// Get chain information
+					if chainId, ok := metadata["chainId"].(string); ok {
+						chain, err := common.GetChain(chainId)
+						if err != nil {
+							fmt.Printf("Error getting chain info: %v\n", err)
+							address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
+						} else {
+							switch chain.ChainType {
+							case "dogecoin":
+								// Use Dogecoin address format
+								if strings.HasSuffix(chainId, "1") { // Testnet
+									address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
+								} else { // Mainnet
+									address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
+								}
+								if err != nil {
+									fmt.Printf("Error generating Dogecoin address: %v\n", err)
+									address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
+								}
+							case "bitcoin":
+								address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
+							default:
+								// Default to Bitcoin address format for unknown chains
+								address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
+							}
+						}
+					} else {
+						// Default to Bitcoin if no chainId in metadata
+						address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
+					}
+				}
 
 				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
 

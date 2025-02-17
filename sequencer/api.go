@@ -8,6 +8,8 @@ import (
 	"strconv"
 
 	"github.com/StripChain/strip-node/aptos"
+	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/dogecoin"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 )
 
@@ -549,7 +551,23 @@ func startHTTPServer(port string) {
 				return
 			}
 		} else if operation.KeyCurve == "secp256k1" {
-			transfers, _, err := GetBitcoinTransfers(operation.ChainId, operation.Result)
+			// Get chain information
+			chain, err := common.GetChain(operation.ChainId)
+			if err != nil {
+				http.Error(w, "Chain not found", http.StatusInternalServerError)
+				return
+			}
+
+			var transfers []common.Transfer
+			switch chain.ChainType {
+			case "dogecoin":
+				transfers, err = dogecoin.GetDogeTransfers(operation.ChainId, operation.Result)
+			case "bitcoin":
+				transfers, _, err = GetBitcoinTransfers(operation.ChainId, operation.Result)
+			default:
+				http.Error(w, "Unsupported chain type", http.StatusInternalServerError)
+				return
+			}
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

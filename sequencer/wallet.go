@@ -3,11 +3,14 @@ package sequencer
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/StripChain/strip-node/dogecoin"
 )
 
 // createWallet creates a new wallet with the specified identity and identity curve.
@@ -233,6 +236,17 @@ func createWallet(identity string, identityCurve string) error {
 	bitcoinRegtestAddress := getBitcoinAddressesResponse.RegtestAddress
 
 	// add created wallet to the store
+	// Generate Dogecoin addresses
+	dogecoinMainnetAddress, err := dogecoin.PublicKeyToAddress(ecdsaAddress)
+	if err != nil {
+		return fmt.Errorf("failed to generate Dogecoin mainnet address: %v", err)
+	}
+
+	dogecoinTestnetAddress, err := dogecoin.PublicKeyToTestnetAddress(ecdsaAddress)
+	if err != nil {
+		return fmt.Errorf("failed to generate Dogecoin testnet address: %v", err)
+	}
+
 	wallet := WalletSchema{
 		Identity:                identity,
 		IdentityCurve:           identityCurve,
@@ -243,6 +257,8 @@ func createWallet(identity string, identityCurve string) error {
 		BitcoinMainnetPublicKey: bitcoinMainnetAddress,
 		BitcoinTestnetPublicKey: bitcoinTestnetAddress,
 		BitcoinRegtestPublicKey: bitcoinRegtestAddress,
+		DogecoinMainnetPublicKey: dogecoinMainnetAddress,
+		DogecoinTestnetPublicKey: dogecoinTestnetAddress,
 	}
 
 	_, err = AddWallet(&wallet)

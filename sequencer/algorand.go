@@ -281,5 +281,42 @@ func withdrawAlgorandASAGetSignature(
 	txHash := crypto.TransactionID(tx)
 
 	return hex.EncodeToString(txHash), &tx, nil
+}
 
+func withdrawAlgorandTxn(
+	algodURL string,
+	signature string,
+	tx *types.Transaction,
+) (string, error) {
+
+	client, err := algod.MakeClient(algodURL, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to make algod client: %w", err)
+	}
+
+	// Decode the signature (base32 encoded)
+	sigBytes, err := base32.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode signature: %v", err)
+	}
+
+	// Create a signed transaction with the provided signature
+	// In go1.19, we can't convert sigBytes directly to types.Signature
+	var sig types.Signature
+	copy(sig[:], sigBytes)
+	signedTxn := types.SignedTxn{
+		Txn: *tx,
+		Sig: sig,
+	}
+
+	// Encode the signed transaction using msgpack
+	signedTxnBytes := msgpack.Encode(signedTxn)
+
+	// Send the transaction
+	txid, err := client.SendRawTransaction(signedTxnBytes).Do(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+
+	return txid, nil
 }

@@ -1011,11 +1011,6 @@ func ProcessIntent(intentId int64) {
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "algorand_eddsa" {
-						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
-						if err != nil {
-							fmt.Printf("error getting public key: %v", err)
-							break
-						}
 
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native ALGO token
@@ -1042,9 +1037,8 @@ func ProcessIntent(intentId int64) {
 
 							result, err := withdrawAlgorandTxn(
 								withdrawalChain.ChainUrl,
-								tx,
-								wallet.AlgorandEDDSAPublicKey,
 								signature,
+								tx,
 							)
 
 							if err != nil {
@@ -1081,9 +1075,8 @@ func ProcessIntent(intentId int64) {
 
 							result, err := withdrawAlgorandTxn(
 								withdrawalChain.ChainUrl,
-								tx,
-								wallet.AlgorandEDDSAPublicKey,
 								signature,
+								tx,
 							)
 
 							if err != nil {

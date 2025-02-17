@@ -1150,7 +1150,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = checkAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1216,7 +1216,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = checkAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1378,7 +1378,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = checkAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1484,7 +1484,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							if chain.ChainType == "algorand" {
-								txnConfirmed, err := checkAlgorandTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := CheckAlgorandTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break

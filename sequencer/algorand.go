@@ -200,10 +200,10 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, keyCurve 
 	}
 
 	// Encode the signed transaction using msgpack
-	stxnBytes := msgpack.Encode(signedTxn)
+	signedTxnBytes := msgpack.Encode(signedTxn)
 
 	// Send the transaction
-	txid, err := algodClient.SendRawTransaction(stxnBytes).Do(context.Background())
+	txid, err := algodClient.SendRawTransaction(signedTxnBytes).Do(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}

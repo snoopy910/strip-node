@@ -18,6 +18,10 @@ import (
 	"github.com/algorand/go-algorand-sdk/types"
 )
 
+type Client interface {
+	MakeClient(address string, apiToken string) (c *Client, err error)
+}
+
 // GetAlgorandTransfers retrieves transfer information from an Algorand transaction
 // It handles both native ALGO transfers and ASA (Algorand Standard Asset) transfers
 func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error) {
@@ -159,14 +163,14 @@ func CheckAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, er
 }
 
 // SendAlgorandTransaction sends a signed Algorand transaction to the network
-func SendAlgorandTransaction(serializedTxn string, genesisHash string, keyCurve string, dataToSign string, signatureBase64 string) (string, error) {
+func SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error) {
 	chain, err := common.GetChain(genesisHash)
 	if err != nil {
 		return "", err
 	}
 
-	// Create an algod client (no API key needed for AlgoNode)
-	algodClient, err := algod.MakeClient(chain.ChainUrl, "")
+	// Create an algod client (no API key needed for AlgoNode/Nodely)
+	client, err := algod.MakeClient(chain.ChainUrl, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to create algod client: %v", err)
 	}
@@ -203,7 +207,7 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, keyCurve 
 	signedTxnBytes := msgpack.Encode(signedTxn)
 
 	// Send the transaction
-	txid, err := algodClient.SendRawTransaction(signedTxnBytes).Do(context.Background())
+	txid, err := client.SendRawTransaction(signedTxnBytes).Do(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}

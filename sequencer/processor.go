@@ -1019,7 +1019,7 @@ func ProcessIntent(intentId int64) {
 
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native ALGO token
-							transaction, dataToSign, err := withdrawAlgorandNativeGetSignature(
+							transaction, dataToSign, err := WithdrawAlgorandNativeGetSignature(
 								withdrawalChain.ChainUrl,
 								bridgeWallet.AlgorandEDDSAPublicKey,
 								burn.SolverOutput,

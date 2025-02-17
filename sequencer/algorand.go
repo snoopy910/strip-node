@@ -3,14 +3,18 @@ package sequencer
 import (
 	"context"
 	"encoding/base32"
+	"encoding/hex"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/algorand/go-algorand-sdk/client/v2/algod"
 	"github.com/algorand/go-algorand-sdk/client/v2/indexer"
+	"github.com/algorand/go-algorand-sdk/crypto"
 	"github.com/algorand/go-algorand-sdk/encoding/msgpack"
+	"github.com/algorand/go-algorand-sdk/future"
 	"github.com/algorand/go-algorand-sdk/types"
 )
 
@@ -29,6 +33,7 @@ func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer
 	}
 
 	// Create context with timeout
+	// why 10 seconds? Needs to be computed ?
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -204,4 +209,38 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, keyCurve 
 	}
 
 	return txid, nil
+}
+
+func WithdrawAlgorandNativeGetSignature(
+	algodURL string,
+	account string,
+	amount string,
+	recipient string,
+	genesisHash string,
+) (string, *types.Transaction, error) {
+
+	client, err := algod.MakeClient(algodURL, "")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to make algod client: %w", err)
+	}
+
+	sp, err := client.SuggestedParams().Do(context.Background())
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get suggested params: %w", err)
+	}
+
+	amt, err := strconv.ParseUint(amount, 10, 64)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid amount: %w", err)
+	}
+
+	tx, err := future.MakePaymentTxn(account, recipient, amt, nil, "", sp)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create payment transaction: %w", err)
+	}
+
+	// algorand sdk v1 doesn't support tx.ID()
+	txHash := crypto.TransactionID(tx)
+
+	return hex.EncodeToString(txHash), &tx, nil
 }

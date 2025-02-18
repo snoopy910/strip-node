@@ -5,7 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -182,8 +182,8 @@ func VerifySignature(
 		// Convert message to bytes
 		msgBytes := []byte(message)
 
-		// Decode signature from base32 (Algorand standard)
-		sigBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(signature)
+		// Decode signature from base64 (Algorand standard)
+		sigBytes, err := base64.StdEncoding.DecodeString(signature)
 		if err != nil {
 			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
 		}

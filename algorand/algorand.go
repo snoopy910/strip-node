@@ -3,6 +3,7 @@ package algorand
 import (
 	"context"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -221,8 +222,8 @@ func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash
 		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
 	}
 
-	// Decode the signature (base32 encoded)
-	sigBytes, err := base32.StdEncoding.DecodeString(signatureBase64)
+	// Decode the signature (base64 encoded)
+	sigBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}

@@ -1,11 +1,14 @@
 package signer
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
+
+	"golang.org/x/crypto/sha3"
 	"strings"
 
 
@@ -131,6 +134,22 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	if keyCurve == EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := (&big.Int{}).SetBytes(hash)
+
+		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
+
+	} else if keyCurve == SUI_EDDSA_CURVE {
+		// Sui uses Ed25519 for transaction signing
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+
+		// For Sui, we need to hash the message with SHA3-512 first
+		hasher := sha3.New512()
+		hasher.Write(hash)
+		msgHash := hasher.Sum(nil)
+		msg := (&big.Int{}).SetBytes(msgHash)
 
 		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
 		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
@@ -271,6 +290,36 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       []byte(final),
 					Address:       address,
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else if keyCurve == SUI_EDDSA_CURVE {
+				// Get the Ed25519 public key
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
+
+				// Serialize the full Ed25519 public key
+				pkBytes := pk.Serialize()
+
+				// Convert to Sui address format (0x-prefixed hex of first 32 bytes)
+				suiAddress := "0x" + hex.EncodeToString(pkBytes[:32])
+
+				// For Sui, we need to encode the signature in base64
+				signatureBase64 := base64.StdEncoding.EncodeToString(save.Signature)
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       []byte(signatureBase64),
+					Address:       suiAddress,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

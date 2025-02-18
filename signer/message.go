@@ -1,6 +1,7 @@
 package signer
 
 import (
+	"encoding/hex"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -98,13 +99,21 @@ func handleIncomingMessage(message []byte) {
 	} else if msg.Type == MESSAGE_TYPE_SIGN {
 		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
-		if msg.KeyCurve == EDDSA_CURVE {
+		switch msg.KeyCurve {
+		case EDDSA_CURVE:
+			// Use base58 encoding for standard EdDSA
 			if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
 				val <- msg
 			}
-		} else {
-			if val, ok := messageChan[string(msg.Hash)]; ok {
+		case SUI_EDDSA_CURVE:
+			// Use hex encoding for Sui EdDSA
+			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
 				val <- msg
+			}
+		default:
+			// Use raw bytes for other curves
+			if val, ok := messageChan[string(msg.Hash)]; ok {
+			val <- msg
 			}
 		}
 	}

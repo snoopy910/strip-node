@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	identityVerification "github.com/StripChain/strip-node/identity"
@@ -30,6 +32,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
+	SUI_EDDSA_CURVE   = "sui_eddsa" // Sui uses Ed25519 for native transactions
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -208,6 +211,40 @@ func startHTTPServer(port string) {
 					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 				}
 			}
+		} else if keyCurve == SUI_EDDSA_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			// Serialize the Ed25519 public key
+			pkBytes := pk.Serialize()
+
+			// Full public key in hex
+			publicKeyHex := hex.EncodeToString(pkBytes)
+
+			// Hash the public key with Blake2b-256 to get Sui address
+			hasher := blake2b.Sum256(pkBytes)
+			suiAddress := "0x" + hex.EncodeToString(hasher[:])
+
+			// Prepare response
+			getSuiAddressResponse := GetSuiAddressResponse{
+				Address:   suiAddress,
+				PublicKey: publicKeyHex,
+			}
+
+			// Set content type header
+			w.Header().Set("Content-Type", "application/json")
+
+			// Encode and send response
+			if err := json.NewEncoder(w).Encode(getSuiAddressResponse); err != nil {
+				log.Printf("Error encoding Sui address response: %v", err)
+				http.Error(w, fmt.Sprintf("Error building response: %v", err), http.StatusInternalServerError)
+				return
+			}
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
 
@@ -347,7 +384,7 @@ func startHTTPServer(port string) {
 			msgHash := crypto.Keccak256([]byte(msg))
 			// Get chain information from the operation
 			chainId := intent.Operations[operationIndexInt].ChainId
-			
+
 			// For UTXO-based chains (Bitcoin, Dogecoin), include chain information in metadata
 			chain, err := common.GetChain(chainId)
 			if err != nil {
@@ -360,7 +397,7 @@ func startHTTPServer(port string) {
 			if chain.ChainType == "bitcoin" || chain.ChainType == "dogecoin" {
 				metadata := map[string]interface{}{
 					"chainId": chainId,
-					"msg":    hex.EncodeToString(msgHash),
+					"msg":     hex.EncodeToString(msgHash),
 				}
 				metadataBytes, _ := json.Marshal(metadata)
 				go generateSignatureMessage(identity, identityCurve, keyCurve, metadataBytes)
@@ -368,6 +405,11 @@ func startHTTPServer(port string) {
 				// For other chains, just pass the hash
 				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
 			}
+		} else if keyCurve == SUI_EDDSA_CURVE {
+			// For Sui, we need to format the message according to Sui's standards
+			// The message should be prefixed with "Sui Message:" for personal messages
+			suiMsg := []byte("Sui Message:" + msg)
+			go generateSignatureMessage(identity, identityCurve, keyCurve, suiMsg)
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else {
@@ -389,6 +431,11 @@ func startHTTPServer(port string) {
 		} else if keyCurve == SECP256K1_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
+		} else if keyCurve == SUI_EDDSA_CURVE {
+			// For Sui, we return the signature in base64 format
+			signatureResponse.Signature = string(sig.Message) // Already base64 encoded in generateSignature
+			signatureResponse.Address = sig.Address
+			fmt.Println("generated Sui signature for address:", sig.Address)
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
@@ -427,4 +474,9 @@ type GetBitcoinAddressesResponse struct {
 type GetDogecoinAddressesResponse struct {
 	MainnetAddress string `json:"mainnetAddress"`
 	TestnetAddress string `json:"testnetAddress"`
+}
+
+type GetSuiAddressResponse struct {
+	Address   string `json:"address"`
+	PublicKey string `json:"publicKey"` // Full Ed25519 public key in hex
 }

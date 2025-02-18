@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,8 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/sha3"
 
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -25,6 +28,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
+	SUI_EDDSA_CURVE   = "sui_eddsa"    // Sui uses Ed25519 for native transactions
 )
 
 type OperationForSigning struct {
@@ -174,6 +178,49 @@ func VerifySignature(
 			return "in"
 		}())
 		return valid, nil
+	} else if identityCurve == SUI_EDDSA_CURVE {
+		fmt.Println("[VERIFY SUI_EDDSA] Verifying Sui EdDSA signature")
+
+		// Remove 0x prefix from public key
+		identity = strings.TrimPrefix(identity, "0x")
+		if len(identity) != 64 {
+			return false, fmt.Errorf("invalid public key length: expected 64 hex chars, got %d", len(identity))
+		}
+
+		// For Sui, we need to verify that the message has the correct prefix
+		if !strings.HasPrefix(message, "Sui Message:") {
+			return false, fmt.Errorf("invalid message format: must start with 'Sui Message:'")
+		}
+
+		// Convert message to bytes
+		messageBytes := []byte(message)
+		fmt.Printf("[VERIFY SUI_EDDSA] Message bytes: %x\n", messageBytes)
+
+		// Decode the public key from hex
+		publicKeyBytes, err := hex.DecodeString(identity)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode public key: %v", err)
+		}
+		fmt.Printf("[VERIFY SUI_EDDSA] Public key bytes: %x\n", publicKeyBytes)
+
+		// Decode base64 signature
+		signatureBytes, err := base64.StdEncoding.DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode base64 signature: %v", err)
+		}
+		fmt.Printf("[VERIFY SUI_EDDSA] Signature bytes: %x\n", signatureBytes)
+
+		// Hash the message with SHA3-512 (Sui's requirement)
+		hasher := sha3.New512()
+		hasher.Write(messageBytes)
+		msgHash := hasher.Sum(nil)
+
+		// Verify using ed25519
+		verified := ed25519.Verify(publicKeyBytes, msgHash, signatureBytes)
+
+		fmt.Printf("[VERIFY SUI_EDDSA] Verification result: %v\n", verified)
+		return verified, nil
+
 	} else if identityCurve == APTOS_EDDSA_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 

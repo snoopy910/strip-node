@@ -60,7 +60,6 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 
 	var transfers []common.Transfer
 
-	fmt.Printf("tx.Signatures: %+v\n", tx.Signatures)
 	// Helper function to create a transfer from a Stellar asset
 	createTransfer := func(from, to, amount string, assetType, assetCode, assetIssuer string) common.Transfer {
 		if assetType == "native" {

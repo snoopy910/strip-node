@@ -106,7 +106,7 @@ func TestGetStellarTransfers(t *testing.T) {
 				require.Error(t, err)
 				return
 			}
-			require.Error(t, err)
+			require.NoError(t, err)
 			require.NotEmpty(t, transfers)
 
 			transfer := transfers[0]

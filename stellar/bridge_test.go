@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/require"
 )
 
@@ -137,6 +138,32 @@ func TestWithdrawStellarAssetGetSignature(t *testing.T) {
 }
 
 func TestWithdrawStellarTxn(t *testing.T) {
+
+	accountID := "GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"
+	account, err := horizonclient.DefaultPublicNetClient.AccountDetail(horizonclient.AccountRequest{AccountID: accountID})
+	require.NoError(t, err)
+	tx, err := txnbuild.NewTransaction(
+		txnbuild.TransactionParams{
+			SourceAccount:        &account,
+			IncrementSequenceNum: true,
+			Operations: []txnbuild.Operation{
+				&txnbuild.Payment{
+					Destination: "GABFQIK63R2NETJM7T673EAMZN4RJLLGP3OFUEJU5SZVTGWUKULZJNL6",
+					Amount:      "1",
+					Asset:       txnbuild.CreditAsset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"},
+				},
+			},
+			BaseFee:       txnbuild.MinBaseFee,
+			Memo:          nil,
+			Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewInfiniteTimeout()},
+		},
+	)
+	require.NoError(t, err)
+
+	// Get the transaction in XDR format
+	txeB64, err := tx.Base64()
+	require.NoError(t, err)
+
 	tests := []struct {
 		name          string
 		client        *horizonclient.Client
@@ -148,7 +175,7 @@ func TestWithdrawStellarTxn(t *testing.T) {
 		{
 			name:          "Valid transaction submission",
 			client:        horizonclient.DefaultPublicNetClient,
-			serializedTxn: "AAAAAgAAAADg/SnwMpB8JNdtEYcw4I0BEQPjTPpXaKVzlY2HVpQObgAAAGQBW+ZAABB1TAAAAAEAAAAAAAAAAAAAAABns3JGAAAAAAAAAAEAAAAAAAAAAQAAAAACWCFe3HTSTSz8/f2QDMt5FK1mftxaETTss1ma1FUXlAAAAAFVU0RDAAAAADuZETgO/piLoKiQDrHP5E82b32+lGvtB3JA9/Yk3xXFAAAAADuaygAAAAAAAAAAAA==",
+			serializedTxn: txeB64,
 			signature:     "bf37bab19150d32715cb042de8bc43f1c1ce57f7749ff0e26ec1ab99822ab9ccb9f1347f3fec47adf55d6fc0c616f0d5f181c899f27c97d51d21725e35eecf0f",
 			expectError:   true,
 			errorMessage:  "tx_bad_auth",

@@ -363,8 +363,8 @@ func (client *Clients) WithdrawAlgorandTxn(
 	tx *types.Transaction,
 ) (string, error) {
 
-	// Decode the signature (base32 encoded)
-	sigBytes, err := base32.StdEncoding.DecodeString(signature)
+	// Decode the signature (base64 encoded)
+	sigBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}

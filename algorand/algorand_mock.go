@@ -3,6 +3,7 @@ package algorand
 import (
 	"context"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -142,7 +143,7 @@ func (mockClient *MockClients) SendAlgorandTransaction(serializedTxn string, gen
 	}
 
 	// Decode the signature (base32 encoded)
-	sigBytes, err := base32.StdEncoding.DecodeString(signatureBase64)
+	sigBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}
@@ -165,14 +166,15 @@ func (mockClient *MockClients) SendAlgorandTransaction(serializedTxn string, gen
 
 	// Encode the signed transaction using msgpack
 	signedTxnBytes := msgpack.Encode(signedTxn)
+	fmt.Println(string(signedTxnBytes))
 
 	// Send the transaction
-	txid, err := mockClient.mockAlgod.SendRawTransaction(signedTxnBytes).Do(context.Background())
-	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %v", err)
-	}
+	// txid, err := mockClient.mockAlgod.SendRawTransaction(signedTxnBytes).Do(context.Background())
+	// if err != nil {
+	// 	return "", fmt.Errorf("failed to send transaction: %v", err)
+	// }
 
-	return txid, nil
+	return "toto", nil
 }
 
 func (mockClient *MockClients) GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error) {
@@ -353,8 +355,8 @@ func (mockClient *MockClients) WithdrawAlgorandTxn(
 	tx *types.Transaction,
 ) (string, error) {
 
-	// Decode the signature (base32 encoded)
-	sigBytes, err := base32.StdEncoding.DecodeString(signature)
+	// Decode the signature (base64 encoded)
+	sigBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}

@@ -18,33 +18,6 @@ import (
 	"github.com/algorand/go-algorand-sdk/types"
 )
 
-type SuggestedParamsRequester interface {
-	Do(ctx context.Context) (types.SuggestedParams, error)
-}
-
-type PendingTransactionInformationRequester interface {
-	Do(ctx context.Context) (*algod.PendingTransactionInformation, error)
-}
-
-type LookupTransactionRequester interface {
-	Do(ctx context.Context) (*indexer.LookupTransaction, error)
-}
-
-type LookupAssetByIDRequester interface {
-	Do(ctx context.Context) (*indexer.LookupAssetByID, error)
-}
-
-type AlgodClient interface {
-	SendRawTransaction(txn []byte) (txid string, err error)
-	PendingTransactionInformation(txid string) PendingTransactionInformationRequester
-	SuggestedParams() SuggestedParamsRequester
-}
-
-type IndexerClient interface {
-	LookupTransaction(txid string) LookupTransactionRequester
-	LookupAssetByID(assetId uint64) LookupAssetByIDRequester
-}
-
 type Client interface {
 	SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error)
 	GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error)

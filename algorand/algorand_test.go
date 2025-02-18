@@ -416,6 +416,16 @@ func TestWithdrawAlgorandTxn(t *testing.T) {
 			TxId:                      "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
 			Error:                     "failed to send transaction: error in send raw transaction",
 		},
+		{
+			Name:                      "Invalid Transaction object",
+			MockClient:                true,
+			Transaction:               nil,
+			Signature:                 "lMsQcVS00tj3RymOKQibx+4mZvLapLRg27d3egK6l5pZW0ge5Q9ojQQUX1gJxZQTMAFI0wDD7Fs4xQWFQnkhCw==",
+			IsError:                   true,
+			IsSendRawTransactionError: false,
+			TxId:                      "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+			Error:                     "transaction is nil",
+		},
 	}
 
 	// Run test cases
@@ -433,8 +443,9 @@ func TestWithdrawAlgorandTxn(t *testing.T) {
 			}
 			serializedTxn, err := clients.WithdrawAlgorandTxn(tt.Signature, tt.Transaction)
 			fmt.Println(serializedTxn)
+			fmt.Println(err)
 			if !tt.IsError && err != nil {
-				t.Errorf("WithdrawAlgorandTokenGetSignature() error = %v", err)
+				t.Errorf("WithdrawAlgorandTxn() error = %v", err)
 			} else if tt.IsError && err.Error() != tt.Error {
 				t.Errorf("expected error = %v", err)
 			}

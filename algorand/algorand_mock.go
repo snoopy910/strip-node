@@ -355,6 +355,10 @@ func (mockClient *MockClients) WithdrawAlgorandTxn(
 	tx *types.Transaction,
 ) (string, error) {
 
+	if tx == nil {
+		return "", fmt.Errorf("transaction is nil")
+	}
+
 	// Decode the signature (base64 encoded)
 	sigBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {

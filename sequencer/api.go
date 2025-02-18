@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 )
@@ -16,7 +17,7 @@ type Operation struct {
 	SerializedTxn    string `json:"serializedTxn"`
 	DataToSign       string `json:"dataToSign"`
 	ChainId          string `json:"chainId"`
-	GenesisHash      string  `json:"genesisHash"`
+	GenesisHash      string `json:"genesisHash"`
 	KeyCurve         string `json:"keyCurve"`
 	Status           string `json:"status"`
 	Result           string `json:"result"`
@@ -563,7 +564,7 @@ func startHTTPServer(port string) {
 				return
 			}
 		} else if operation.KeyCurve == "algorand_eddsa" {
-			transfers, err := GetAlgorandTransfers(operation.ChainId, operation.Result)
+			transfers, err := algorand.GetAlgorandTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

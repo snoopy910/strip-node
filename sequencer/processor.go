@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
@@ -223,7 +224,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							txnHash, err = SendAlgorandTransaction(operation.SerializedTxn, operation.GenesisHash, signature)
+							txnHash, err = algorand.SendAlgorandTransaction(operation.SerializedTxn, operation.GenesisHash, signature)
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -453,7 +454,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							transfers, err = GetAlgorandTransfers(depositOperation.ChainId, depositOperation.Result)
+							transfers, err = algorand.GetAlgorandTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1014,7 +1015,7 @@ func ProcessIntent(intentId int64) {
 
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native ALGO token
-							dataToSign, tx, err := withdrawAlgorandNativeGetSignature(
+							dataToSign, tx, err := algorand.WithdrawAlgorandNativeGetSignature(
 								withdrawalChain.ChainUrl,
 								bridgeWallet.AlgorandEDDSAPublicKey,
 								burn.SolverOutput,
@@ -1035,7 +1036,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							result, err := withdrawAlgorandTxn(
+							result, err := algorand.WithdrawAlgorandTxn(
 								withdrawalChain.ChainUrl,
 								signature,
 								tx,
@@ -1051,7 +1052,7 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						} else {
 							// handle ASA (Algorand Standard Asset)
-							dataToSign, tx, err := withdrawAlgorandASAGetSignature(
+							dataToSign, tx, err := algorand.WithdrawAlgorandASAGetSignature(
 								withdrawalChain.ChainUrl,
 								bridgeWallet.AlgorandEDDSAPublicKey,
 								burn.SolverOutput,
@@ -1073,7 +1074,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							result, err := withdrawAlgorandTxn(
+							result, err := algorand.WithdrawAlgorandTxn(
 								withdrawalChain.ChainUrl,
 								signature,
 								tx,
@@ -1143,7 +1144,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1209,7 +1210,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1371,7 +1372,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1477,7 +1478,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							if chain.ChainType == "algorand" {
-								txnConfirmed, err := CheckAlgorandTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := algorand.CheckAlgorandTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break

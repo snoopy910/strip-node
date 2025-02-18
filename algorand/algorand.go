@@ -1,4 +1,4 @@
-package sequencer
+package algorand
 
 import (
 	"context"
@@ -18,24 +18,98 @@ import (
 	"github.com/algorand/go-algorand-sdk/types"
 )
 
-type Client interface {
-	MakeClient(address string, apiToken string) (c *Client, err error)
+type SuggestedParamsRequester interface {
+	Do(ctx context.Context) (types.SuggestedParams, error)
+}
+
+type PendingTransactionInformationRequester interface {
+	Do(ctx context.Context) (*algod.PendingTransactionInformation, error)
+}
+
+type LookupTransactionRequester interface {
+	Do(ctx context.Context) (*indexer.LookupTransaction, error)
+}
+
+type LookupAssetByIDRequester interface {
+	Do(ctx context.Context) (*indexer.LookupAssetByID, error)
+}
+
+type AlgodClient interface {
 	SendRawTransaction(txn []byte) (txid string, err error)
+	PendingTransactionInformation(txid string) *PendingTransactionInformationRequester
+	SuggestedParams() SuggestedParamsRequester
+}
+
+type IndexerClient interface {
+	LookupTransaction(txid string) LookupTransactionRequester
+	LookupAssetByID(assetId uint64) LookupAssetByIDRequester
+}
+
+type Client interface {
+	SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error)
+	GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error)
+	CheckAlgorandTransactionConfirmed(genesisHash string, txnHash string) (bool, error)
+	WithdrawAlgorandNativeGetSignature(account string, amount string, recipient string) (string, *types.Transaction, error)
+	WithdrawAlgorandASAGetSignature(account string, amount string, recipient string, assetId string) (string, *types.Transaction, error)
+	WithdrawAlgorandTxn(signature string, tx *types.Transaction) (string, error)
+}
+
+type Clients struct {
+	algodClient   *algod.Client
+	indexerClient *indexer.Client
+}
+
+var _ Client = (*Clients)(nil)
+
+func NewClients(genesisHash string, algodURL string, indexerURL string, createAlgod bool, createIndexer bool) (c *Clients, err error) {
+	aURL := algodURL
+	iURL := indexerURL
+
+	nodeClient := &algod.Client{}
+	indexerClient := &indexer.Client{}
+
+	if createAlgod {
+		if algodURL == "" {
+			chain, err := common.GetChain(genesisHash)
+			if err != nil {
+				return nil, err
+			}
+			aURL = chain.ChainUrl
+		}
+		nodeClient, err = algod.MakeClient(aURL, "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create algod client: %v", err)
+		}
+	}
+
+	if createIndexer {
+		if indexerURL == "" {
+			chain, err := common.GetChain(genesisHash)
+			if err != nil {
+				return nil, err
+			}
+			iURL = chain.IndexerUrl
+		}
+		// Create an indexer client (no API key needed for AlgoNode)
+		indexerClient, err = indexer.MakeClient(iURL, "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create indexer client: %v", err)
+		}
+	}
+	return &Clients{algodClient: nodeClient, indexerClient: indexerClient}, nil
+}
+
+func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error) {
+	client, err := NewClients(genesisHash, "", "", false, true)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetAlgorandTransfers(genesisHash, txnHash)
 }
 
 // GetAlgorandTransfers retrieves transfer information from an Algorand transaction
 // It handles both native ALGO transfers and ASA (Algorand Standard Asset) transfers
-func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error) {
-	chain, err := common.GetChain(genesisHash)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create an indexer client (no API key needed for AlgoNode)
-	indexerClient, err := indexer.MakeClient(chain.IndexerUrl, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create indexer client: %v", err)
-	}
+func (client *Clients) GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error) {
 
 	// Create context with timeout
 	// why 10 seconds? Needs to be computed ?
@@ -43,7 +117,7 @@ func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer
 	defer cancel()
 
 	// Look up the transaction
-	txnResponse, err := indexerClient.LookupTransaction(txnHash).Do(ctx)
+	txnResponse, err := client.indexerClient.LookupTransaction(txnHash).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup transaction: %v", err)
 	}
@@ -99,7 +173,7 @@ func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer
 
 		// Get asset info for decimals
 
-		_, asset, err := indexerClient.LookupAssetByID(txn.AssetTransferTransaction.AssetId).Do(ctx)
+		_, asset, err := client.indexerClient.LookupAssetByID(txn.AssetTransferTransaction.AssetId).Do(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to lookup asset info: %v", err)
 		}
@@ -121,39 +195,34 @@ func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer
 	return transfers, nil
 }
 
-// CheckAlgorandTransactionConfirmed checks if an Algorand transaction is confirmed
-// It first tries the Algod API, then falls back to the Indexer if needed
-func CheckAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := common.GetChain(chainId)
+func CheckAlgorandTransactionConfirmed(genesisHash string, txnHash string) (bool, error) {
+	client, err := NewClients(genesisHash, "", "", true, true)
 	if err != nil {
 		return false, err
 	}
+	return client.CheckAlgorandTransactionConfirmed(genesisHash, txnHash)
+}
 
+// CheckAlgorandTransactionConfirmed checks if an Algorand transaction is confirmed
+// It first tries the Algod API, then falls back to the Indexer if needed
+func (client *Clients) CheckAlgorandTransactionConfirmed(genesisHash string, txnHash string) (bool, error) {
 	// First try using native Algod API (Priority 1)
-	algodClient, err := algod.MakeClient(chain.ChainUrl, "")
+	// Get pending transaction information
+	pendingTxn, _, err := client.algodClient.PendingTransactionInformation(txnHash).Do(context.Background())
 	if err == nil {
-		// Get pending transaction information
-		pendingTxn, _, err := algodClient.PendingTransactionInformation(txnHash).Do(context.Background())
-		if err == nil {
-			// If confirmed round is non-zero, transaction is confirmed
-			if pendingTxn.ConfirmedRound > 0 {
-				return true, nil
-			}
-			// If pool error is empty and confirmed round is zero, transaction is still pending
-			if pendingTxn.PoolError == "" {
-				return false, nil
-			}
+		// If confirmed round is non-zero, transaction is confirmed
+		if pendingTxn.ConfirmedRound > 0 {
+			return true, nil
+		}
+		// If pool error is empty and confirmed round is zero, transaction is still pending
+		if pendingTxn.PoolError == "" {
+			return false, nil
 		}
 	}
 
 	// Fallback to Indexer if Algod fails or transaction not found (Priority 2)
-	indexerClient, err := indexer.MakeClient(chain.IndexerUrl, "")
-	if err != nil {
-		return false, fmt.Errorf("failed to create indexer client: %v", err)
-	}
-
 	// Look up the transaction
-	txnResponse, err := indexerClient.LookupTransaction(txnHash).Do(context.Background())
+	txnResponse, err := client.indexerClient.LookupTransaction(txnHash).Do(context.Background())
 	if err != nil {
 		return false, fmt.Errorf("failed to lookup transaction: %v", err)
 	}
@@ -163,19 +232,16 @@ func CheckAlgorandTransactionConfirmed(chainId string, txnHash string) (bool, er
 	return txnResponse.Transaction.ConfirmedRound > 0, nil
 }
 
-// SendAlgorandTransaction sends a signed Algorand transaction to the network
 func SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error) {
-	chain, err := common.GetChain(genesisHash)
+	client, err := NewClients(genesisHash, "", "", true, false)
 	if err != nil {
 		return "", err
 	}
+	return client.SendAlgorandTransaction(serializedTxn, genesisHash, signatureBase64)
+}
 
-	// Create an algod client (no API key needed for AlgoNode/Nodely)
-	client, err := algod.MakeClient(chain.ChainUrl, "")
-	if err != nil {
-		return "", fmt.Errorf("failed to create algod client: %v", err)
-	}
-
+// SendAlgorandTransaction sends a signed Algorand transaction to the network
+func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error) {
 	// Decode the serialized transaction (base32 encoded)
 	txnBytes, err := base32.StdEncoding.DecodeString(serializedTxn)
 	if err != nil {
@@ -208,7 +274,7 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, signature
 	signedTxnBytes := msgpack.Encode(signedTxn)
 
 	// Send the transaction
-	txid, err := client.SendRawTransaction(signedTxnBytes).Do(context.Background())
+	txid, err := client.algodClient.SendRawTransaction(signedTxnBytes).Do(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
@@ -218,19 +284,27 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, signature
 
 // bridge withdraw
 
-func withdrawAlgorandNativeGetSignature(
+func WithdrawAlgorandNativeGetSignature(
 	algodURL string,
 	account string,
 	amount string,
 	recipient string,
 ) (string, *types.Transaction, error) {
-
-	client, err := algod.MakeClient(algodURL, "")
+	client, err := NewClients("", algodURL, "", true, false)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to make algod client: %w", err)
+		return "", nil, err
 	}
+	return client.WithdrawAlgorandNativeGetSignature(account, amount, recipient)
 
-	sp, err := client.SuggestedParams().Do(context.Background())
+}
+
+func (client *Clients) WithdrawAlgorandNativeGetSignature(
+	account string,
+	amount string,
+	recipient string,
+) (string, *types.Transaction, error) {
+
+	sp, err := client.algodClient.SuggestedParams().Do(context.Background())
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get suggested params: %w", err)
 	}
@@ -251,20 +325,28 @@ func withdrawAlgorandNativeGetSignature(
 	return hex.EncodeToString(txHash), &tx, nil
 }
 
-func withdrawAlgorandASAGetSignature(
+func WithdrawAlgorandASAGetSignature(
 	algodURL string,
 	account string,
 	amount string,
 	recipient string,
 	assetId string,
 ) (string, *types.Transaction, error) {
-
-	client, err := algod.MakeClient(algodURL, "")
+	client, err := NewClients("", algodURL, "", true, false)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to make algod client: %w", err)
+		return "", nil, err
 	}
+	return client.WithdrawAlgorandASAGetSignature(account, amount, recipient, assetId)
+}
 
-	sp, err := client.SuggestedParams().Do(context.Background())
+func (client *Clients) WithdrawAlgorandASAGetSignature(
+	account string,
+	amount string,
+	recipient string,
+	assetId string,
+) (string, *types.Transaction, error) {
+
+	sp, err := client.algodClient.SuggestedParams().Do(context.Background())
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get suggested params: %w", err)
 	}
@@ -290,16 +372,22 @@ func withdrawAlgorandASAGetSignature(
 	return hex.EncodeToString(txHash), &tx, nil
 }
 
-func withdrawAlgorandTxn(
+func WithdrawAlgorandTxn(
 	algodURL string,
 	signature string,
 	tx *types.Transaction,
 ) (string, error) {
-
-	client, err := algod.MakeClient(algodURL, "")
+	client, err := NewClients("", algodURL, "", true, false)
 	if err != nil {
-		return "", fmt.Errorf("failed to make algod client: %w", err)
+		return "", err
 	}
+	return client.WithdrawAlgorandTxn(signature, tx)
+}
+
+func (client *Clients) WithdrawAlgorandTxn(
+	signature string,
+	tx *types.Transaction,
+) (string, error) {
 
 	// Decode the signature (base32 encoded)
 	sigBytes, err := base32.StdEncoding.DecodeString(signature)
@@ -320,7 +408,7 @@ func withdrawAlgorandTxn(
 	signedTxnBytes := msgpack.Encode(signedTxn)
 
 	// Send the transaction
-	txid, err := client.SendRawTransaction(signedTxnBytes).Do(context.Background())
+	txid, err := client.algodClient.SendRawTransaction(signedTxnBytes).Do(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}

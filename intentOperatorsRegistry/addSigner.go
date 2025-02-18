@@ -52,11 +52,30 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 		log.Fatal(err)
 	}
 
+	toAddress := common.HexToAddress(contractAddress)
+
+	abi, err := IntentOperatorsRegistryMetaData.GetAbi()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	data, err := abi.Pack("addSigner", tssCommon.PublicKeyStrToBytes32(signerPublicKey), signerNodeURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
+	if err != nil {
+		log.Fatalf("failed to estimate gas: %v", err)
+	}
+	fmt.Println("gas estimate ", gas)
+
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
+	auth.GasLimit = gas
+	// auth.GasLimit = 972978
 
 	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {

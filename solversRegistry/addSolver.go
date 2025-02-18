@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"time"
 
+	tssCommon "github.com/StripChain/strip-node/common"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -51,11 +52,35 @@ func AddSolver(rpcURL string, contractAddress string, privKey string, solverDoma
 		log.Fatal(err)
 	}
 
+	toAddress := common.HexToAddress(contractAddress)
+
+	abi, err := SolversRegistryMetaData.GetAbi()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// big.int array of chain ids
+	chains := make([]*big.Int, 0)
+	chains = append(chains, big.NewInt(1))
+	chains = append(chains, big.NewInt(3))
+
+	data, err := abi.Pack("updateSolver", solverDomain, true, chains)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gas, err := tssCommon.EstimateTransactionGas(fromAddress, &toAddress, 0, gasPrice, nil, nil, data, client, 1.2)
+	if err != nil {
+		log.Fatalf("failed to estimate gas: %v", err)
+	}
+	fmt.Println("gas estimate ", gas)
+
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0) // in wei
 	auth.GasPrice = gasPrice
-	auth.GasLimit = 972978
+	auth.GasLimit = gas
+	// auth.GasLimit = 972978
 
 	nonce, err = client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
@@ -63,11 +88,6 @@ func AddSolver(rpcURL string, contractAddress string, privKey string, solverDoma
 	}
 
 	auth.Nonce = big.NewInt(int64(nonce))
-
-	// big.int array of chain ids
-	chains := make([]*big.Int, 0)
-	chains = append(chains, big.NewInt(1))
-	chains = append(chains, big.NewInt(3))
 
 	tx, err := instance.UpdateSolver(auth, solverDomain, true, chains)
 	if err != nil {

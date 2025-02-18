@@ -36,7 +36,7 @@ type LookupAssetByIDRequester interface {
 
 type AlgodClient interface {
 	SendRawTransaction(txn []byte) (txid string, err error)
-	PendingTransactionInformation(txid string) *PendingTransactionInformationRequester
+	PendingTransactionInformation(txid string) PendingTransactionInformationRequester
 	SuggestedParams() SuggestedParamsRequester
 }
 

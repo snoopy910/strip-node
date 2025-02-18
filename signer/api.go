@@ -303,7 +303,7 @@ func startHTTPServer(port string) {
 		operationIndexInt := uint(operationIndex)
 
 		if intent.Expiry < uint64(time.Now().Unix()) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Intent has expired", http.StatusBadRequest)
 			return
 		}
 

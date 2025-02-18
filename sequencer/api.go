@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
@@ -539,6 +540,19 @@ func startHTTPServer(port string) {
 			}
 		} else if operation.KeyCurve == "aptos_eddsa" {
 			transfers, err := aptos.GetAptosTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "sui_eddsa" {
+			transfers, err := sui.GetSuiTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

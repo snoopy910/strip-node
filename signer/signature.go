@@ -14,6 +14,7 @@ import (
 
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/common"
+	"golang.org/x/crypto/blake2b"
 
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -145,10 +146,12 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		// Sui uses Ed25519 for transaction signing
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 
-		// For Sui, we need to hash the message with SHA3-512 first
+		// Sui uses Ed25519 with SHA3-512 for transaction signing
+		// 1. Hash the message with SHA3-512
 		hasher := sha3.New512()
 		hasher.Write(hash)
 		msgHash := hasher.Sum(nil)
+		// 2. Convert to big.Int for TSS library
 		msg := (&big.Int{}).SetBytes(msgHash)
 
 		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
@@ -309,8 +312,9 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				// Serialize the full Ed25519 public key
 				pkBytes := pk.Serialize()
 
-				// Convert to Sui address format (0x-prefixed hex of first 32 bytes)
-				suiAddress := "0x" + hex.EncodeToString(pkBytes[:32])
+				// Convert to Sui address format (Blake2b-256 hash of public key)
+				hasher := blake2b.Sum256(pkBytes)
+				suiAddress := "0x" + hex.EncodeToString(hasher[:])
 
 				// For Sui, we need to encode the signature in base64
 				signatureBase64 := base64.StdEncoding.EncodeToString(save.Signature)

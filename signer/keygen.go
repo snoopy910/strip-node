@@ -1,7 +1,7 @@
 package signer
 
 import (
-	"golang.org/x/crypto/blake2b"
+	
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,6 +14,7 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/mr-tron/base58"
+	"golang.org/x/crypto/blake2b"
 )
 
 func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int, signers []string) {

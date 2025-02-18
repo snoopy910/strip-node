@@ -52,6 +52,7 @@ type WalletSchema struct {
 	DogecoinMainnetPublicKey string `json:"dogecoinMainnetPublicKey"`
 	DogecoinTestnetPublicKey string `json:"dogecoinTestnetPublicKey"`
 	BitcoinRegtestPublicKey string `json:"bitcoinRegtestPublicKey"`
+	SuiPublicKey            string `json:"suiPublicKey"`
 	Signers                 string `json:"signers"`
 }
 

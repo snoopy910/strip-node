@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/aptos"
+	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
@@ -203,6 +204,35 @@ func ProcessIntent(intentId int64) {
 							} else {
 								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 							}
+						}
+					} else if operation.KeyCurve == "sui_eddsa" {
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						txnHash, err := sui.SendSuiTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						var lockMetadata LockMetadata
+						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+						if lockMetadata.Lock {
+							err := LockIdentity(lockSchema.Id)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+						} else {
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
@@ -434,7 +464,7 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" ||
-						depositOperation.KeyCurve == "secp256k1" {
+						depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "sui_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -467,6 +497,12 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "bitcoin" {
 							transfers, _, err = GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						} else if chain.ChainType == "sui" {
+							transfers, err = sui.GetSuiTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1087,6 +1123,91 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
 						break
+					} else if withdrawalChain.KeyCurve == "sui_eddsa" {
+						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						if err != nil {
+							fmt.Printf("error getting public key: %v", err)
+							break
+						}
+
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// Handle native SUI token withdrawal
+							transaction, dataToSign, err := sui.WithdrawSuiNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.SuiPublicKey,
+								burn.SolverOutput,
+								user.SuiPublicKey,
+							)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := sui.WithdrawSuiTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								wallet.SuiPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						} else {
+							// Handle Sui token withdrawal
+							transaction, dataToSign, err := sui.WithdrawSuiTokenGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.SuiPublicKey,
+								burn.SolverOutput,
+								user.SuiPublicKey,
+								tokenToWithdraw,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := sui.WithdrawSuiTxn(
+								withdrawalChain.ChainUrl,
+								transaction,
+								wallet.SuiPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						}
+						break
 					}
 				}
 
@@ -1123,7 +1244,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "sui_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1140,6 +1261,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "sui" {
+							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1186,7 +1315,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "sui_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1203,6 +1332,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "sui" {
+							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1346,7 +1483,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "sui_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1363,6 +1500,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "sui" {
+							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1441,7 +1586,7 @@ func ProcessIntent(intentId int64) {
 									}
 								}
 							}
-						} else if depositOperation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						} else if depositOperation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "sui_eddsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
@@ -1467,6 +1612,23 @@ func ProcessIntent(intentId int64) {
 
 							if chain.ChainType == "aptos" {
 								txnConfirmed, err := aptos.CheckAptosTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Println(err)
+									break
+								}
+
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+								}
+							}
+
+							if chain.ChainType == "sui" {
+								txnConfirmed, err := sui.CheckSuiTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break

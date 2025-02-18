@@ -170,6 +170,26 @@ func createWallet(identity string, identityCurve string) error {
 
 	eddsaAddress := getAddressResponse.Address
 
+	// get the address of the wallet whose keycurve is sui_eddsa here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=sui_eddsa")
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(body, &getAddressResponse)
+	if err != nil {
+		return err
+	}
+
+	suiAddress := getAddressResponse.Address
+
 	// get the address of the wallet whose keycurve is aptos_eddsa here
 	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=aptos_eddsa")
 	if err != nil {
@@ -259,6 +279,7 @@ func createWallet(identity string, identityCurve string) error {
 		BitcoinRegtestPublicKey: bitcoinRegtestAddress,
 		DogecoinMainnetPublicKey: dogecoinMainnetAddress,
 		DogecoinTestnetPublicKey: dogecoinTestnetAddress,
+		SuiPublicKey:            suiAddress,
 	}
 
 	_, err = AddWallet(&wallet)

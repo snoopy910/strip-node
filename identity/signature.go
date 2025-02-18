@@ -14,13 +14,14 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/crypto/sha3"
+
 
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1" // Add this import
 	"github.com/mr-tron/base58"
+	"golang.org/x/crypto/blake2b"
 )
 
 var (
@@ -210,12 +211,12 @@ func VerifySignature(
 		}
 		fmt.Printf("[VERIFY SUI_EDDSA] Signature bytes: %x\n", signatureBytes)
 
-		// Hash the message with SHA3-512 (Sui's requirement)
-		hasher := sha3.New512()
+		// Hash the message with Blake2b as per Sui's requirement
+		hasher, _ := blake2b.New256(nil) // Using nil key for keyless hashing
 		hasher.Write(messageBytes)
 		msgHash := hasher.Sum(nil)
 
-		// Verify using ed25519
+		// Verify using ed25519 which internally uses SHA-512 as per RFC 8032
 		verified := ed25519.Verify(publicKeyBytes, msgHash, signatureBytes)
 
 		fmt.Printf("[VERIFY SUI_EDDSA] Verification result: %v\n", verified)

@@ -14,10 +14,10 @@ func GetClient(chainType string, chainUrl string) *horizonclient.Client {
 		// Create a new client with custom URL
 		client := &horizonclient.Client{
 			HorizonURL: chainUrl,
-			HTTP:      http.DefaultClient,
+			HTTP:       http.DefaultClient,
 		}
 		// Set timeout using the SDK's constant
-		client.SetTimeout(horizonclient.HorizonTimeout)
+		client.SetHorizonTimeout(horizonclient.HorizonTimeout)
 		return client
 	}
 	return horizonclient.DefaultTestNetClient

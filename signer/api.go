@@ -369,13 +369,9 @@ func startHTTPServer(port string) {
 		} else if keyCurve == SECP256K1_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
-		} else if keyCurve == APTOS_EDDSA_CURVE {
+		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
-			signatureResponse.Address = sig.Address
-		} else if keyCurve == STELLAR_CURVE {
-			// For Stellar, encode the signature in base32 (Stellar's standard)
-			signatureResponse.Signature = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
 		} else {
 			signatureResponse.Signature = base58.Encode(sig.Message)

@@ -1,7 +1,6 @@
 package stellar
 
 import (
-	"encoding/base32"
 	"encoding/hex"
 	"fmt"
 
@@ -61,6 +60,7 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 
 	var transfers []common.Transfer
 
+	fmt.Printf("tx.Signatures: %+v\n", tx.Signatures)
 	// Helper function to create a transfer from a Stellar asset
 	createTransfer := func(from, to, amount string, assetType, assetCode, assetIssuer string) common.Transfer {
 		if assetType == "native" {
@@ -99,22 +99,12 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 
 	for _, rawOp := range ops.Embedded.Records {
 		// Get the source account for this operation
-		sourceAccount := ""
+		sourceAccount := tx.Account
 		switch op := rawOp.(type) {
-		case *operations.Payment:
-			sourceAccount = op.From
-		case *operations.PathPayment:
-			sourceAccount = op.From
-		}
-
-		if sourceAccount == "" {
-			sourceAccount = tx.Account
-		}
-
-		// Handle different types of payment operations
-		// We only care about operations that represent actual value transfers
-		switch op := rawOp.(type) {
-		case *operations.Payment:
+		case operations.Payment:
+			if op.From != "" {
+				sourceAccount = op.From
+			}
 			transfers = append(transfers, createTransfer(
 				sourceAccount,
 				op.To,
@@ -123,10 +113,10 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 				op.Asset.Code,
 				op.Asset.Issuer,
 			))
-
-
-
-		case *operations.PathPayment:
+		case operations.PathPayment:
+			if op.From != "" {
+				sourceAccount = op.From
+			}
 			transfers = append(transfers, createTransfer(
 				sourceAccount,
 				op.To,
@@ -135,6 +125,8 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 				op.Asset.Code,
 				op.Asset.Issuer,
 			))
+		default:
+			fmt.Printf("unknown operation type: %T\n", op)
 		}
 	}
 	return transfers, nil
@@ -154,10 +146,23 @@ func SendStellarTxn(serializedTxn string, chainId string, keyCurve string, dataT
 		Signature: sigBytes,
 	}
 
-	// Convert to base64 XDR
-	signatureXDR, err := xdr.MarshalBase64(xdrSig)
+	// Decode the serialized transaction
+	var envelope xdr.TransactionEnvelope
+	err = xdr.SafeUnmarshalBase64(serializedTxn, &envelope)
 	if err != nil {
-		return "", fmt.Errorf("error encoding XDR signature: %w", err)
+		return "", fmt.Errorf("failed to decode transaction XDR: %w", err)
+	}
+
+	// Add the signature to the appropriate envelope based on type
+	switch envelope.Type {
+	case xdr.EnvelopeTypeEnvelopeTypeTx:
+		envelope.V1.Signatures = append(envelope.V1.Signatures, xdrSig)
+	case xdr.EnvelopeTypeEnvelopeTypeTxV0:
+		envelope.V0.Signatures = append(envelope.V0.Signatures, xdrSig)
+	case xdr.EnvelopeTypeEnvelopeTypeTxFeeBump:
+		envelope.FeeBump.Signatures = append(envelope.FeeBump.Signatures, xdrSig)
+	default:
+		return "", fmt.Errorf("unsupported transaction envelope type: %v", envelope.Type)
 	}
 
 	chain, err := common.GetChain(chainId)
@@ -167,37 +172,6 @@ func SendStellarTxn(serializedTxn string, chainId string, keyCurve string, dataT
 
 	// Initialize Horizon client
 	client := GetClient(chain.ChainType, chain.ChainUrl)
-
-	// Decode the serialized transaction
-	var envelope xdr.TransactionEnvelope
-	err = xdr.SafeUnmarshalBase64(serializedTxn, &envelope)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode transaction XDR: %w", err)
-	}
-
-	// Convert base32 signature to raw bytes
-	sigBytes, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(signatureXDR)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode base32 signature: %w", err)
-	}
-
-	// Create a decorated signature
-	decoratedSig := xdr.DecoratedSignature{
-		Signature: sigBytes,
-		Hint:      [4]byte{}, // Hint is not needed for Ed25519 signatures
-	}
-
-	// Add the signature to the appropriate envelope based on type
-	switch envelope.Type {
-	case xdr.EnvelopeTypeEnvelopeTypeTx:
-		envelope.V1.Signatures = append(envelope.V1.Signatures, decoratedSig)
-	case xdr.EnvelopeTypeEnvelopeTypeTxV0:
-		envelope.V0.Signatures = append(envelope.V0.Signatures, decoratedSig)
-	case xdr.EnvelopeTypeEnvelopeTypeTxFeeBump:
-		envelope.FeeBump.Signatures = append(envelope.FeeBump.Signatures, decoratedSig)
-	default:
-		return "", fmt.Errorf("unsupported transaction envelope type: %v", envelope.Type)
-	}
 
 	// Convert back to base64 for submission
 	txeB64, err := xdr.MarshalBase64(envelope)

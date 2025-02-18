@@ -2,6 +2,7 @@ package stellar
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -32,6 +33,11 @@ func WithdrawStellarNativeGetSignature(
 	// Get bridge account to use as source account
 	account, err := client.AccountDetail(horizonclient.AccountRequest{AccountID: bridgeAddress})
 	if err != nil {
+		hzErr, ok := err.(*horizonclient.Error)
+		if ok {
+			return "", "", fmt.Errorf("error getting bridge account: %v", hzErr.Problem)
+		}
+
 		return "", "", fmt.Errorf("error getting bridge account: %v", err)
 	}
 
@@ -50,8 +56,8 @@ func WithdrawStellarNativeGetSignature(
 					Asset:       txnbuild.NativeAsset{},
 				},
 			},
-			BaseFee:  txnbuild.MinBaseFee,
-			Memo:    nil,
+			BaseFee:       txnbuild.MinBaseFee,
+			Memo:          nil,
 			Preconditions: txnbuild.Preconditions{TimeBounds: tb},
 		},
 	)
@@ -97,6 +103,11 @@ func WithdrawStellarAssetGetSignature(
 	// Get bridge account to use as source account
 	account, err := client.AccountDetail(horizonclient.AccountRequest{AccountID: bridgeAddress})
 	if err != nil {
+		hzErr, ok := err.(*horizonclient.Error)
+		if ok {
+			return "", "", fmt.Errorf("error getting bridge account: %v", hzErr.Problem)
+		}
+
 		return "", "", fmt.Errorf("error getting bridge account: %v", err)
 	}
 
@@ -115,8 +126,8 @@ func WithdrawStellarAssetGetSignature(
 					Asset:       txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer},
 				},
 			},
-			BaseFee:  txnbuild.MinBaseFee,
-			Memo:    nil,
+			BaseFee:       txnbuild.MinBaseFee,
+			Memo:          nil,
 			Preconditions: txnbuild.Preconditions{TimeBounds: tb},
 		},
 	)
@@ -153,9 +164,9 @@ func WithdrawStellarTxn(
 	}
 
 	// Decode the signature
-	sigBytes, err := base64.StdEncoding.DecodeString(signature)
+	sigBytes, err := hex.DecodeString(signature)
 	if err != nil {
-		return "", fmt.Errorf("error decoding signature: %v", err)
+		return "", fmt.Errorf("error decoding signature: %w", err)
 	}
 
 	// Create decorated signature
@@ -187,7 +198,8 @@ func WithdrawStellarTxn(
 	if err != nil {
 		hzErr, ok := err.(*horizonclient.Error)
 		if ok {
-			return "", fmt.Errorf("transaction submission failed: %v", hzErr.Problem)
+			resultCodes, _ := hzErr.ResultCodes()
+			return "", fmt.Errorf("transaction submission failed: %w, Result Codes: %v", hzErr.Problem, resultCodes)
 		}
 		return "", fmt.Errorf("error submitting transaction: %v", err)
 	}

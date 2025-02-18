@@ -142,7 +142,7 @@ func (mockClient *MockClients) SendAlgorandTransaction(serializedTxn string, gen
 		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
 	}
 
-	// Decode the signature (base32 encoded)
+	// Decode the signature (base64 encoded)
 	sigBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode signature: %v", err)
@@ -169,10 +169,10 @@ func (mockClient *MockClients) SendAlgorandTransaction(serializedTxn string, gen
 	fmt.Println(string(signedTxnBytes))
 
 	// Send the transaction
-	// txid, err := mockClient.mockAlgod.SendRawTransaction(signedTxnBytes).Do(context.Background())
-	// if err != nil {
-	// 	return "", fmt.Errorf("failed to send transaction: %v", err)
-	// }
+	_, err = mockClient.mockAlgod.SendRawTransaction(signedTxnBytes).Do(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
 
 	return "toto", nil
 }

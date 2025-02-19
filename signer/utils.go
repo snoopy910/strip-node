@@ -86,22 +86,3 @@ func CalculateThreshold(totalSigners int) uint {
 		return uint((totalSigners / 2) + 1)
 	}
 }
-
-// CRC16 polynomial for Stellar's StrKey format
-const CRC16Poly = 0x1021 // x^16 + x^12 + x^5 + 1
-
-// CRC16 calculates CRC16 checksum used in Stellar's StrKey format
-func CRC16(data []byte) uint16 {
-	var crc uint16 = 0x0000
-	for _, b := range data {
-		crc ^= uint16(b) << 8
-		for i := 0; i < 8; i++ {
-			if (crc & 0x8000) != 0 {
-				crc = (crc << 1) ^ CRC16Poly
-			} else {
-				crc = crc << 1
-			}
-		}
-	}
-	return crc
-}

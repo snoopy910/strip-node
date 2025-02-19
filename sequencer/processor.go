@@ -59,13 +59,13 @@ func ProcessIntent(intentId int64) {
 	for {
 		intent, err := GetIntent(intentId)
 		if err != nil {
-			log.Println(err)
+			log.Printf("error getting intent: %+v\n", err)
 			return
 		}
 
 		intentBytes, err := json.Marshal(intent)
 		if err != nil {
-			log.Println(err)
+			log.Printf("error marshalling intent: %+v\n", err)
 			return
 		}
 
@@ -95,18 +95,18 @@ func ProcessIntent(intentId int64) {
 							_, err := AddLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error adding lock: %+v\n", err)
 								break
 							}
 
 							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error getting lock after adding: %+v\n", err)
 								break
 							}
 						} else {
-							fmt.Println(err)
+							fmt.Printf("error getting lock: %+v\n", err)
 							break
 						}
 					}
@@ -120,13 +120,13 @@ func ProcessIntent(intentId int64) {
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting chain: %+v\n", err)
 							break
 						}
 
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting signature: %+v\n", err)
 							break
 						}
 
@@ -183,14 +183,14 @@ func ProcessIntent(intentId int64) {
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting chain: %+v\n", err)
 							break
 						}
 
 						signature, err := getSignature(intent, i)
 
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting signature: %+v\n", err)
 							break
 						}
 
@@ -932,7 +932,7 @@ func ProcessIntent(intentId int64) {
 					} else if withdrawalChain.KeyCurve == "stellar_eddsa" {
 						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
-							fmt.Printf("error getting wallet: %v", err)
+							fmt.Printf("error getting wallet: %+v\n", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -946,8 +946,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						// Initialize Horizon client
-						client := stellar.GetClient(withdrawalChain.ChainType, withdrawalChain.ChainUrl)
-
+						client := stellar.GetClient(withdrawalChain.ChainId, withdrawalChain.ChainUrl)
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// Handle native XLM transfer
 							txn, dataToSign, err := stellar.WithdrawStellarNativeGetSignature(
@@ -958,7 +957,9 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error withdrawing native XLM: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -967,7 +968,9 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error getting signature: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -978,7 +981,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error withdrawing Stellar: %+v\n", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -995,6 +998,8 @@ func ProcessIntent(intentId int64) {
 
 							assetCode := assetParts[0]
 							assetIssuer := assetParts[1]
+							fmt.Printf("assetCode: %+v\n", assetCode)
+							fmt.Printf("assetIssuer: %+v\n", assetIssuer)
 
 							txn, dataToSign, err := stellar.WithdrawStellarAssetGetSignature(
 								client,
@@ -1006,7 +1011,9 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error withdrawing Stellar asset: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -1015,7 +1022,9 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error getting signature: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -1026,7 +1035,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error withdrawing Stellar: %+v\n", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1393,7 +1402,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error checking Stellar transaction: %+v\n", err)
 								break
 							}
 						}
@@ -1499,7 +1508,7 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "stellar" {
 								txnConfirmed, err := stellar.CheckStellarTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									fmt.Printf("error checking Stellar transaction: %+v\n", err)
 									break
 								}
 								if txnConfirmed {
@@ -1562,6 +1571,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
 
 	if err != nil {
+		fmt.Printf("error creating request: %+v\n", err)
 		return "", err
 	}
 
@@ -1570,6 +1580,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	resp, err := client.Do(req)
 
 	if err != nil {
+		fmt.Printf("error sending request: %+v\n", err)
 		return "", err
 	}
 
@@ -1577,12 +1588,14 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		fmt.Printf("error reading response body: %+v\n", err)
 		return "", err
 	}
 
 	var signatureResponse SignatureResponse
 	err = json.Unmarshal(body, &signatureResponse)
 	if err != nil {
+		fmt.Printf("error unmarshalling response body: %+v\n", err)
 		return "", err
 	}
 

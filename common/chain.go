@@ -92,14 +92,14 @@ var Chains = []Chain{
 		ChainId:     "testnet",
 		ChainType:   "stellar",
 		ChainUrl:    "https://horizon-testnet.stellar.org",
-		KeyCurve:    "ecdsa",
+		KeyCurve:    "eddsa",
 		TokenSymbol: "XLM",
 	},
 	{
 		ChainId:     "mainnet",
 		ChainType:   "stellar",
 		ChainUrl:    "https://horizon.stellar.org",
-		KeyCurve:    "ecdsa",
+		KeyCurve:    "eddsa",
 		TokenSymbol: "XLM",
 	},
 }

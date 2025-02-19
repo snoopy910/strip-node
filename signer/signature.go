@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
+	"github.com/stellar/go/strkey"
 )
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
@@ -276,20 +276,20 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 				// Get the public key bytes
 				pkBytes := pk.Serialize()
+				if len(pkBytes) != 32 {
+					fmt.Println("Invalid public key length")
+					return
+				}
 
-				// Stellar StrKey format:
-				// 1. Version byte (6 << 3 = 48 for public key)
-				versionByte := byte(48) // 6 << 3 for public key
+				// Version byte for ED25519 public key in Stellar
+				versionByte := strkey.VersionByteAccountID // 6 << 3, or 48
 
-				// 2. Append public key bytes
-				payload := append([]byte{versionByte}, pkBytes...)
-
-				// 3. Calculate CRC16 checksum
-				checksum := CRC16(payload)
-				payload = append(payload, byte(checksum>>8), byte(checksum))
-
-				// 4. Base32 encode without padding
-				address := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(payload)
+				// Use Stellar SDK's strkey package to encode
+				address, err := strkey.Encode(versionByte, pkBytes)
+				if err != nil {
+					fmt.Println("error encoding Stellar address: ", err)
+					return
+				}
 
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,

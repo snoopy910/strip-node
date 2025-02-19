@@ -10,7 +10,7 @@ import (
 
 var (
 	ErrInvalidAmount = "amount not found in solver output"
-	ErrInvalidAcc    = "full details: The request you sent was invalid in some way"
+	ErrInvalidAcc    = "problem: https://stellar.org/horizon-errors/bad_request"
 )
 
 func TestWithdrawStellarNativeGetSignature(t *testing.T) {

@@ -1,7 +1,7 @@
 package signer
 
 import (
-	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -12,6 +12,7 @@ import (
 
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/stellar/go/strkey"
 
 	"github.com/StripChain/strip-node/solver"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -184,23 +185,25 @@ func startHTTPServer(port string) {
 			pkBytes := pk.Serialize()
 
 			// Stellar StrKey format:
-			// 1. Version byte (6 << 3 = 48 for public key)
-			versionByte := byte(48) // 6 << 3 for public key
+			if len(pkBytes) != 32 {
+				http.Error(w, "Invalid public key length", http.StatusInternalServerError)
+				return
+			}
 
-			// 2. Append public key bytes
-			payload := append([]byte{versionByte}, pkBytes...)
+			// Version byte for ED25519 public key in Stellar
+			versionByte := strkey.VersionByteAccountID // 6 << 3, or 48
 
-			// 3. Calculate CRC16 checksum
-			checksum := CRC16(payload)
-			payload = append(payload, byte(checksum>>8), byte(checksum))
-
-			// 4. Base32 encode without padding
-			address := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(payload)
+			// Use Stellar SDK's strkey package to encode
+			address, err := strkey.Encode(versionByte, pkBytes)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error encoding Stellar address: %v", err), http.StatusInternalServerError)
+				return
+			}
 
 			getAddressResponse := GetAddressResponse{
 				Address: address,
 			}
-			err := json.NewEncoder(w).Encode(getAddressResponse)
+			err = json.NewEncoder(w).Encode(getAddressResponse)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
@@ -336,8 +339,7 @@ func startHTTPServer(port string) {
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == STELLAR_CURVE {
-			// For Stellar, decode the base32 message first (similar to Algorand)
-			msgBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(msg)
+			msgBytes, err := base64.StdEncoding.DecodeString(msg)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error decoding Stellar message: %v", err), http.StatusInternalServerError)
 				return

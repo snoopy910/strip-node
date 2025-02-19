@@ -133,33 +133,37 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 
 // SendTransaction submits a signed Stellar transaction to the network
 func SendStellarTxn(serializedTxn string, chainId string, keyCurve string, dataToSign string, signature string) (string, error) {
+	// Decode the transaction
+	var envelope xdr.TransactionEnvelope
+	err := xdr.SafeUnmarshalBase64(serializedTxn, &envelope)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode transaction XDR: %w", err)
+	}
+
 	// Convert hex signature to XDR format
 	sigBytes, err := hex.DecodeString(signature)
 	if err != nil {
 		return "", fmt.Errorf("error decoding signature: %w", err)
 	}
 
-	// Create XDR signature
-	xdrSig := xdr.DecoratedSignature{
-		Hint:      [4]byte{}, // Hint will be first 4 bytes of the public key
-		Signature: sigBytes,
-	}
+	// Get the last 4 bytes of the public key for the hint
+	publicKey := envelope.SourceAccount().ToAccountId().Ed25519[:]
+	hint := [4]byte{publicKey[28], publicKey[29], publicKey[30], publicKey[31]}
 
-	// Decode the serialized transaction
-	var envelope xdr.TransactionEnvelope
-	err = xdr.SafeUnmarshalBase64(serializedTxn, &envelope)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode transaction XDR: %w", err)
+	// Add signature
+	xdrSig := xdr.DecoratedSignature{
+		Hint:      hint,
+		Signature: sigBytes,
 	}
 
 	// Add the signature to the appropriate envelope based on type
 	switch envelope.Type {
 	case xdr.EnvelopeTypeEnvelopeTypeTx:
-		envelope.V1.Signatures = append(envelope.V1.Signatures, xdrSig)
+		envelope.V1.Signatures = []xdr.DecoratedSignature{xdrSig}
 	case xdr.EnvelopeTypeEnvelopeTypeTxV0:
-		envelope.V0.Signatures = append(envelope.V0.Signatures, xdrSig)
+		envelope.V0.Signatures = []xdr.DecoratedSignature{xdrSig}
 	case xdr.EnvelopeTypeEnvelopeTypeTxFeeBump:
-		envelope.FeeBump.Signatures = append(envelope.FeeBump.Signatures, xdrSig)
+		envelope.FeeBump.Signatures = []xdr.DecoratedSignature{xdrSig}
 	default:
 		return "", fmt.Errorf("unsupported transaction envelope type: %v", envelope.Type)
 	}
@@ -170,7 +174,7 @@ func SendStellarTxn(serializedTxn string, chainId string, keyCurve string, dataT
 	}
 
 	// Initialize Horizon client
-	client := GetClient(chain.ChainType, chain.ChainUrl)
+	client := GetClient(chain.ChainId, chain.ChainUrl)
 
 	// Convert back to base64 for submission
 	txeB64, err := xdr.MarshalBase64(envelope)

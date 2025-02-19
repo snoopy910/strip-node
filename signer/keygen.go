@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/mr-tron/base58"
+	"github.com/stellar/go/strkey"
 )
 
 func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int, signers []string) {
@@ -219,20 +219,20 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			// Get the public key bytes
 			pkBytes := pk.Serialize()
 
-			// Stellar StrKey format:
-			// 1. Version byte (6 << 3 = 48 for public key)
-			versionByte := byte(48) // 6 << 3 for public key
+			if len(pkBytes) != 32 {
+				fmt.Println("Invalid public key length")
+				return
+			}
 
-			// 2. Append public key bytes
-			payload := append([]byte{versionByte}, pkBytes...)
+			// Version byte for ED25519 public key in Stellar
+			versionByte := strkey.VersionByteAccountID // 6 << 3, or 48
 
-			// 3. Calculate CRC16 checksum
-			checksum := CRC16(payload)
-			payload = append(payload, byte(checksum>>8), byte(checksum))
-
-			// 4. Base32 encode without padding
-			publicKeyStr := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(payload)
-
+			// Use Stellar SDK's strkey package to encode
+			publicKeyStr, err := strkey.Encode(versionByte, pkBytes)
+			if err != nil {
+				fmt.Println("error encoding Stellar address: ", err)
+				return
+			}
 			fmt.Println("new TSS Address (Stellar) is: ", publicKeyStr)
 
 			out, err := json.Marshal(save)

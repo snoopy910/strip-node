@@ -5,9 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/stellar/go/clients/horizonclient"
-	b "github.com/stellar/go/txnbuild"
 )
 
 var (
@@ -125,6 +122,7 @@ func TestSendStellarTxn(t *testing.T) {
 	tests := []struct {
 		name         string
 		chainId      string
+		serializedTx string
 		keyCurve     string
 		dataToSign   string
 		signature    string
@@ -132,19 +130,17 @@ func TestSendStellarTxn(t *testing.T) {
 		errorMessage error
 	}{
 		{
-			name:         "Valid transaction on mainnet",
-			chainId:      "mainnet",
-			keyCurve:     "",
-			dataToSign:   "",
-			signature:    "bf37bab19150d32715cb042de8bc43f1c1ce57f7749ff0e26ec1ab99822ab9ccb9f1347f3fec47adf55d6fc0c616f0d5f181c899f27c97d51d21725e35eecf0f",
-			expectError:  true,
-			errorMessage: ErrBadAuth,
+			name:         "Valid transaction on testnet",
+			chainId:      "testnet",
+			serializedTx: "AAAAAgAAAAA6BrT9L+GG9XS6ZknRuYtcX6Zt6Rsav0PPYxJuSrI0WAAAAGQAEptTAAAAAwAAAAEAAAAAAAAAAAAAAABntyJuAAAAAAAAAAEAAAAAAAAAAQAAAAB/X2atFcr1OOrJ35T6ESjTHI8H9EQpV56/HGy4H1vA3gAAAAAAAAAAAJiWgAAAAAAAAAAA",
+			signature:    "d917d6d4334a54c8ed0d069be153de4477efaf6b297cc609626c1b676475db6e0c2406a2d1f7186429ab6f9bdf9678a20723ca7aded6552b685e44c443c9f604",
+			expectError:  false,
+			errorMessage: nil,
 		},
 		{
 			name:         "Invalid signature",
 			chainId:      "testnet",
-			keyCurve:     "",
-			dataToSign:   "",
+			serializedTx: "AAAAAgAAAAA6BrT9L+GG9XS6ZknRuYtcX6Zt6Rsav0PPYxJuSrI0WAAAAGQAEptTAAAAAwAAAAEAAAAAAAAAAAAAAABntyJuAAAAAAAAAAEAAAAAAAAAAQAAAAB/X2atFcr1OOrJ35T6ESjTHI8H9EQpV56/HGy4H1vA3gAAAAAAAAAAAJiWgAAAAAAAAAAA",
 			signature:    "invalid_signature",
 			expectError:  true,
 			errorMessage: ErrInvalidSignature,
@@ -153,38 +149,8 @@ func TestSendStellarTxn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Get the current sequence number
-			horizonClient := horizonclient.DefaultPublicNetClient
-			sourceAccount, err := horizonClient.AccountDetail(horizonclient.AccountRequest{
-				AccountID: "GCIS55JJ7VHNBLVTOZKRZGPQDWOACTSXBEYDX4YKU3HVIJQA6MURTX4E",
-			})
-			require.NoError(t, err)
-
-			tx, err := b.NewTransaction(
-				b.TransactionParams{
-					SourceAccount: &b.SimpleAccount{
-						AccountID: "GCIS55JJ7VHNBLVTOZKRZGPQDWOACTSXBEYDX4YKU3HVIJQA6MURTX4E",
-						Sequence:  sourceAccount.Sequence, // Use the current sequence number
-					},
-					IncrementSequenceNum: true,
-					Operations: []b.Operation{
-						&b.Payment{
-							Destination: "GABFQIK63R2NETJM7T673EAMZN4RJLLGP3OFUEJU5SZVTGWUKULZJNL6",
-							Amount:      "1",
-							Asset:       b.NativeAsset{},
-						},
-					},
-					Preconditions: b.Preconditions{
-						TimeBounds: b.NewInfiniteTimeout(),
-					},
-					BaseFee: 1000,
-				},
-			)
-			require.NoError(t, err)
-			txBase64, err := tx.Base64()
-			require.NoError(t, err)
 			txHash, err := SendStellarTxn(
-				txBase64,
+				tt.serializedTx,
 				tt.chainId,
 				tt.keyCurve,
 				tt.dataToSign,

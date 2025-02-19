@@ -2,7 +2,7 @@ package signer
 
 import (
 	"context"
-	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -123,9 +123,9 @@ func handleIncomingMessage(message []byte) {
 				val <- msg
 			}
 		case STELLAR_CURVE:
-			// Stellar: Client sends base32 string -> decode -> process -> encode back to base32
-			// Channel key must match the original base32 format from client, using StrKey encoding
-			if val, ok := messageChan[base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(msg.Hash)]; ok {
+			// Stellar: Client sends base64 string -> decode -> process -> encode back to base64
+			// Channel key must match the original base64 format from client, using StrKey encoding
+			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
 				val <- msg
 			}
 		default:

@@ -184,9 +184,15 @@ func startHTTPServer(port string) {
 
 			// Convert to Algorand address format
 			// Algorand addresses are the last 32 bytes of the SHA512_256 of the public key
-			hash := sha512.Sum512_256(pkBytes)
+			hasher := sha512.New512_256()
+			hasher.Write(pkBytes)
+			checksum := hasher.Sum(nil)[28:] // Last 4 bytes
 			// Add the prefix 'a' for Algorand address
-			address := "a" + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:])
+			// Concatenate public key and checksum
+			addressBytes := append(pkBytes, checksum...)
+
+			// Encode in base32 without padding
+			address := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addressBytes)
 
 			getAddressResponse := GetAddressResponse{
 				Address: address,

@@ -53,9 +53,9 @@ type MockLookupTransactionRequester struct {
 	mock.Mock
 }
 
-func (m *MockLookupTransactionRequester) Do(ctx context.Context) (models.Transaction, error) {
+func (m *MockLookupTransactionRequester) Do(ctx context.Context) (models.TransactionResponse, error) {
 	args := m.Called(ctx)
-	return args.Get(0).(models.Transaction), args.Error(1)
+	return args.Get(0).(models.TransactionResponse), args.Error(1)
 }
 
 type LookupAssetByIDRequester interface {

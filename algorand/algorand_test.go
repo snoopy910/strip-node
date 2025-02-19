@@ -3,12 +3,14 @@ package algorand
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"testing"
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/algorand/go-algorand-sdk/client/v2/algod"
+	"github.com/algorand/go-algorand-sdk/client/v2/common/models"
 	"github.com/algorand/go-algorand-sdk/client/v2/indexer"
 	"github.com/algorand/go-algorand-sdk/future"
 	"github.com/algorand/go-algorand-sdk/types"
@@ -442,6 +444,196 @@ func TestWithdrawAlgorandTxn(t *testing.T) {
 				mockSendRawTransactionRequester.On("Do", mock.Anything).Return("", fmt.Errorf("error in send raw transaction"))
 			}
 			serializedTxn, err := clients.WithdrawAlgorandTxn(tt.Signature, tt.Transaction)
+			fmt.Println(serializedTxn)
+			fmt.Println(err)
+			if !tt.IsError && err != nil {
+				t.Errorf("WithdrawAlgorandTxn() error = %v", err)
+			} else if tt.IsError && err.Error() != tt.Error {
+				t.Errorf("expected error = %v", err)
+			}
+		})
+	}
+
+}
+
+func TestGetAlgorandTransfers(t *testing.T) {
+
+	txA := models.Transaction{
+		Id:     "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+		Sender: "IBEM5YYEA5UHMRKV3HPRPYB2IJZ4HIII5SW4EDCV5OJFHBKIJBMQWNME6U",
+		PaymentTransaction: models.TransactionPayment{
+			Receiver: "IBEM5YYEA5UHMRKV3HPRPYB2IJZ4HIII5SW4EDCV5OJFHBKIJBMQWNME6U",
+			Amount:   100,
+		},
+		ConfirmedRound: 12345,
+		// Note:           "test note",
+		// AssetID:        0,
+		Type: string(types.PaymentTx),
+	}
+
+	respA := models.TransactionResponse{
+		CurrentRound: 12350,
+		Transaction:  txA,
+	}
+
+	txB := models.Transaction{
+		Id:     "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+		Sender: "IBEM5YYEA5UHMRKV3HPRPYB2IJZ4HIII5SW4EDCV5OJFHBKIJBMQWNME6U",
+		AssetTransferTransaction: models.TransactionAssetTransfer{
+			Receiver: "IBEM5YYEA5UHMRKV3HPRPYB2IJZ4HIII5SW4EDCV5OJFHBKIJBMQWNME6U",
+			Amount:   100,
+			AssetId:  123,
+		},
+		ConfirmedRound: 12345,
+		Type:           string(types.AssetTransferTx),
+	}
+
+	respB := models.TransactionResponse{
+		CurrentRound: 12350,
+		Transaction:  txB,
+	}
+
+	tests := []struct {
+		Name                 string
+		GenesisHash          string
+		TxHash               string
+		Error                string
+		IsLookUpTxnError     bool
+		IsLookUpAssetIdError bool
+		IsError              bool
+		Response             models.TransactionResponse
+	}{
+		{
+			Name:             "Valid payment transaction",
+			GenesisHash:      "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+			TxHash:           "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+			Response:         respA,
+			Error:            "",
+			IsLookUpTxnError: false,
+			IsError:          false,
+		},
+		{
+			Name:             "Valid asset transfer transaction",
+			GenesisHash:      "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+			TxHash:           "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+			Response:         respB,
+			Error:            "",
+			IsLookUpTxnError: false,
+			IsError:          false,
+		},
+		{
+			Name:             "Look up transactioninfo error",
+			GenesisHash:      "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+			TxHash:           "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+			Error:            "failed to lookup transaction: error in look up transaction",
+			IsLookUpTxnError: true,
+			IsError:          true,
+		},
+	}
+
+	// Run test cases
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			clients := &MockClients{mockAlgod: new(MockAlgodClient), mockIndexer: new(MockIndexerClient)}
+			mockLookupTransactionRequester := new(MockLookupTransactionRequester)
+			clients.mockIndexer.On("LookupTransaction", mock.Anything).Return(mockLookupTransactionRequester)
+			if !tt.IsLookUpTxnError {
+				mockLookupTransactionRequester.On("Do", mock.Anything).Return(tt.Response, nil)
+			} else {
+				mockLookupTransactionRequester.On("Do", mock.Anything).Return(models.TransactionResponse{}, fmt.Errorf("error in look up transaction"))
+			}
+
+			mockLookupAssetIdRequester := new(MockLookupAssetByIDRequester)
+			clients.mockIndexer.On("LookupAssetByID", mock.Anything).Return(mockLookupAssetIdRequester)
+			if !tt.IsLookUpAssetIdError {
+				mockLookupAssetIdRequester.On("Do", mock.Anything).Return(uint64(334), models.Asset{Index: 123}, nil)
+			} else {
+				mockLookupAssetIdRequester.On("Do", mock.Anything).Return(uint64(0), models.Asset{}, fmt.Errorf("error in look up asset"))
+			}
+
+			serializedTxn, err := clients.GetAlgorandTransfers(tt.GenesisHash, tt.TxHash)
+			fmt.Println(serializedTxn)
+			fmt.Println(err)
+			if !tt.IsError && err != nil {
+				t.Errorf("WithdrawAlgorandTxn() error = %v", err)
+			} else if tt.IsError && err.Error() != tt.Error {
+				t.Errorf("expected error = %v", err)
+			}
+		})
+	}
+
+}
+
+func TestCheckAlgorandTransactionConfirmed(t *testing.T) {
+
+	respA := models.PendingTransactionInfoResponse{
+		ConfirmedRound: 12350,
+		PoolError:      "sss",
+	}
+
+	respB := models.TransactionResponse{
+		Transaction: models.Transaction{
+			Id:     "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+			Sender: "IBEM5YYEA5UHMRKV3HPRPYB2IJZ4HIII5SW4EDCV5OJFHBKIJBMQWNME6U",
+			PaymentTransaction: models.TransactionPayment{
+				Receiver: "IBEM5YYEA5UHMRKV3HPRPYB2IJZ4HIII5SW4EDCV5OJFHBKIJBMQWNME6U",
+				Amount:   100,
+			},
+			ConfirmedRound: 12345,
+			// Note:           "test note",
+			// AssetID:        0,
+			Type: string(types.PaymentTx),
+		},
+	}
+
+	tests := []struct {
+		Name                  string
+		GenesisHash           string
+		TxHash                string
+		Error                 string
+		IsErrorPendingTxnInfo bool
+		IsErrorLookupTxnInfo  bool
+		IsError               bool
+	}{
+		{
+			Name:                  "Pending transaction confirmed",
+			GenesisHash:           "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+			TxHash:                "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+			IsErrorPendingTxnInfo: false,
+			IsErrorLookupTxnInfo:  false,
+			IsError:               false,
+		},
+		{
+			Name:                  "Pending transaction not confirmed",
+			GenesisHash:           "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+			TxHash:                "P5RRK4SQHBC5QZUCKNMCQ6MDMAJSEPCQKEZJCPRV4R3MX3YWICUQ",
+			IsErrorPendingTxnInfo: true,
+			IsErrorLookupTxnInfo:  false,
+			IsError:               false,
+		},
+	}
+
+	// Run test cases
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			clients := &MockClients{mockAlgod: new(MockAlgodClient), mockIndexer: new(MockIndexerClient)}
+			mockPendingTransactionInformationRequester := new(MockPendingTransactionInformationRequester)
+			clients.mockAlgod.On("PendingTransactionInformation", mock.Anything).Return(mockPendingTransactionInformationRequester)
+			if !tt.IsErrorPendingTxnInfo {
+				mockPendingTransactionInformationRequester.On("Do", mock.Anything).Return(respA, types.SignedTxn{}, nil)
+			} else {
+				mockPendingTransactionInformationRequester.On("Do", mock.Anything).Return(models.PendingTransactionInfoResponse{}, types.SignedTxn{}, errors.New("error pending transaction information"))
+			}
+
+			mockLookupTransactionRequester := new(MockLookupTransactionRequester)
+			clients.mockIndexer.On("LookupTransaction", mock.Anything).Return(mockLookupTransactionRequester)
+			if !tt.IsErrorLookupTxnInfo {
+				mockLookupTransactionRequester.On("Do", mock.Anything).Return(respB, nil)
+			} else {
+				mockLookupTransactionRequester.On("Do", mock.Anything).Return(models.TransactionResponse{}, fmt.Errorf("error in look up transaction"))
+			}
+
+			serializedTxn, err := clients.CheckAlgorandTransactionConfirmed(tt.GenesisHash, tt.TxHash)
 			fmt.Println(serializedTxn)
 			fmt.Println(err)
 			if !tt.IsError && err != nil {

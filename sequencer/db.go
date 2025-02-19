@@ -30,6 +30,7 @@ type OperationSchema struct {
 	SerializedTxn    string
 	DataToSign       string
 	ChainId          string
+	GenesisHash      string
 	KeyCurve         string
 	Status           string
 	Result           string
@@ -191,6 +192,7 @@ func AddIntent(
 			SerializedTxn:  operation.SerializedTxn,
 			DataToSign:     operation.DataToSign,
 			ChainId:        operation.ChainId,
+			GenesisHash:    operation.GenesisHash,
 			KeyCurve:       operation.KeyCurve,
 			Status:         OPERATION_STATUS_PENDING,
 			Result:         "",
@@ -228,6 +230,7 @@ func GetIntent(intentId int64) (*Intent, error) {
 			SerializedTxn:    operationSchema.SerializedTxn,
 			DataToSign:       operationSchema.DataToSign,
 			ChainId:          operationSchema.ChainId,
+			GenesisHash:      operationSchema.GenesisHash,
 			KeyCurve:         operationSchema.KeyCurve,
 			Status:           operationSchema.Status,
 			Result:           operationSchema.Result,
@@ -279,6 +282,7 @@ func GetOperation(intentId int64, operationIndex int64) (*Operation, error) {
 			SerializedTxn:    operationSchema.SerializedTxn,
 			DataToSign:       operationSchema.DataToSign,
 			ChainId:          operationSchema.ChainId,
+			GenesisHash:      operationSchema.GenesisHash,
 			KeyCurve:         operationSchema.KeyCurve,
 			Status:           operationSchema.Status,
 			Result:           operationSchema.Result,
@@ -320,6 +324,7 @@ func getIntents(intentSchemas *([]IntentSchema)) ([]*Intent, error) {
 				SerializedTxn:    operationSchema.SerializedTxn,
 				DataToSign:       operationSchema.DataToSign,
 				ChainId:          operationSchema.ChainId,
+				GenesisHash:      operationSchema.GenesisHash,
 				KeyCurve:         operationSchema.KeyCurve,
 				Status:           operationSchema.Status,
 				Result:           operationSchema.Result,

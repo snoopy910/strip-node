@@ -2,7 +2,6 @@ package algorand
 
 import (
 	"context"
-	"encoding/base32"
 	"encoding/base64"
 	"fmt"
 	"math"
@@ -212,8 +211,8 @@ func SendAlgorandTransaction(serializedTxn string, genesisHash string, signature
 
 // SendAlgorandTransaction sends a signed Algorand transaction to the network
 func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error) {
-	// Decode the serialized transaction (base32 encoded)
-	txnBytes, err := base32.StdEncoding.DecodeString(serializedTxn)
+	// Decode the serialized transaction (base64 encoded)
+	txnBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
 	}

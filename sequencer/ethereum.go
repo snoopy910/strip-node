@@ -13,17 +13,23 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+// GetEthereumTransfers retrieves and parses transfer information from an Ethereum transaction
+// Handles both native ETH transfers and ERC20 token transfers by analyzing transaction logs
+// Uses the standard ERC20 Transfer event signature to detect token transfers
 func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]common.Transfer, error) {
+	// Get chain configuration for RPC URL and native token symbol
 	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return nil, err
 	}
 
+	// Initialize Ethereum client with chain RPC URL
 	client, err := ethclient.Dial(chain.ChainUrl)
 	if err != nil {
 		return nil, err
 	}
 
+	// Get transaction receipt which contains logs of token transfers
 	receipt, err := client.TransactionReceipt(context.Background(), ethCommon.HexToHash(txnHash))
 	if err != nil {
 		return nil, err
@@ -31,23 +37,33 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]c
 
 	var transfers []common.Transfer
 
+	// Process logs to find ERC20 token transfers
 	for _, log := range receipt.Logs {
+		// Check if log is an ERC20 Transfer event
+		// Signature: Transfer(address,address,uint256)
+		// Hash: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
 		if log.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" {
+			// Extract from and to addresses from log topics
+			// Topics[1] = from address, Topics[2] = to address
 			from := ethCommon.BytesToAddress(log.Topics[1].Bytes()).Hex()
 			to := ethCommon.BytesToAddress(log.Topics[2].Bytes()).Hex()
 
+			// Get token details (decimals and symbol) from the token contract
 			decimal, symbol, err := getERC20Details(client, ethCommon.BytesToAddress(log.Address.Bytes()))
 
 			if err != nil {
 				return nil, err
 			}
 
+			// Format token amount using correct number of decimals
+			// log.Data contains the transfer amount in the token's smallest unit
 			formattedAmount, err := FormatUnits(new(big.Int).SetBytes(log.Data), int(decimal))
 
 			if err != nil {
 				return nil, err
 			}
 
+			// Create transfer record for ERC20 token
 			transfers = append(transfers, common.Transfer{
 				From:         from,
 				To:           to,
@@ -60,14 +76,18 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]c
 		}
 	}
 
+	// Get transaction details to check for native ETH transfer
 	tx, _, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))
 	if err != nil {
 		return nil, err
 	}
 
+	// Get native ETH transfer amount in Wei
 	wei := tx.Value()
 
+	// If transaction value is non-zero, it's a native ETH transfer
 	if wei.Cmp(big.NewInt(0)) != 0 {
+		// Create transfer record for native ETH
 		transfers = append(transfers, common.Transfer{
 			From:         ecdsaAddr,
 			To:           tx.To().String(),

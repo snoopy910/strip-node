@@ -122,7 +122,13 @@ func handleIncomingMessage(message []byte) {
 			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
 				val <- msg
 			}
-		case ALGORAND_CURVE:
+		case STELLAR_CURVE:
+			// Stellar: Client sends base64 string -> decode -> process -> encode back to base64
+			// Channel key must match the original base64 format from client, using StrKey encoding
+			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
+                case ALGORAND_CURVE:
 			// Algorand: Client sends base32 string -> decode -> process -> encode back to base32
 			// Channel key must match the original base32 format from client
 			// if val, ok := messageChan[base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(msg.Hash)]; ok {

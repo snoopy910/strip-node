@@ -119,6 +119,20 @@ var Chains = []Chain{
 		KeyCurve:    "ed25519",
 		TokenSymbol: "ALGO",
 	},
+	{
+		ChainId:     "testnet",
+		ChainType:   "stellar",
+		ChainUrl:    "https://horizon-testnet.stellar.org",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "XLM",
+	},
+	{
+		ChainId:     "mainnet",
+		ChainType:   "stellar",
+		ChainUrl:    "https://horizon.stellar.org",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "XLM",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

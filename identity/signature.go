@@ -27,7 +27,8 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
-	ALGORAND_CURVE    = "algorand_eddsa"
+	STELLAR_CURVE     = "stellar_eddsa"
+        ALGORAND_CURVE    = "algorand_eddsa"
 )
 
 type OperationForSigning struct {

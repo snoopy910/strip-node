@@ -51,7 +51,8 @@ type WalletSchema struct {
 	BitcoinMainnetPublicKey string `json:"bitcoinMainnetPublicKey"`
 	BitcoinTestnetPublicKey string `json:"bitcoinTestnetPublicKey"`
 	BitcoinRegtestPublicKey string `json:"bitcoinRegtestPublicKey"`
-	AlgorandEDDSAPublicKey  string `json:"algorandEddsaPublicKey"`
+	StellarPublicKey        string `json:"stellarPublicKey"`
+        AlgorandEDDSAPublicKey  string `json:"algorandEddsaPublicKey"`
 	Signers                 string `json:"signers"`
 }
 

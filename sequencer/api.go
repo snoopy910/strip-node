@@ -10,6 +10,7 @@ import (
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
+	"github.com/StripChain/strip-node/stellar"
 )
 
 type Operation struct {
@@ -563,14 +564,25 @@ func startHTTPServer(port string) {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 				return
 			}
-		} else if operation.KeyCurve == "algorand_eddsa" {
-			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
+		} else if operation.KeyCurve == "stellar_eddsa" {
+			transfers, err := stellar.GetStellarTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
 				return
 			}
 
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "algorand_eddsa" {
+			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
 			err = json.NewEncoder(w).Encode(transfers)
 			if err != nil {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)

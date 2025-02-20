@@ -18,6 +18,7 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
+	"github.com/stellar/go/strkey"
 )
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
@@ -152,6 +153,15 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
+	} else if keyCurve == STELLAR_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		msg := new(big.Int).SetBytes(hash)
+
+		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
 	} else if keyCurve == ALGORAND_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := new(big.Int).SetBytes(hash)
@@ -260,6 +270,43 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       save.Signature,
 					Address:       publicKeyStr,
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else if keyCurve == STELLAR_CURVE {
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
+
+				// Get the public key bytes
+				pkBytes := pk.Serialize()
+				if len(pkBytes) != 32 {
+					fmt.Println("Invalid public key length")
+					return
+				}
+
+				// Version byte for ED25519 public key in Stellar
+				versionByte := strkey.VersionByteAccountID // 6 << 3, or 48
+
+				// Use Stellar SDK's strkey package to encode
+				address, err := strkey.Encode(versionByte, pkBytes)
+				if err != nil {
+					fmt.Println("error encoding Stellar address: ", err)
+					return
+				}
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       address,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

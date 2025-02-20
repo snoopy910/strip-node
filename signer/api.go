@@ -14,6 +14,8 @@ import (
 
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/stellar/go/strkey"
+
 	"github.com/StripChain/strip-node/solver"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
@@ -31,7 +33,9 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
+	STELLAR_CURVE     = "stellar_eddsa" // Stellar uses Ed25519 with StrKey encoding
 	ALGORAND_CURVE    = "algorand_eddsa"
+	// Note: Hedera uses ECDSA_CURVE since it's compatible with EVM
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -168,6 +172,41 @@ func startHTTPServer(port string) {
 				Address: "0x" + publicKeyStr,
 			}
 			err := json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
+		} else if keyCurve == STELLAR_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			pk := edwards.PublicKey{
+				Curve: tss.Edwards(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			// Get the public key bytes
+			pkBytes := pk.Serialize()
+
+			// Stellar StrKey format:
+			if len(pkBytes) != 32 {
+				http.Error(w, "Invalid public key length", http.StatusInternalServerError)
+				return
+			}
+
+			// Version byte for ED25519 public key in Stellar
+			versionByte := strkey.VersionByteAccountID // 6 << 3, or 48
+
+			// Use Stellar SDK's strkey package to encode
+			address, err := strkey.Encode(versionByte, pkBytes)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error encoding Stellar address: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			getAddressResponse := GetAddressResponse{
+				Address: address,
+			}
+			err = json.NewEncoder(w).Encode(getAddressResponse)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
@@ -333,6 +372,13 @@ func startHTTPServer(port string) {
 			}
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
+		} else if keyCurve == STELLAR_CURVE {
+			msgBytes, err := base64.StdEncoding.DecodeString(msg)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error decoding Stellar message: %v", err), http.StatusInternalServerError)
+				return
+			}
+			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else if keyCurve == ALGORAND_CURVE {
 			// For Algorand, decode the base32 message first
 			// msgBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(msg)
@@ -350,7 +396,8 @@ func startHTTPServer(port string) {
 		// Create a channel using the message as the key. The key format varies by chain:
 		// - Solana: base58 encoded string (from client)
 		// - Bitcoin/Aptos: hex encoded string
-		// - Algorand: base32 encoded string (from client)
+		// - Algorand: base64 encoded string (from client)
+		// - Stellar: base32 encoded string (from client)
 		// - Ethereum: raw bytes as string
 		// This same format must be used in message.go when looking up the channel
 		messageChan[msg] = make(chan Message)
@@ -368,7 +415,7 @@ func startHTTPServer(port string) {
 		} else if keyCurve == SECP256K1_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
-		} else if keyCurve == APTOS_EDDSA_CURVE {
+		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address

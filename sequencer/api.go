@@ -9,6 +9,7 @@ import (
 
 	"github.com/StripChain/strip-node/aptos"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
+	"github.com/StripChain/strip-node/stellar"
 )
 
 type Operation struct {
@@ -550,6 +551,19 @@ func startHTTPServer(port string) {
 			}
 		} else if operation.KeyCurve == "secp256k1" {
 			transfers, _, err := GetBitcoinTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "stellar_eddsa" {
+			transfers, err := stellar.GetStellarTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

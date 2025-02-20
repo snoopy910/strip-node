@@ -16,7 +16,7 @@ import (
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1" // Add this import
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/mr-tron/base58"
 )
 
@@ -25,6 +25,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
+	STELLAR_CURVE     = "stellar_eddsa"
 )
 
 type OperationForSigning struct {

@@ -19,6 +19,7 @@ import (
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/solver"
+	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/util"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -58,13 +59,13 @@ func ProcessIntent(intentId int64) {
 	for {
 		intent, err := GetIntent(intentId)
 		if err != nil {
-			log.Println(err)
+			log.Printf("error getting intent: %+v\n", err)
 			return
 		}
 
 		intentBytes, err := json.Marshal(intent)
 		if err != nil {
-			log.Println(err)
+			log.Printf("error marshalling intent: %+v\n", err)
 			return
 		}
 
@@ -94,18 +95,18 @@ func ProcessIntent(intentId int64) {
 							_, err := AddLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error adding lock: %+v\n", err)
 								break
 							}
 
 							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("error getting lock after adding: %+v\n", err)
 								break
 							}
 						} else {
-							fmt.Println(err)
+							fmt.Printf("error getting lock: %+v\n", err)
 							break
 						}
 					}
@@ -119,13 +120,13 @@ func ProcessIntent(intentId int64) {
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting chain: %+v\n", err)
 							break
 						}
 
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting signature: %+v\n", err)
 							break
 						}
 
@@ -179,17 +180,17 @@ func ProcessIntent(intentId int64) {
 								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting chain: %+v\n", err)
 							break
 						}
 
 						signature, err := getSignature(intent, i)
 
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("error getting signature: %+v\n", err)
 							break
 						}
 
@@ -216,6 +217,17 @@ func ProcessIntent(intentId int64) {
 							fmt.Println(txnHash)
 							if err != nil {
 								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+						}
+
+						if chain.ChainType == "stellar" {
+							// Send Stellar transaction
+							txnHash, err = stellar.SendStellarTxn(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							if err != nil {
+								fmt.Printf("error sending Stellar transaction: %v", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -409,7 +421,7 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" ||
-						depositOperation.KeyCurve == "secp256k1" {
+						depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "stellar_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -436,6 +448,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "bitcoin" {
 							transfers, _, err = GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "stellar" {
+							transfers, err = stellar.GetStellarTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -909,6 +929,121 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
 						break
+					} else if withdrawalChain.KeyCurve == "stellar_eddsa" {
+						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						if err != nil {
+							fmt.Printf("error getting wallet: %+v\n", err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						if wallet.StellarPublicKey == "" {
+							fmt.Printf("error: no Stellar public key found in wallet")
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						// Initialize Horizon client
+						client := stellar.GetClient(withdrawalChain.ChainId, withdrawalChain.ChainUrl)
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// Handle native XLM transfer
+							txn, dataToSign, err := stellar.WithdrawStellarNativeGetSignature(
+								client,
+								bridgeWallet.StellarPublicKey,
+								burn.SolverOutput,
+								wallet.StellarPublicKey, // Use the wallet's Stellar public key
+							)
+
+							if err != nil {
+								fmt.Printf("error withdrawing native XLM: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Printf("error getting signature: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							result, err := stellar.WithdrawStellarTxn(
+								client,
+								txn,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Printf("error withdrawing Stellar: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						} else {
+							// Handle non-native Stellar asset transfer
+							assetParts := strings.Split(tokenToWithdraw, ":")
+							if len(assetParts) != 2 {
+								fmt.Printf("invalid asset format: %s", tokenToWithdraw)
+								break
+							}
+
+							assetCode := assetParts[0]
+							assetIssuer := assetParts[1]
+							fmt.Printf("assetCode: %+v\n", assetCode)
+							fmt.Printf("assetIssuer: %+v\n", assetIssuer)
+
+							txn, dataToSign, err := stellar.WithdrawStellarAssetGetSignature(
+								client,
+								bridgeWallet.StellarPublicKey,
+								burn.SolverOutput,
+								wallet.StellarPublicKey, // Use the wallet's Stellar public key
+								assetCode,
+								assetIssuer,
+							)
+
+							if err != nil {
+								fmt.Printf("error withdrawing Stellar asset: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Printf("error getting signature: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							result, err := stellar.WithdrawStellarTxn(
+								client,
+								txn,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Printf("error withdrawing Stellar: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						}
+						break
 					} else if withdrawalChain.KeyCurve == "aptos_eddsa" {
 						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
@@ -1022,7 +1157,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1041,6 +1176,14 @@ func ProcessIntent(intentId int64) {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "stellar" {
+							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Stellar transaction: %v", err)
 								break
 							}
 						}
@@ -1079,7 +1222,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1233,7 +1376,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1255,6 +1398,15 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
+
+						if chain.ChainType == "stellar" {
+							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Stellar transaction: %+v\n", err)
+								break
+							}
+						}
+
 					}
 
 					if !confirmed {
@@ -1313,7 +1465,7 @@ func ProcessIntent(intentId int64) {
 									}
 								}
 							}
-						} else if depositOperation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" {
+						} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
@@ -1343,7 +1495,22 @@ func ProcessIntent(intentId int64) {
 									fmt.Println(err)
 									break
 								}
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+								}
+							}
 
+							if chain.ChainType == "stellar" {
+								txnConfirmed, err := stellar.CheckStellarTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Printf("error checking Stellar transaction: %+v\n", err)
+									break
+								}
 								if txnConfirmed {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
@@ -1404,6 +1571,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
 
 	if err != nil {
+		fmt.Printf("error creating request: %+v\n", err)
 		return "", err
 	}
 
@@ -1412,6 +1580,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	resp, err := client.Do(req)
 
 	if err != nil {
+		fmt.Printf("error sending request: %+v\n", err)
 		return "", err
 	}
 
@@ -1419,12 +1588,14 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		fmt.Printf("error reading response body: %+v\n", err)
 		return "", err
 	}
 
 	var signatureResponse SignatureResponse
 	err = json.Unmarshal(body, &signatureResponse)
 	if err != nil {
+		fmt.Printf("error unmarshalling response body: %+v\n", err)
 		return "", err
 	}
 
@@ -1464,7 +1635,7 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 	}
 
 	// Regarding the deprecation of GetConfirmedTransaction in Solana-Core v2, this has been updated to use GetTransaction.
-	// https://solana.com/docs/rpc/deprecated/getconfirmedtransaction
+	// https://spl_governance.crates.io/docs/rpc/deprecated/getconfirmedtransaction
 	_, err = c.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
 		Commitment: rpc.CommitmentConfirmed,
 	})
@@ -1535,44 +1706,59 @@ func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, d
 	return _tx.Hash().Hex(), nil
 }
 
+// sendSolanaTransaction submits a signed Solana transaction to the network
 func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
+	// Get chain configuration for RPC endpoint
 	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
 	}
 
+	// Initialize Solana RPC client
 	c := rpc.New(chain.ChainUrl)
 
+	// Decode the base58-encoded transaction data
+	// Solana transactions are serialized using a custom binary format and base58-encoded
 	decodedTransactionData, err := base58.Decode(serializedTxn)
 	if err != nil {
 		fmt.Println("Error decoding transaction data:", err)
 		return "", err
 	}
 
+	// Deserialize the binary data into a Solana transaction
+	// This reconstructs the transaction object with all its instructions
 	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
 	if err != nil {
 		return "", err
 	}
 
+	// Decode the base58-encoded signature and convert it to Solana's signature format
+	// Solana uses 64-byte Ed25519 signatures
 	sig, _ := base58.Decode(signatureBase58)
 	signature := solana.SignatureFromBytes(sig)
 
+	// Add the signature to the transaction
+	// Solana transactions can have multiple signatures for multi-sig transactions
 	_tx.Signatures = append(_tx.Signatures, signature)
 
+	// Verify that all required signatures are present and valid
+	// This checks signatures against the transaction data and account permissions
 	err = _tx.VerifySignatures()
-
 	if err != nil {
 		fmt.Println("error during verification")
 		fmt.Println(err)
 		return "", err
 	}
 
+	// Submit the transaction to the Solana network
+	// The returned hash can be used to track the transaction status
 	hash, err := c.SendTransaction(context.Background(), _tx)
 	if err != nil {
 		fmt.Println("error during sending transaction")
 		return "", err
 	}
 
+	// Return the transaction hash as a string
 	return hash.String(), nil
 }
 

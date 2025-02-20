@@ -81,7 +81,6 @@ func GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer
 func (client *Clients) GetAlgorandTransfers(genesisHash string, txnHash string) ([]common.Transfer, error) {
 
 	// Create context with timeout
-	// why 10 seconds? Needs to be computed ?
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -201,16 +200,16 @@ func (client *Clients) CheckAlgorandTransactionConfirmed(genesisHash string, txn
 	return txnResponse.Transaction.ConfirmedRound > 0, nil
 }
 
-func SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error) {
+func SendAlgorandTransaction(serializedTxn string, genesisHash string, signature string) (string, error) {
 	client, err := NewClients(genesisHash, "", "", true, false)
 	if err != nil {
 		return "", err
 	}
-	return client.SendAlgorandTransaction(serializedTxn, genesisHash, signatureBase64)
+	return client.SendAlgorandTransaction(serializedTxn, genesisHash, signature)
 }
 
 // SendAlgorandTransaction sends a signed Algorand transaction to the network
-func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash string, signatureBase64 string) (string, error) {
+func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash string, signature string) (string, error) {
 	// Decode the serialized transaction (base64 encoded)
 	txnBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
 	if err != nil {
@@ -218,7 +217,7 @@ func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash
 	}
 
 	// Decode the signature (base64 encoded)
-	sigBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
+	sigBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}

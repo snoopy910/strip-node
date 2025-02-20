@@ -181,7 +181,11 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "algorand_eddsa" {
-						chain, err := common.GetChain(operation.ChainId)
+						chId := operation.ChainId
+						if chId == "" {
+							chId = operation.GenesisHash
+						}
+						chain, err := common.GetChain(chId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -1121,7 +1125,11 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "algorand_eddsa" {
-						chain, err := common.GetChain(operation.ChainId)
+						chId := operation.ChainId
+						if chId == "" {
+							chId = operation.GenesisHash
+						}
+						chain, err := common.GetChain(chId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -1144,7 +1152,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1567,7 +1575,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	fmt.Println("getSignature", signatureResponse.Signature)
 	return signatureResponse.Signature, nil
 }
 

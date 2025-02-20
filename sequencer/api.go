@@ -564,7 +564,7 @@ func startHTTPServer(port string) {
 				return
 			}
 		} else if operation.KeyCurve == "algorand_eddsa" {
-			transfers, err := algorand.GetAlgorandTransfers(operation.ChainId, operation.Result)
+			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

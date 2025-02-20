@@ -458,7 +458,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							transfers, err = algorand.GetAlgorandTransfers(depositOperation.ChainId, depositOperation.Result)
+							transfers, err = algorand.GetAlgorandTransfers(depositOperation.GenesisHash, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1218,7 +1218,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1380,7 +1380,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1486,7 +1486,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							if chain.ChainType == "algorand" {
-								txnConfirmed, err := algorand.CheckAlgorandTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := algorand.CheckAlgorandTransactionConfirmed(depositOperation.GenesisHash, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -1575,7 +1575,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("getSignature", signatureResponse.Signature)
+
 	return signatureResponse.Signature, nil
 }
 

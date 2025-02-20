@@ -182,14 +182,14 @@ func VerifySignature(
 
 		// Convert message to bytes
 		// msgBytes := []byte(message) ?
-		fmt.Println("verify signature message: ", message)
+		fmt.Println("verify message: ", message)
 		msgBytes, err := base64.StdEncoding.DecodeString(message)
 		if err != nil {
 			return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
 		}
 
 		// Decode signature from base64 (Algorand standard)
-		fmt.Println("verify signature signature: ", signature)
+		fmt.Println("verify signature: ", signature)
 		sigBytes, err := base64.StdEncoding.DecodeString(signature)
 		if err != nil {
 			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)

@@ -11,6 +11,10 @@ import (
 	"github.com/StripChain/strip-node/common"
 )
 
+const (
+	MaxStellarOperationsPerTx = 100
+)
+
 // CheckTransactionConfirmed checks if a Stellar transaction has been confirmed
 func CheckStellarTransactionConfirmed(chainId string, txnHash string) (bool, error) {
 	chain, err := common.GetChain(chainId)
@@ -89,7 +93,7 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 	// Get the transaction operations with a reasonable limit
 	opReq := horizonclient.OperationRequest{
 		ForTransaction: txnHash,
-		Limit:          200, // Maximum operations we'll process
+		Limit:          MaxStellarOperationsPerTx,
 	}
 	ops, err := client.Operations(opReq)
 	if err != nil {

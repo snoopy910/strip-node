@@ -3,6 +3,7 @@ package signer
 import (
 	"crypto/sha512"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -334,7 +335,8 @@ func startHTTPServer(port string) {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == ALGORAND_CURVE {
 			// For Algorand, decode the base32 message first
-			msgBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(msg)
+			// msgBytes, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(msg)
+			msgBytes, err := base64.StdEncoding.DecodeString(msg)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error decoding Algorand message: %v", err), http.StatusInternalServerError)
 				return
@@ -372,8 +374,16 @@ func startHTTPServer(port string) {
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == ALGORAND_CURVE {
 			// For Algorand, encode the signature in base32 (Algorand's standard)
-			signatureResponse.Signature = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sig.Message)
+			fmt.Println("generated signature base32", base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sig.Message))
+			fmt.Println("generated signature base64", base64.StdEncoding.EncodeToString(sig.Message))
+			// signatureResponse.Signature = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sig.Message)
+			signatureResponse.Signature = base64.StdEncoding.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
+			v, err := identityVerification.VerifySignature(sig.Address, "algorand_eddsa", msg, signatureResponse.Signature)
+			if !v {
+				http.Error(w, fmt.Sprintf("error verifying algorand signature: %v", err), http.StatusInternalServerError)
+				return
+			}
 		} else {
 			signatureResponse.Signature = base58.Encode(sig.Message)
 			signatureResponse.Address = sig.Address

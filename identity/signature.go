@@ -34,6 +34,7 @@ type OperationForSigning struct {
 	SerializedTxn  string `json:"serializedTxn"`
 	DataToSign     string `json:"dataToSign"`
 	ChainId        string `json:"chainId"`
+	GenesisHash    string `json:"genesisHash"`
 	KeyCurve       string `json:"keyCurve"`
 	Type           string `json:"type"`
 	Solver         string `json:"solver"`
@@ -180,9 +181,15 @@ func VerifySignature(
 		copy(pubKey, pubKeyBytes)
 
 		// Convert message to bytes
-		msgBytes := []byte(message)
+		// msgBytes := []byte(message) ?
+		fmt.Println("verify signature message: ", message)
+		msgBytes, err := base64.StdEncoding.DecodeString(message)
+		if err != nil {
+			return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
+		}
 
 		// Decode signature from base64 (Algorand standard)
+		fmt.Println("verify signature signature: ", signature)
 		sigBytes, err := base64.StdEncoding.DecodeString(signature)
 		if err != nil {
 			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
@@ -248,6 +255,7 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 			SerializedTxn:  operation.SerializedTxn,
 			DataToSign:     operation.DataToSign,
 			ChainId:        operation.ChainId,
+			GenesisHash:    operation.GenesisHash,
 			KeyCurve:       operation.KeyCurve,
 			Type:           operation.Type,
 			Solver:         operation.Solver,

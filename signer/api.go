@@ -373,10 +373,7 @@ func startHTTPServer(port string) {
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == ALGORAND_CURVE {
-			// For Algorand, encode the signature in base32 (Algorand's standard)
-			fmt.Println("generated signature base32", base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sig.Message))
-			fmt.Println("generated signature base64", base64.StdEncoding.EncodeToString(sig.Message))
-			// signatureResponse.Signature = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sig.Message)
+			// For Algorand, encode the signature in base64 (Algorand's standard)
 			signatureResponse.Signature = base64.StdEncoding.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
 			v, err := identityVerification.VerifySignature(sig.Address, "algorand_eddsa", msg, signatureResponse.Signature)

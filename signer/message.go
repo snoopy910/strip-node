@@ -2,7 +2,6 @@ package signer
 
 import (
 	"context"
-	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -97,13 +96,10 @@ func handleIncomingMessage(message []byte) {
 	} else if msg.Type == MESSAGE_TYPE_GENERATE_KEYGEN {
 		go updateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To, msg.Signers)
 	} else if msg.Type == MESSAGE_TYPE_START_SIGN {
-		fmt.Println("MESSAGE_TYPE_START_SIGN")
 		go generateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.Hash)
 	} else if msg.Type == MESSAGE_TYPE_SIGN {
-		fmt.Println("MESSAGE_TYPE_SIGN")
 		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
-		fmt.Println("MESSAGE_TYPE_SIGNATURE")
 		// When looking up the channel to send back the signature, we must encode the hash
 		// in the same format that was used when creating the channel in api.go.
 		// This ensures we find the correct channel for each chain's message format.
@@ -129,7 +125,6 @@ func handleIncomingMessage(message []byte) {
 		case ALGORAND_CURVE:
 			// Algorand: Client sends base32 string -> decode -> process -> encode back to base32
 			// Channel key must match the original base32 format from client
-			fmt.Println("MESSAGE_TYPE_SIGNATURE-2 ", base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(msg.Hash))
 			// if val, ok := messageChan[base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(msg.Hash)]; ok {
 			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
 				val <- msg

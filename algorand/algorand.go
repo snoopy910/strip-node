@@ -246,6 +246,6 @@ func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
-
+	fmt.Println("Algorand txid: ", txid)
 	return txid, nil
 }

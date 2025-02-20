@@ -165,7 +165,6 @@ func (mockClient *MockClients) SendAlgorandTransaction(serializedTxn string, gen
 
 	// Encode the signed transaction using msgpack
 	signedTxnBytes := msgpack.Encode(signedTxn)
-	fmt.Println(string(signedTxnBytes))
 
 	// Send the transaction
 	_, err = mockClient.mockAlgod.SendRawTransaction(signedTxnBytes).Do(context.Background())

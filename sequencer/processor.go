@@ -1577,18 +1577,17 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
-						if chain.ChainType == "stellar" {
-							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
-							if err != nil {
-								fmt.Printf("error checking Stellar transaction: %+v\n", err)
-								break
-							}
-						}
-
 						if chain.ChainType == "algorand" {
 							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Algorand transaction: %+v\n", err)
+								fmt.Println(err)
+								break
+							}
+						}
+						if chain.ChainType == "stellar" {
+							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Stellar transaction: %v", err)
 								break
 							}
 						}

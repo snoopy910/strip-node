@@ -31,6 +31,7 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/mr-tron/base58"
+	"github.com/stellar/go/xdr"
 )
 
 type MintOutput struct {
@@ -326,10 +327,273 @@ func ProcessIntent(intentId int64) {
 					} else {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 					}
+				} else if operation.Type == OPERATION_TYPE_SEND_TO_BRIDGE {
+					// Get bridge wallet for the chain
+					bridgeWallet, err := GetWallet("bridge", operation.KeyCurve)
+					if err != nil {
+						fmt.Println("Failed to get bridge wallet:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Process transaction based on key curve and chain type
+					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+					if err != nil {
+						if err.Error() == "pg: no rows in result set" {
+							_, err := AddLock(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Printf("error adding lock: %+v\n", err)
+								break
+							}
+							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Printf("error getting lock after adding: %+v\n", err)
+								break
+							}
+						} else {
+							fmt.Printf("error getting lock: %+v\n", err)
+							break
+						}
+					}
+
+					if lockSchema.Locked {
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+						chain, err := common.GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Printf("error getting chain: %+v\n", err)
+							break
+						}
+
+						// Extract destination address from serialized transaction
+						var destAddress string
+						if chain.ChainType == "bitcoin" {
+							// For Bitcoin, decode the serialized transaction to get output address
+							var tx wire.MsgTx
+							txBytes, err := hex.DecodeString(operation.SerializedTxn)
+							if err != nil {
+								fmt.Printf("error decoding bitcoin transaction: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+							if err := tx.Deserialize(bytes.NewReader(txBytes)); err != nil {
+								fmt.Printf("error deserializing bitcoin transaction: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+							// Get the first output's address (assuming it's the bridge address)
+							if len(tx.TxOut) > 0 {
+								_, addrs, _, err := txscript.ExtractPkScriptAddrs(tx.TxOut[0].PkScript, nil)
+								if err != nil || len(addrs) == 0 {
+									fmt.Printf("error extracting bitcoin address: %+v\n", err)
+									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									break
+								}
+								destAddress = addrs[0].String()
+							}
+						} else {
+							// For EVM chains, decode the transaction to get the 'to' address
+							txBytes, err := hex.DecodeString(operation.SerializedTxn)
+							if err != nil {
+								fmt.Printf("error decoding EVM transaction: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+							tx := new(types.Transaction)
+							if err := rlp.DecodeBytes(txBytes, tx); err != nil {
+								fmt.Printf("error deserializing EVM transaction: %+v\n", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+							destAddress = tx.To().Hex()
+						}
+
+						// Verify destination address matches bridge wallet
+						var expectedAddress string
+						if chain.ChainType == "bitcoin" {
+							expectedAddress = bridgeWallet.BitcoinMainnetPublicKey
+						} else {
+							expectedAddress = bridgeWallet.ECDSAPublicKey
+						}
+
+						if !strings.EqualFold(destAddress, expectedAddress) {
+							fmt.Printf("Invalid bridge destination address. Expected %s, got %s\n", expectedAddress, destAddress)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Printf("error getting signature: %+v\n", err)
+							break
+						}
+
+						var txnHash string
+						switch operation.KeyCurve {
+						case "ecdsa":
+							switch chain.ChainType {
+							case "bitcoin":
+								txnHash, err = sendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							default: // EVM chains
+								txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							}
+
+						}
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						var lockMetadata LockMetadata
+						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+						if lockMetadata.Lock {
+							err := LockIdentity(lockSchema.Id)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+						} else {
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						}
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
+						chain, err := common.GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Printf("error getting chain: %+v\n", err)
+							break
+						}
+
+						// Verify destination address matches bridge wallet based on chain type
+						var validDestination bool
+						var destAddress string
+
+						// Extract destination address from serialized transaction based on chain type
+						switch chain.ChainType {
+						case "solana":
+							// Decode base58 transaction and extract destination
+							decodedTxn, err := base58.Decode(operation.SerializedTxn)
+							if err != nil {
+								fmt.Printf("error decoding Solana transaction: %v\n", err)
+								break
+							}
+							tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
+							if err != nil || len(tx.Message.Instructions) == 0 {
+								fmt.Printf("error deserializing Solana transaction: %v\n", err)
+								break
+							}
+							// Get the first instruction's destination account index
+							destAccountIndex := tx.Message.Instructions[0].Accounts[1]
+							// Get the actual account address from the message accounts
+							destAddress = tx.Message.AccountKeys[destAccountIndex].String()
+						case "aptos":
+							// For Aptos, the destination is in the transaction payload
+							var aptosPayload struct {
+								Function string `json:"function"`
+								Args     []string `json:"arguments"`
+							}
+							if err := json.Unmarshal([]byte(operation.SerializedTxn), &aptosPayload); err != nil {
+								fmt.Printf("error parsing Aptos transaction: %v\n", err)
+								break
+							}
+							if len(aptosPayload.Args) > 0 {
+								destAddress = aptosPayload.Args[0] // First arg is typically the recipient
+							}
+						case "stellar":
+							// For Stellar, parse the XDR transaction envelope
+							var txEnv xdr.TransactionEnvelope
+							err := xdr.SafeUnmarshalBase64(operation.SerializedTxn, &txEnv)
+							if err != nil {
+								fmt.Printf("error parsing Stellar transaction: %v\n", err)
+								break
+							}
+							
+							// Get the first operation's destination
+							if len(txEnv.Operations()) > 0 {
+								if paymentOp, ok := txEnv.Operations()[0].Body.GetPaymentOp(); ok {
+									destAddress = paymentOp.Destination.Address()
+								}
+							}
+						}
+
+						// Verify the extracted destination matches the bridge wallet
+						if destAddress == "" {
+							fmt.Printf("Failed to extract destination address from %s transaction\n", chain.ChainType)
+							validDestination = false
+						} else {
+							switch chain.ChainType {
+							case "solana":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.EDDSAPublicKey)
+							case "aptos":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.AptosEDDSAPublicKey)
+							case "stellar":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.StellarPublicKey)
+							}
+						}
+
+						if !validDestination {
+							fmt.Println("Invalid bridge destination address for", chain.ChainType)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Printf("error getting signature: %+v\n", err)
+							break
+						}
+
+						var txnHash string
+						switch chain.ChainType {
+						case "solana":
+							txnHash, err = sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						case "aptos":
+							txnHash, err = aptos.SendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						case "stellar":
+							txnHash, err = stellar.SendStellarTxn(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						}
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						var lockMetadata LockMetadata
+						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+
+						if lockMetadata.Lock {
+							err := LockIdentity(lockSchema.Id)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+						} else {
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						}
+					}
+
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					depositOperation := intent.Operations[i-1]
 
-					if i == 0 || !(depositOperation.Type == OPERATION_TYPE_TRANSACTION || depositOperation.Type == OPERATION_TYPE_SOLVER) {
+					if i == 0 || !(depositOperation.Type == OPERATION_TYPE_SEND_TO_BRIDGE) {
 						fmt.Println("Invalid operation type for bridge deposit")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -734,9 +998,9 @@ func ProcessIntent(intentId int64) {
 
 							dataToSign, err := withdrawBitcoinGetSignature(
 								withdrawalChain.ChainUrl,
-								bridgeWallet.ECDSAPublicKey,
+								bridgeWallet.BitcoinMainnetPublicKey,
 								amount,
-								user.ECDSAPublicKey,
+								user.BitcoinMainnetPublicKey,
 							)
 
 							if err != nil {
@@ -1138,11 +1402,11 @@ func ProcessIntent(intentId int64) {
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							fmt.Println(err)
-							break
-						}
+					chain, err := common.GetChain(operation.ChainId)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
 
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
@@ -1169,7 +1433,7 @@ func ProcessIntent(intentId int64) {
 							if err != nil {
 								fmt.Println(err)
 								break
-							}
+						}
 						}
 
 						if chain.ChainType == "aptos" {
@@ -1177,16 +1441,54 @@ func ProcessIntent(intentId int64) {
 							if err != nil {
 								fmt.Println(err)
 								break
-							}
+						}
 						}
 
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
-							if err != nil {
-								fmt.Printf("error checking Stellar transaction: %v", err)
-								break
-							}
-						}
+					if err != nil {
+								fmt.Printf("error checking Stellar transaction: %+v\n", err)
+						break
+					}
+					}
+					}
+
+					if !confirmed {
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
+
+					break
+				} else if operation.Type == OPERATION_TYPE_SEND_TO_BRIDGE {
+					confirmed := false
+					chain, err := common.GetChain(operation.ChainId)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					switch chain.ChainType {
+					case "bitcoin":
+						confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+					case "solana":
+						confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+					case "aptos":
+						confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
+					case "stellar":
+						confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
+					default: // EVM chains
+						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+					}
+
+					if err != nil {
+						fmt.Printf("error checking %s transaction: %+v\n", chain.ChainType, err)
+						break
 					}
 
 					if !confirmed {

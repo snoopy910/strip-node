@@ -329,7 +329,7 @@ func ProcessIntent(intentId int64) {
 					}
 				} else if operation.Type == OPERATION_TYPE_SEND_TO_BRIDGE {
 					// Get bridge wallet for the chain
-					bridgeWallet, err := GetWallet("bridge", operation.KeyCurve)
+					bridgeWallet, err := GetWallet(BridgeContractAddress, operation.KeyCurve)
 					if err != nil {
 						fmt.Println("Failed to get bridge wallet:", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)

@@ -459,15 +459,11 @@ func ProcessIntent(intentId int64) {
 						}
 
 						var txnHash string
-						switch operation.KeyCurve {
-						case "ecdsa":
-							switch chain.ChainType {
-							case "bitcoin":
-								txnHash, err = sendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
-							default: // EVM chains
-								txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
-							}
-
+						switch chain.ChainType {
+						case "bitcoin":
+							txnHash, err = sendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+						default: // EVM chains
+							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						}
 
 						if err != nil {
@@ -1581,13 +1577,6 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
-						if chain.ChainType == "algorand" {
-							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
-							if err != nil {
-								fmt.Println(err)
-								break
-							}
-						}
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -1597,7 +1586,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "algorand" {
-							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
 								fmt.Printf("error checking Algorand transaction: %+v\n", err)
 								break
@@ -1634,6 +1623,8 @@ func ProcessIntent(intentId int64) {
 						confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 					case "stellar":
 						confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
+					case "algorand":
+						confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 					default: // EVM chains
 						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					}

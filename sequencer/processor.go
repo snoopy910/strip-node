@@ -471,7 +471,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)
@@ -503,7 +503,7 @@ func ProcessIntent(intentId int64) {
 						case "aptos":
 							// For Aptos, the destination is in the transaction payload
 							var aptosPayload struct {
-								Function string `json:"function"`
+								Function string   `json:"function"`
 								Args     []string `json:"arguments"`
 							}
 							if err := json.Unmarshal([]byte(operation.SerializedTxn), &aptosPayload); err != nil {
@@ -521,13 +521,16 @@ func ProcessIntent(intentId int64) {
 								fmt.Printf("error parsing Stellar transaction: %v\n", err)
 								break
 							}
-							
+
 							// Get the first operation's destination
 							if len(txEnv.Operations()) > 0 {
 								if paymentOp, ok := txEnv.Operations()[0].Body.GetPaymentOp(); ok {
 									destAddress = paymentOp.Destination.Address()
 								}
 							}
+						case "algorand":
+                            var tx &Transaction
+							//decode transaction Decode serialized transaction
 						}
 
 						// Verify the extracted destination matches the bridge wallet
@@ -542,6 +545,9 @@ func ProcessIntent(intentId int64) {
 								validDestination = strings.EqualFold(destAddress, bridgeWallet.AptosEDDSAPublicKey)
 							case "stellar":
 								validDestination = strings.EqualFold(destAddress, bridgeWallet.StellarPublicKey)
+							// add algorand case
+							case "algorand":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.AlgorandPublicKey)
 							}
 						}
 
@@ -1402,11 +1408,11 @@ func ProcessIntent(intentId int64) {
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
-					chain, err := common.GetChain(operation.ChainId)
-					if err != nil {
-						fmt.Println(err)
-						break
-					}
+						chain, err := common.GetChain(operation.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
 
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
@@ -1421,7 +1427,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1433,7 +1439,7 @@ func ProcessIntent(intentId int64) {
 							if err != nil {
 								fmt.Println(err)
 								break
-						}
+							}
 						}
 
 						if chain.ChainType == "aptos" {
@@ -1441,16 +1447,24 @@ func ProcessIntent(intentId int64) {
 							if err != nil {
 								fmt.Println(err)
 								break
-						}
+							}
 						}
 
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
-					if err != nil {
+							if err != nil {
 								fmt.Printf("error checking Stellar transaction: %+v\n", err)
-						break
-					}
-					}
+								break
+							}
+						}
+
+						if chain.ChainType == "algorand" {
+							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Algorand transaction: %+v\n", err)
+								break
+							}
+						}
 					}
 
 					if !confirmed {

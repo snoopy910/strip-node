@@ -60,6 +60,7 @@ const (
 	OPERATION_TYPE_SWAP           = "swap"
 	OPERATION_TYPE_BURN           = "burn"
 	OPERATION_TYPE_WITHDRAW       = "withdraw"
+	OPERATION_TYPE_SEND_TO_BRIDGE = "sendToBridge"
 )
 
 const (

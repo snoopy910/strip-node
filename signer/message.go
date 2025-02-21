@@ -128,6 +128,13 @@ func handleIncomingMessage(message []byte) {
 			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
 				val <- msg
 			}
+                case ALGORAND_CURVE:
+			// Algorand: Client sends base32 string -> decode -> process -> encode back to base32
+			// Channel key must match the original base32 format from client
+			// if val, ok := messageChan[base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(msg.Hash)]; ok {
+			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
 		default:
 			// Ethereum: Client sends string -> process raw bytes
 			// Channel key must match the raw bytes as string

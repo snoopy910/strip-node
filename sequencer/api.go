@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/common"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
@@ -18,6 +19,7 @@ type Operation struct {
 	SerializedTxn    string `json:"serializedTxn"`
 	DataToSign       string `json:"dataToSign"`
 	ChainId          string `json:"chainId"`
+	GenesisHash      string `json:"genesisHash"`
 	KeyCurve         string `json:"keyCurve"`
 	Status           string `json:"status"`
 	Result           string `json:"result"`
@@ -605,6 +607,17 @@ func startHTTPServer(port string) {
 				return
 			}
 
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "algorand_eddsa" {
+			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
 			err = json.NewEncoder(w).Encode(transfers)
 			if err != nil {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)

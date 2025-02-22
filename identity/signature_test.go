@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
-func TestVerifySignatureSecp256k1Success(t *testing.T) {
-	// Generate a new SECP256K1 private key
+func TestVerifySignatureBitcoinSuccess(t *testing.T) {
+	// Generate a new Bitcoin private key
 	privateKey, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("Failed to generate private key: %v", err)
@@ -40,7 +40,7 @@ func TestVerifySignatureSecp256k1Success(t *testing.T) {
 	signatureHex := hex.EncodeToString(signature)
 
 	// Verify the signature
-	valid, err := VerifySignature(publicKeyHex, SECP256K1_CURVE, message, signatureHex)
+	valid, err := VerifySignature(publicKeyHex, BITCOIN_CURVE, message, signatureHex)
 	if err != nil {
 		t.Fatalf("Failed to verify signature: %v", err)
 	}
@@ -50,8 +50,8 @@ func TestVerifySignatureSecp256k1Success(t *testing.T) {
 	}
 }
 
-func TestVerifySignatureSecp256k1Fail(t *testing.T) {
-	// Generate a new SECP256K1 private key
+func TestVerifySignatureBitcoinFail(t *testing.T) {
+	// Generate a new Bitcoin private key
 	privateKey, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("Failed to generate private key: %v", err)
@@ -82,7 +82,7 @@ func TestVerifySignatureSecp256k1Fail(t *testing.T) {
 	invalidSignatureHex := hex.EncodeToString(invalidSignature)
 
 	// Verify the invalid signature
-	valid, err := VerifySignature(publicKeyHex, SECP256K1_CURVE, message, invalidSignatureHex)
+	valid, err := VerifySignature(publicKeyHex, BITCOIN_CURVE, message, invalidSignatureHex)
 	if err != nil {
 		t.Fatalf("Failed to verify signature: %v", err)
 	}

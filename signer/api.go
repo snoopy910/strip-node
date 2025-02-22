@@ -317,6 +317,9 @@ func startHTTPServer(port string) {
 		identityCurve := intent.IdentityCurve
 		keyCurve := intent.Operations[operationIndexInt].KeyCurve
 
+		log.Println("keyCurve", keyCurve)
+		log.Println("msg", msg)
+
 		// verify signature
 		intentStr, err := identityVerification.SanitiseIntent(intent)
 		if err != nil {

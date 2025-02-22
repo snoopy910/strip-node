@@ -26,9 +26,9 @@ var (
 	ECDSA_CURVE       = "ecdsa"
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
-	SECP256K1_CURVE   = "secp256k1"
+	BITCOIN_CURVE     = "bitcoin_ecdsa"
 	STELLAR_CURVE     = "stellar_eddsa"
-        ALGORAND_CURVE    = "algorand_eddsa"
+	ALGORAND_CURVE    = "algorand_eddsa"
 )
 
 type OperationForSigning struct {
@@ -115,12 +115,12 @@ func VerifySignature(
 
 		fmt.Println("[VERIFY EDDSA] Signature is invalid")
 		return false, nil
-	} else if identityCurve == SECP256K1_CURVE {
-		fmt.Println("[VERIFY SECP256K1] Verifying secp256k1 signature")
+	} else if identityCurve == BITCOIN_CURVE {
+		fmt.Println("[VERIFY BITCOIN] Verifying bitcoin signature")
 		// Parse the public key
 		pubKeyBytes, err := hex.DecodeString(identity)
 		if err != nil {
-			fmt.Printf("[VERIFY SECP256K1] Error decoding public key: %v\n", err)
+			fmt.Printf("[VERIFY BITCOIN] Error decoding public key: %v\n", err)
 			return false, fmt.Errorf("failed to decode public key: %v", err)
 		}
 
@@ -143,7 +143,7 @@ func VerifySignature(
 		// Parse the signature
 		sigBytes, err := hex.DecodeString(signature)
 		if err != nil {
-			fmt.Printf("[VERIFY SECP256K1] Error decoding signature: %v\n", err)
+			fmt.Printf("[VERIFY BITCOIN] Error decoding signature: %v\n", err)
 			return false, fmt.Errorf("failed to decode signature: %v", err)
 		}
 
@@ -162,7 +162,7 @@ func VerifySignature(
 
 		// Verify the signature using ECDSA
 		valid := ecdsa.Verify(pubKey, hash[:], r, s)
-		fmt.Printf("[VERIFY SECP256K1] Signature is %svalid\n", func() string {
+		fmt.Printf("[VERIFY BITCOIN] Signature is %svalid\n", func() string {
 			if valid {
 				return ""
 			}

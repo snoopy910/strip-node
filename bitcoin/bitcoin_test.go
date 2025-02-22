@@ -615,7 +615,7 @@ func TestBitcoinPsbtSerilizedTxn(t *testing.T) {
 func TestSendBitcoinTransaction(t *testing.T) {
 	serializedTxn := "cHNidP8BAHQCAAAAAbzOlSXVYBO8x+11Btz6/aQStOQn7AcGl+MPj6wYWEyqAAAAAAD/////AugDAAAAAAAAFgAUSGWbePkEw7w7okG9RjjsaTwOKVskxJo7AAAAABl2qRT2cW9Eqq1ybINmC64ZyBJ+IgabJ4isAAAAAAABASIAypo7AAAAABl2qRT2cW9Eqq1ybINmC64ZyBJ+IgabJ4isAAAA"
 	chainId := "1002"
-	keyCurve := "secp256k1"
+	keyCurve := "bitcoin_ecdsa"
 	dataToSign := "7bb3a60651a0c7e5a39ac42d308bc6b35fa66cd799414f796c1145fd326292f4"
 	signatureHex := "d8949b22405f76ef5331cd6c0219b6b214e177ad8e92491904999ee5db2a150a2354612ca392ddebabf66c4fb79754ecf1c322ce047d28b6f89fa2ce677a8cdc01"
 

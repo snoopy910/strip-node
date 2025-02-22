@@ -447,7 +447,7 @@ func TestFetchUTXOValue(t *testing.T) {
 			}
 
 			// Call the function
-			value, err := FetchUTXOValue(tt.chainUrl, tt.txHash)
+			value, err := fetchUTXOValue(tt.chainUrl, tt.txHash)
 
 			// Check error
 			if tt.expectError {
@@ -561,7 +561,7 @@ func TestFetchUTXOValueErrors(t *testing.T) {
 			}
 
 			// Call the function
-			value, err := FetchUTXOValue(tt.chainUrl, tt.txHash)
+			value, err := fetchUTXOValue(tt.chainUrl, tt.txHash)
 
 			// Verify error
 			require.Error(t, err)
@@ -587,7 +587,7 @@ func TestIsValidBitcoinAddress(t *testing.T) {
 func TestBitcoinPsbtSerilizedTxn(t *testing.T) {
 	serializedTxn := "cHNidP8BAHQCAAAAAQrNIZka3cgdzRlhZXX1YwG5zwZCdmtwg/M3eiBjuJJHAAAAAAD/////AmQAAAAAAAAAFgAUhHfs0h8qvtrZ9eCDwcAAk7NR8j2SyZo7AAAAABl2qRTupX02brO38k+CEHq86KDosx1PUoisAAAAAAABASIAypo7AAAAABl2qRTupX02brO38k+CEHq86KDosx1PUoisAAAA"
 
-	unsignedTx, err := ParseSerializedTransaction(serializedTxn)
+	unsignedTx, err := parseSerializedTransaction(serializedTxn)
 	require.NoError(t, err)
 	require.NotNil(t, unsignedTx)
 

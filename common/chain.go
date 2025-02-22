@@ -133,6 +133,20 @@ var Chains = []Chain{
 		KeyCurve:    "eddsa",
 		TokenSymbol: "XLM",
 	},
+	{
+		ChainId:     "1003",
+		ChainType:   "ripple",
+		ChainUrl:    "wss://s1.ripple.com:51233",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "XRP",
+	},
+	{
+		ChainId:     "1004",
+		ChainType:   "ripple",
+		ChainUrl:    "wss://s.altnet.rippletest.net:51233",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "XRP",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

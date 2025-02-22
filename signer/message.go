@@ -103,30 +103,49 @@ func handleIncomingMessage(message []byte) {
 		// When looking up the channel to send back the signature, we must encode the hash
 		// in the same format that was used when creating the channel in api.go.
 		// This ensures we find the correct channel for each chain's message format.
+		sentMessage := false
 		switch msg.KeyCurve {
 		case EDDSA_CURVE:
 			// Solana: Client sends base58 string -> decode -> process -> encode back to base58
 			// Channel key must match the original base58 format from client
 			if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
 				val <- msg
+				sentMessage = true
 			}
 		case SECP256K1_CURVE:
 			// Bitcoin: Client sends string -> hash -> process -> encode to hex
 			// Channel key must match the hex encoded hash
 			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
 				val <- msg
+				sentMessage = true
 			}
 		case APTOS_EDDSA_CURVE:
 			// Aptos: Client sends string -> process -> encode to hex
 			// Channel key must match the hex encoded format
 			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
 				val <- msg
+				sentMessage = true
+			}
+		case RIPPLE_CURVE:
+			fmt.Printf("messageChan: %+v\n", messageChan)
+			for key, value := range messageChan {
+				fmt.Printf("key: %+v, value: %+v\n", key, value)
+			}
+			fmt.Printf("msg.Hash: %+v\n", hex.EncodeToString(msg.Hash))
+			fmt.Printf("msg.Hash: %+v\n", string(msg.Hash))
+
+			// Ripple: Client sends string -> process -> encode to hex
+			// Channel key must match the hex encoded format
+			if val, ok := messageChan[strings.ToUpper(hex.EncodeToString(msg.Hash))]; ok {
+				val <- msg
+				sentMessage = true
 			}
 		case STELLAR_CURVE:
 			// Stellar: Client sends base64 string -> decode -> process -> encode back to base64
 			// Channel key must match the original base64 format from client, using StrKey encoding
 			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
 				val <- msg
+				sentMessage = true
 			}
                 case ALGORAND_CURVE:
 			// Algorand: Client sends base32 string -> decode -> process -> encode back to base32
@@ -140,7 +159,12 @@ func handleIncomingMessage(message []byte) {
 			// Channel key must match the raw bytes as string
 			if val, ok := messageChan[string(msg.Hash)]; ok {
 				val <- msg
+				sentMessage = true
 			}
+		}
+
+		if !sentMessage {
+			fmt.Println("message not found")
 		}
 	}
 }

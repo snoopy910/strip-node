@@ -13,6 +13,7 @@ import (
 	"time"
 
 	identityVerification "github.com/StripChain/strip-node/identity"
+	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/stellar/go/strkey"
 
@@ -36,6 +37,7 @@ var (
 	STELLAR_CURVE     = "stellar_eddsa" // Stellar uses Ed25519 with StrKey encoding
 	ALGORAND_CURVE    = "algorand_eddsa"
 	// Note: Hedera uses ECDSA_CURVE since it's compatible with EVM
+	RIPPLE_CURVE = "ripple_eddsa" // Ripple supports Ed25519 https://xrpl.org/docs/concepts/accounts/cryptographic-keys#signing-algorithms
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -241,6 +243,16 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
+		} else if keyCurve == RIPPLE_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			getAddressResponse := GetAddressResponse{
+				Address: ripple.PublicKeyToAddress(rawKeyEddsa),
+			}
+			err = json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
 		} else {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
@@ -388,6 +400,13 @@ func startHTTPServer(port string) {
 				return
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
+		} else if keyCurve == RIPPLE_CURVE {
+			msgBytes, err := hex.DecodeString(msg)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error decoding Ripple message: %v", err), http.StatusInternalServerError)
+				return
+			}
+			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else {
 			http.Error(w, "invalid key curve", http.StatusBadRequest)
 			return
@@ -395,7 +414,7 @@ func startHTTPServer(port string) {
 
 		// Create a channel using the message as the key. The key format varies by chain:
 		// - Solana: base58 encoded string (from client)
-		// - Bitcoin/Aptos: hex encoded string
+		// - Bitcoin/Aptos/Ripple: hex encoded string
 		// - Algorand: base64 encoded string (from client)
 		// - Stellar: base32 encoded string (from client)
 		// - Ethereum: raw bytes as string
@@ -415,7 +434,7 @@ func startHTTPServer(port string) {
 		} else if keyCurve == SECP256K1_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
-		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE {
+		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address

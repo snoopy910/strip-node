@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -17,12 +16,12 @@ import (
 
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
+	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/util"
-	"github.com/btcsuite/btcd/txscript"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -131,7 +130,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "bitcoin" {
-							txnHash, err := sendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err := bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 							if err != nil {
 								fmt.Println(err)
@@ -462,7 +461,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "bitcoin" {
-							transfers, _, err = GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
+							transfers, _, err = bitcoin.GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1248,7 +1247,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "bitcoin" {
-							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1325,7 +1324,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 						if chain.ChainType == "bitcoin" {
-							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1487,7 +1486,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 						if chain.ChainType == "bitcoin" {
-							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1566,7 +1565,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							if chain.ChainType == "bitcoin" {
-								txnConfirmed, err := checkBitcoinTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := bitcoin.CheckBitcoinTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -1793,25 +1792,6 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 	return true, nil
 }
 
-func checkBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return false, err
-	}
-
-	txn, err := FetchTransaction(chain.ChainUrl, txnHash)
-	if err != nil {
-		return false, err
-	}
-
-	// Assuming a transaction is confirmed if it has at least 3 confirmations
-	if txn != nil && txn.Confirmations >= 3 {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
 	chain, err := common.GetChain(chainId)
 	if err != nil {
@@ -1906,103 +1886,4 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 
 	// Return the transaction hash as a string
 	return hash.String(), nil
-}
-
-func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return "", err
-	}
-	log.Println("rpcURL", chain.ChainUrl)
-
-	// Step 1: Decode the signature from hex
-	signature, err := hex.DecodeString(signatureHex)
-	if err != nil {
-		return "", fmt.Errorf("error decoding signature: %v", err)
-	}
-	log.Println("Decoded signature length:", len(signature))
-
-	// Step 2: Parse the serialized transaction
-	msgTx, err := ParseSerializedTransaction(serializedTxn)
-	if err != nil {
-		return "", fmt.Errorf("error parsing transaction: %v", err)
-	}
-
-	// Step 3: Create proper signature script
-	if len(msgTx.TxIn) == 0 {
-		return "", fmt.Errorf("transaction has no inputs")
-	}
-
-	// Create a proper Bitcoin script that only contains push operations
-	builder := txscript.NewScriptBuilder()
-	builder.AddData(signature)          // Push the signature
-	builder.AddData([]byte(dataToSign)) // Push the public key
-	signatureScript, err := builder.Script()
-	if err != nil {
-		return "", fmt.Errorf("error building signature script: %v", err)
-	}
-	msgTx.TxIn[0].SignatureScript = signatureScript
-
-	// Step 4: Serialize the signed transaction
-	var signedTxBuffer bytes.Buffer
-	if err := msgTx.Serialize(&signedTxBuffer); err != nil {
-		return "", fmt.Errorf("error serializing signed transaction: %v", err)
-	}
-	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
-
-	// Step 5: Prepare and send RPC request
-	rpcRequest := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "sendrawtransaction",
-		"params":  []interface{}{signedTxHex},
-	}
-
-	jsonData, err := json.Marshal(rpcRequest)
-	if err != nil {
-		return "", fmt.Errorf("error marshaling RPC request: %v", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", chain.ChainUrl, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("error creating HTTP request: %v", err)
-	}
-
-	// Add headers
-	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth("your_rpc_user", "your_rpc_password")
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending transaction: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Read and parse response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
-	}
-
-	var rpcResponse struct {
-		Result string `json:"result"`
-		Error  *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &rpcResponse); err != nil {
-		return "", fmt.Errorf("error parsing response: %v", err)
-	}
-
-	// Check for RPC error
-	if rpcResponse.Error != nil {
-		return "", fmt.Errorf("RPC error %d: %s", rpcResponse.Error.Code, rpcResponse.Error.Message)
-	}
-
-	return rpcResponse.Result, nil
 }

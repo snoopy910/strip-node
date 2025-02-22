@@ -9,6 +9,7 @@ import (
 
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
+	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/common"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/stellar"
@@ -587,7 +588,7 @@ func startHTTPServer(port string) {
 				return
 			}
 		} else if operation.KeyCurve == "secp256k1" {
-			transfers, _, err := GetBitcoinTransfers(operation.ChainId, operation.Result)
+			transfers, _, err := bitcoin.GetBitcoinTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

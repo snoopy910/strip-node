@@ -1,19 +1,141 @@
-package sequencer
+package bitcoin
 
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"math/big"
 	"net/http"
 	"regexp"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 
 	"github.com/StripChain/strip-node/common"
 )
+
+func CheckBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	txn, err := FetchTransaction(chain.ChainUrl, txnHash)
+	if err != nil {
+		return false, err
+	}
+
+	// Assuming a transaction is confirmed if it has at least 3 confirmations
+	if txn != nil && txn.Confirmations >= 3 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+	log.Println("rpcURL", chain.ChainUrl)
+
+	// Step 1: Decode the signature from hex
+	signature, err := hex.DecodeString(signatureHex)
+	if err != nil {
+		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+	log.Println("Decoded signature length:", len(signature))
+
+	// Step 2: Parse the serialized transaction
+	msgTx, err := ParseSerializedTransaction(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("error parsing transaction: %v", err)
+	}
+
+	// Step 3: Create proper signature script
+	if len(msgTx.TxIn) == 0 {
+		return "", fmt.Errorf("transaction has no inputs")
+	}
+
+	// Create a proper Bitcoin script that only contains push operations
+	builder := txscript.NewScriptBuilder()
+	builder.AddData(signature)          // Push the signature
+	builder.AddData([]byte(dataToSign)) // Push the public key
+	signatureScript, err := builder.Script()
+	if err != nil {
+		return "", fmt.Errorf("error building signature script: %v", err)
+	}
+	msgTx.TxIn[0].SignatureScript = signatureScript
+
+	// Step 4: Serialize the signed transaction
+	var signedTxBuffer bytes.Buffer
+	if err := msgTx.Serialize(&signedTxBuffer); err != nil {
+		return "", fmt.Errorf("error serializing signed transaction: %v", err)
+	}
+	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
+
+	// Step 5: Prepare and send RPC request
+	rpcRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "sendrawtransaction",
+		"params":  []interface{}{signedTxHex},
+	}
+
+	jsonData, err := json.Marshal(rpcRequest)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling RPC request: %v", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", chain.ChainUrl, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("error creating HTTP request: %v", err)
+	}
+
+	// Add headers
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth("your_rpc_user", "your_rpc_password")
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending transaction: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read and parse response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %v", err)
+	}
+
+	var rpcResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(body, &rpcResponse); err != nil {
+		return "", fmt.Errorf("error parsing response: %v", err)
+	}
+
+	// Check for RPC error
+	if rpcResponse.Error != nil {
+		return "", fmt.Errorf("RPC error %d: %s", rpcResponse.Error.Code, rpcResponse.Error.Message)
+	}
+
+	return rpcResponse.Result, nil
+}
 
 type BitcoinNetworkConfig struct {
 	Name          string
@@ -363,4 +485,18 @@ func parseRawTransaction(txBytes []byte) (*wire.MsgTx, error) {
 		return nil, fmt.Errorf("failed to deserialize transaction: %v", err)
 	}
 	return tx, nil
+}
+
+func FormatUnits(value *big.Int, decimals int) (string, error) {
+	// Create the scaling factor as 10^decimals
+	scalingFactor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
+
+	// Convert the value to a big.Float
+	valueFloat := new(big.Float).SetInt(value)
+
+	// Divide the value by the scaling factor
+	result := new(big.Float).Quo(valueFloat, scalingFactor)
+
+	// Convert the result to a string with the appropriate precision
+	return result.Text('f', decimals), nil
 }

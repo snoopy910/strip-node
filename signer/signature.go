@@ -1,6 +1,8 @@
 package signer
 
 import (
+	"bytes"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -8,12 +10,12 @@ import (
 	"math/big"
 	"time"
 
-	"golang.org/x/crypto/sha3"
 	"strings"
 
-
-	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/dogecoin"
+	"github.com/coming-chat/go-sui/v2/lib"
+	"github.com/coming-chat/go-sui/v2/sui_types"
 	"golang.org/x/crypto/blake2b"
 
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
@@ -146,13 +148,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		// Sui uses Ed25519 for transaction signing
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 
-		// Sui uses Ed25519 with SHA3-512 for transaction signing
-		// 1. Hash the message with SHA3-512
-		hasher := sha3.New512()
-		hasher.Write(hash)
-		msgHash := hasher.Sum(nil)
-		// 2. Convert to big.Int for TSS library
-		msg := (&big.Int{}).SetBytes(msgHash)
+		msg := (&big.Int{}).SetBytes(hash)
 
 		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
 		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
@@ -313,11 +309,24 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				pkBytes := pk.Serialize()
 
 				// Convert to Sui address format (Blake2b-256 hash of public key)
-				hasher := blake2b.Sum256(pkBytes)
-				suiAddress := "0x" + hex.EncodeToString(hasher[:])
+				flag := byte(0x00)
+				hasher, _ := blake2b.New256(nil)
+				hasher.Write([]byte{flag})
+				hasher.Write(pkBytes)
+
+				arr := hasher.Sum(nil)
+				suiAddress := "0x" + hex.EncodeToString(arr)
 
 				// For Sui, we need to encode the signature in base64
-				signatureBase64 := base64.StdEncoding.EncodeToString(save.Signature)
+				var signatureBytes [ed25519.PublicKeySize + ed25519.SignatureSize + 1]byte
+				signatureBuffer := bytes.NewBuffer([]byte{})
+				scheme := sui_types.SignatureScheme{ED25519: &lib.EmptyEnum{}}
+				signatureBuffer.WriteByte(scheme.Flag())
+				signatureBuffer.Write(save.Signature)
+				signatureBuffer.Write(pkBytes[:])
+				copy(signatureBytes[:], signatureBuffer.Bytes())
+
+				signatureBase64 := base64.StdEncoding.EncodeToString(signatureBytes[:])
 
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,

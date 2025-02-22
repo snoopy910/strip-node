@@ -16,11 +16,11 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/aptos"
-	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/solver"
+	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/util"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -779,24 +779,23 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-								// Get appropriate Dogecoin addresses based on network
-								var userAddress, bridgeAddress string
-									userAddress = user.DogecoinMainnetPublicKey
-									bridgeAddress = bridgeWallet.DogecoinMainnetPublicKey
-								
+							// Get appropriate Dogecoin addresses based on network
+							var userAddress, bridgeAddress string
+							userAddress = user.DogecoinMainnetPublicKey
+							bridgeAddress = bridgeWallet.DogecoinMainnetPublicKey
 
-								// Validate that we have the Dogecoin addresses
-								if userAddress == "" || bridgeAddress == "" {
-									fmt.Println("Dogecoin addresses not found in wallet")
-									break
-								}
+							// Validate that we have the Dogecoin addresses
+							if userAddress == "" || bridgeAddress == "" {
+								fmt.Println("Dogecoin addresses not found in wallet")
+								break
+							}
 
-								txn, dataToSign, err := dogecoin.WithdrawDogeNativeGetSignature(
-									withdrawalChain.ChainUrl,
-									bridgeAddress,
-									amount,
-									userAddress,
-								)
+							txn, dataToSign, err := dogecoin.WithdrawDogeNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeAddress,
+								amount,
+								userAddress,
+							)
 
 							if err != nil {
 								fmt.Println(err)
@@ -815,8 +814,8 @@ func ProcessIntent(intentId int64) {
 							// Use the same Dogecoin address we used for signing
 							result, err := dogecoin.WithdrawDogeTxn(
 								withdrawalChain.ChainUrl,
-								txn,  // Use the serialized transaction instead of dataToSign
-								userAddress,  // Use Dogecoin address instead of ECDSA key
+								txn,         // Use the serialized transaction instead of dataToSign
+								userAddress, // Use Dogecoin address instead of ECDSA key
 								signature,
 							)
 

@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
+	"github.com/StripChain/strip-node/sui"
 )
 
 type Operation struct {
@@ -92,6 +92,11 @@ type GetBitcoinAddressesResponse struct {
 	MainnetAddress string `json:"mainnetAddress"`
 	TestnetAddress string `json:"testnetAddress"`
 	RegtestAddress string `json:"regtestAddress"`
+}
+
+type GetDogecoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
 }
 
 type IntentsResult struct {

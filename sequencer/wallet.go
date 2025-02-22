@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/StripChain/strip-node/dogecoin"
 )
 
 // createWallet creates a new wallet with the specified identity and identity curve.
@@ -70,6 +68,31 @@ func createWallet(identity string, identityCurve string) error {
 	_, err = client.Do(req)
 	if err != nil {
 		return err
+	}
+
+	// create the wallet whose keycurve is sui_eddsa here
+	createWalletRequest = CreateWalletRequest{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		KeyCurve:      "sui_eddsa",
+		Signers:       signersPublicKeyList,
+	}
+
+	marshalled, err = json.Marshal(createWalletRequest)
+	if err != nil {
+		return err
+	}
+
+	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client = http.Client{Timeout: 3 * time.Minute}
+	_, err = client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create sui wallet: %v", err)
 	}
 
 	// create the wallet whose keycurve is aptos_eddsa here
@@ -255,31 +278,42 @@ func createWallet(identity string, identityCurve string) error {
 	bitcoinTestnetAddress := getBitcoinAddressesResponse.TestnetAddress
 	bitcoinRegtestAddress := getBitcoinAddressesResponse.RegtestAddress
 
-	// add created wallet to the store
-	// Generate Dogecoin addresses
-	dogecoinMainnetAddress, err := dogecoin.PublicKeyToAddress(ecdsaAddress)
+	// get the address of the wallet whose keycurve is secp256k1 here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=secp256k1" + "&chainID=2000")
 	if err != nil {
-		return fmt.Errorf("failed to generate Dogecoin mainnet address: %v", err)
+		return err
 	}
 
-	dogecoinTestnetAddress, err := dogecoin.PublicKeyToTestnetAddress(ecdsaAddress)
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to generate Dogecoin testnet address: %v", err)
+		return err
 	}
+
+	var getDogecoinAddressesResponse GetDogecoinAddressesResponse
+
+	err = json.Unmarshal(body, &getDogecoinAddressesResponse)
+	if err != nil {
+		return err
+	}
+
+	dogecoinMainnetAddress := getDogecoinAddressesResponse.MainnetAddress
+	dogecoinTestnetAddress := getDogecoinAddressesResponse.TestnetAddress
 
 	wallet := WalletSchema{
-		Identity:                identity,
-		IdentityCurve:           identityCurve,
-		Signers:                 strings.Join(signersPublicKeyList, ","),
-		EDDSAPublicKey:          eddsaAddress,
-		AptosEDDSAPublicKey:     aptosEddsaAddress,
-		ECDSAPublicKey:          ecdsaAddress,
-		BitcoinMainnetPublicKey: bitcoinMainnetAddress,
-		BitcoinTestnetPublicKey: bitcoinTestnetAddress,
-		BitcoinRegtestPublicKey: bitcoinRegtestAddress,
+		Identity:                 identity,
+		IdentityCurve:            identityCurve,
+		Signers:                  strings.Join(signersPublicKeyList, ","),
+		EDDSAPublicKey:           eddsaAddress,
+		AptosEDDSAPublicKey:      aptosEddsaAddress,
+		ECDSAPublicKey:           ecdsaAddress,
+		BitcoinMainnetPublicKey:  bitcoinMainnetAddress,
+		BitcoinTestnetPublicKey:  bitcoinTestnetAddress,
+		BitcoinRegtestPublicKey:  bitcoinRegtestAddress,
 		DogecoinMainnetPublicKey: dogecoinMainnetAddress,
 		DogecoinTestnetPublicKey: dogecoinTestnetAddress,
-		SuiPublicKey:            suiAddress,
+		SuiPublicKey:             suiAddress,
 	}
 
 	_, err = AddWallet(&wallet)

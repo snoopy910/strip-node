@@ -3,9 +3,6 @@ package sui
 import (
 	"context"
 	"fmt"
-	"math/big"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/common"
@@ -13,13 +10,6 @@ import (
 	"github.com/coming-chat/go-sui/v2/lib"
 	"github.com/coming-chat/go-sui/v2/sui_types"
 	"github.com/coming-chat/go-sui/v2/types"
-)
-
-const (
-	DEFAULT_CONFIRMATIONS = 1 // Sui has instant finality
-	SUI_DECIMALS         = 9
-	SUI_TOKEN_SYMBOL     = "SUI"
-	SUI_TYPE             = "0x2::sui::SUI"
 )
 
 // CheckSuiTransactionConfirmed checks if a Sui transaction is confirmed
@@ -51,8 +41,6 @@ func CheckSuiTransactionConfirmed(chainId string, txHash string) (bool, error) {
 		ctx,
 		*digest,
 		types.SuiTransactionBlockResponseOptions{
-			ShowEvents:  true,
-			ShowInput:   true,
 			ShowEffects: true,
 		},
 	)
@@ -89,6 +77,8 @@ func SendSuiTransaction(
 		return "", fmt.Errorf("failed to connect to Sui node: %v", err)
 	}
 
+	txBytes, _ := lib.NewBase64Data(serializedTx)
+
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -96,7 +86,7 @@ func SendSuiTransaction(
 	// Submit the transaction
 	resp, err := cli.ExecuteTransactionBlock(
 		ctx,
-		lib.Base64Data(serializedTx),
+		*txBytes,
 		[]any{signatureBase64},
 		&types.SuiTransactionBlockResponseOptions{
 			ShowEffects: true,
@@ -117,10 +107,12 @@ func SendSuiTransaction(
 		return "", fmt.Errorf("transaction failed: %v", resp.Effects.Data.V1.Status.Error)
 	}
 
+	fmt.Println("txHash for sui: ", resp.Digest.String())
 	return resp.Digest.String(), nil
 }
 
 // GetSuiTransfers gets transfers from a Sui transaction
+// NOTE: only for transaction block with 1:1 transfer
 func GetSuiTransfers(chainId string, txHash string) ([]common.Transfer, error) {
 	// Get chain URL
 	chain, err := common.GetChain(chainId)
@@ -150,112 +142,57 @@ func GetSuiTransfers(chainId string, txHash string) ([]common.Transfer, error) {
 		ctx,
 		*digest,
 		types.SuiTransactionBlockResponseOptions{
-			ShowEvents:  true,
-			ShowInput:   true,
-			ShowEffects: true,
+			ShowBalanceChanges: true,
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transaction: %v", err)
 	}
 
-	// Extract transfers from events
-	var transfers []common.Transfer
-	if resp.Events == nil {
+	var (
+		transfers    []common.Transfer
+		from         string
+		to           string
+		amount       string
+		token        string
+		isNative     bool
+		tokenAddress string
+		scaledAmount string
+	)
+
+	// Extract transfers from balanceChanges
+	if resp.BalanceChanges == nil {
 		return transfers, nil
 	}
 
-	for _, event := range resp.Events {
-		if event.Type != "0x2::coin::TransferEvent" {
-			continue
-		}
-
-		// Get parsed JSON data
-		parsedData, ok := event.ParsedJson.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Parse amount
-		amountStr, ok := parsedData["amount"].(string)
-		if !ok {
-			continue
-		}
-		amount, err := strconv.ParseUint(amountStr, 10, 64)
-		if err != nil {
-			continue
-		}
-
-		// Get coin type
-		coinType, ok := parsedData["coin_type"].(string)
-		if !ok {
-			continue
-		}
-
-		// Get sender and recipient
-		sender, ok := parsedData["sender"].(string)
-		if !ok {
-			continue
-		}
-		recipient, ok := parsedData["recipient"].(string)
-		if !ok {
-			continue
-		}
-
-		// Get token info
-		tokenSymbol := getTokenSymbol(coinType)
-		decimals := getTokenDecimals(coinType)
-
-		// Create big.Int for amount with proper decimals
-		amountBig := new(big.Int).SetUint64(amount)
-		// Scale amount by decimals
-		scaledBig := new(big.Int).Mul(amountBig, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
-
-		transfer := common.Transfer{
-			From:         sender,
-			To:           recipient,
-			Amount:       scaledBig.String(),  // Use scaled amount
-			Token:        tokenSymbol,
-			IsNative:     coinType == SUI_TYPE,
-			TokenAddress: coinType,
-			ScaledAmount: amountBig.String(),  // Use unscaled amount
-		}
-		transfers = append(transfers, transfer)
+	coinMetadata, err := cli.GetCoinMetadata(ctx, resp.BalanceChanges[1].CoinType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction: %v", err)
 	}
+
+	from = resp.BalanceChanges[0].Owner.AddressOwner.String()
+	to = resp.BalanceChanges[1].Owner.AddressOwner.String()
+	amount, err = getFormattedAmount(resp.BalanceChanges[1].Amount, coinMetadata.Decimals)
+	if err != nil {
+		fmt.Println("Error formatting amount, ", err)
+	}
+	token = coinMetadata.Symbol
+	isNative = false
+	tokenAddress = resp.BalanceChanges[1].CoinType
+	scaledAmount = resp.BalanceChanges[1].Amount
+	if resp.BalanceChanges[1].CoinType == SUI_TYPE {
+		isNative = true
+	}
+
+	transfers = append(transfers, common.Transfer{
+		From:         from,
+		To:           to,
+		Amount:       amount,
+		Token:        token,
+		IsNative:     isNative,
+		TokenAddress: tokenAddress,
+		ScaledAmount: scaledAmount,
+	})
 
 	return transfers, nil
-}
-
-// Helper functions
-func getTokenSymbol(coinType string) string {
-	if coinType == SUI_TYPE {
-		return SUI_TOKEN_SYMBOL
-	}
-	// For other tokens, use the last part of the type
-	// TODO: Implement token metadata lookup
-	return coinType[len(coinType)-3:]
-}
-
-// Well-known token decimals
-var tokenDecimals = map[string]int{
-	SUI_TYPE:                     SUI_DECIMALS,  // Native SUI
-	"0x2::devnet_nft::DevNetNFT": 0,           // NFTs have 0 decimals
-	// Add more token types here as needed
-}
-
-// getTokenDecimals returns the number of decimals for a given coin type.
-// For unknown tokens, it returns the default of 9 decimals (most common in Sui).
-func getTokenDecimals(coinType string) int {
-	// Check well-known tokens first
-	if decimals, ok := tokenDecimals[coinType]; ok {
-		return decimals
-	}
-
-	// For NFTs, return 0 decimals
-	if strings.Contains(coinType, "nft") || strings.Contains(coinType, "NFT") {
-		return 0
-	}
-
-	// For unknown tokens, return default Sui decimals
-	return SUI_DECIMALS
 }

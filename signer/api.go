@@ -19,6 +19,7 @@ import (
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/coming-chat/go-sui/v2/lib"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
@@ -227,8 +228,15 @@ func startHTTPServer(port string) {
 			publicKeyHex := hex.EncodeToString(pkBytes)
 
 			// Hash the public key with Blake2b-256 to get Sui address
-			hasher := blake2b.Sum256(pkBytes)
-			suiAddress := "0x" + hex.EncodeToString(hasher[:])
+			// hasher := blake2b.Sum256(pkBytes)
+			// suiAddress := "0x" + hex.EncodeToString(hasher[:])
+			flag := byte(0x00)
+			hasher, _ := blake2b.New256(nil)
+			hasher.Write([]byte{flag})
+			hasher.Write(pkBytes)
+
+			arr := hasher.Sum(nil)
+			suiAddress := "0x" + hex.EncodeToString(arr)
 
 			// Prepare response
 			getSuiAddressResponse := GetSuiAddressResponse{
@@ -408,8 +416,11 @@ func startHTTPServer(port string) {
 		} else if keyCurve == SUI_EDDSA_CURVE {
 			// For Sui, we need to format the message according to Sui's standards
 			// The message should be prefixed with "Sui Message:" for personal messages
-			suiMsg := []byte("Sui Message:" + msg)
-			go generateSignatureMessage(identity, identityCurve, keyCurve, suiMsg)
+			// suiMsg := []byte("Sui Message:" + msg)
+			// go generateSignatureMessage(identity, identityCurve, keyCurve, suiMsg)
+			msgBytes, _ := lib.NewBase64Data(msg)
+			fmt.Println("msgBytes: ", msgBytes)
+			go generateSignatureMessage(identity, identityCurve, keyCurve, *msgBytes)
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else {
@@ -435,7 +446,7 @@ func startHTTPServer(port string) {
 			// For Sui, we return the signature in base64 format
 			signatureResponse.Signature = string(sig.Message) // Already base64 encoded in generateSignature
 			signatureResponse.Address = sig.Address
-			fmt.Println("generated Sui signature for address:", sig.Address)
+			fmt.Println("generated Sui signature for address:", sig.Message)
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))

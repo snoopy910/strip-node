@@ -1,8 +1,8 @@
 package signer
 
 import (
-	"encoding/hex"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -106,14 +106,14 @@ func handleIncomingMessage(message []byte) {
 				val <- msg
 			}
 		case SUI_EDDSA_CURVE:
-			// Use hex encoding for Sui EdDSA
-			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+			// Use base64 encoding for Sui
+			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
 				val <- msg
 			}
 		default:
 			// Use raw bytes for other curves
 			if val, ok := messageChan[string(msg.Hash)]; ok {
-			val <- msg
+				val <- msg
 			}
 		}
 	}

@@ -102,6 +102,20 @@ var Chains = []Chain{
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
 	},
+	{
+		ChainId:     "3001",
+		ChainType:   "sui",
+		ChainUrl:    "https://fullnode.mainnet.sui.io:443",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "SUI",
+	},
+	{
+		ChainId:     "3002",
+		ChainType:   "sui",
+		ChainUrl:    "https://fullnode.devnet.sui.io:443",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "SUI",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

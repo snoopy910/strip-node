@@ -41,19 +41,19 @@ type OperationSchema struct {
 }
 
 type WalletSchema struct {
-	Id                      int64  `json:"id"`
-	Identity                string `json:"identity"`
-	IdentityCurve           string `json:"identityCurve"`
-	EDDSAPublicKey          string `json:"eddsaPublicKey"`
-	AptosEDDSAPublicKey     string `json:"aptosEddsaPublicKey"`
-	ECDSAPublicKey          string `json:"ecdsaPublicKey"`
-	BitcoinMainnetPublicKey string `json:"bitcoinMainnetPublicKey"`
-	BitcoinTestnetPublicKey string `json:"bitcoinTestnetPublicKey"`
+	Id                       int64  `json:"id"`
+	Identity                 string `json:"identity"`
+	IdentityCurve            string `json:"identityCurve"`
+	EDDSAPublicKey           string `json:"eddsaPublicKey"`
+	AptosEDDSAPublicKey      string `json:"aptosEddsaPublicKey"`
+	ECDSAPublicKey           string `json:"ecdsaPublicKey"`
+	BitcoinMainnetPublicKey  string `json:"bitcoinMainnetPublicKey"`
+	BitcoinTestnetPublicKey  string `json:"bitcoinTestnetPublicKey"`
 	DogecoinMainnetPublicKey string `json:"dogecoinMainnetPublicKey"`
 	DogecoinTestnetPublicKey string `json:"dogecoinTestnetPublicKey"`
-	BitcoinRegtestPublicKey string `json:"bitcoinRegtestPublicKey"`
-	SuiPublicKey            string `json:"suiPublicKey"`
-	Signers                 string `json:"signers"`
+	BitcoinRegtestPublicKey  string `json:"bitcoinRegtestPublicKey"`
+	SuiPublicKey             string `json:"suiPublicKey"`
+	Signers                  string `json:"signers"`
 }
 
 type LockSchema struct {

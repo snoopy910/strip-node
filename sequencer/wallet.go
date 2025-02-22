@@ -124,7 +124,7 @@ func createWallet(identity string, identityCurve string) error {
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
-		KeyCurve:      "secp256k1",
+		KeyCurve:      "bitcoin_ecdsa",
 		Signers:       signersPublicKeyList,
 	}
 
@@ -258,7 +258,7 @@ func createWallet(identity string, identityCurve string) error {
 	bitcoinTestnetAddress := getBitcoinAddressesResponse.TestnetAddress
 	bitcoinRegtestAddress := getBitcoinAddressesResponse.RegtestAddress
 
-      	// get the address of the wallet whose keycurve is algorand_eddsa here
+	// get the address of the wallet whose keycurve is algorand_eddsa here
 	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=algorand_eddsa")
 	if err != nil {
 		return err
@@ -278,7 +278,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	algorandEddsaAddress := getAddressResponse.Address
 
-		// create the wallet whose keycurve is stellar_eddsa here
+	// create the wallet whose keycurve is stellar_eddsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
@@ -335,7 +335,7 @@ func createWallet(identity string, identityCurve string) error {
 		BitcoinTestnetPublicKey: bitcoinTestnetAddress,
 		BitcoinRegtestPublicKey: bitcoinRegtestAddress,
 		StellarPublicKey:        stellarAddress,
-                AlgorandEDDSAPublicKey:  algorandEddsaAddress,
+		AlgorandEDDSAPublicKey:  algorandEddsaAddress,
 	}
 
 	_, err = AddWallet(&wallet)

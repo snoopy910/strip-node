@@ -587,7 +587,7 @@ func startHTTPServer(port string) {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 				return
 			}
-		} else if operation.KeyCurve == "secp256k1" {
+		} else if operation.KeyCurve == "bitcoin_ecdsa" {
 			transfers, _, err := bitcoin.GetBitcoinTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {

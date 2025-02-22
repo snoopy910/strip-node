@@ -116,7 +116,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)
@@ -435,7 +435,7 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" ||
-						depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "stellar_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" {
+						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "stellar_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -738,7 +738,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if withdrawalChain.KeyCurve == "ecdsa" || withdrawalChain.KeyCurve == "secp256k1" {
+					if withdrawalChain.KeyCurve == "ecdsa" || withdrawalChain.KeyCurve == "bitcoin_ecdsa" {
 						if withdrawalChain.ChainType == "bitcoin" {
 							// handle bitcoin withdrawal
 							var solverData map[string]interface{}
@@ -1239,7 +1239,7 @@ func ProcessIntent(intentId int64) {
 				// check for confirmations and update the status to completed
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1317,7 +1317,7 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1479,7 +1479,7 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1557,7 +1557,7 @@ func ProcessIntent(intentId int64) {
 						depositOperation := intent.Operations[i-4]
 						// check for confirmations
 						confirmed = false
-						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "secp256k1" {
+						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "bitcoin_ecdsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)

@@ -31,7 +31,7 @@ var (
 	ECDSA_CURVE       = "ecdsa"
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
-	SECP256K1_CURVE   = "secp256k1"
+	BITCOIN_CURVE     = "bitcoin_ecdsa"
 	STELLAR_CURVE     = "stellar_eddsa" // Stellar uses Ed25519 with StrKey encoding
 	ALGORAND_CURVE    = "algorand_eddsa"
 	// Note: Hedera uses ECDSA_CURVE since it's compatible with EVM
@@ -137,7 +137,7 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
-		} else if keyCurve == SECP256K1_CURVE {
+		} else if keyCurve == BITCOIN_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
 			x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
@@ -357,7 +357,7 @@ func startHTTPServer(port string) {
 			} else {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 			}
-		} else if keyCurve == SECP256K1_CURVE {
+		} else if keyCurve == BITCOIN_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
@@ -401,7 +401,7 @@ func startHTTPServer(port string) {
 		if keyCurve == ECDSA_CURVE {
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
-		} else if keyCurve == SECP256K1_CURVE {
+		} else if keyCurve == BITCOIN_CURVE {
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE {

@@ -136,7 +136,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 		go localParty.Start()
 
-	} else if keyCurve == SECP256K1_CURVE {
+	} else if keyCurve == BITCOIN_CURVE {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		// msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
@@ -235,7 +235,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 				go broadcast(message)
-			} else if keyCurve == SECP256K1_CURVE {
+			} else if keyCurve == BITCOIN_CURVE {
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y

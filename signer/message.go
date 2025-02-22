@@ -3,6 +3,7 @@ package signer
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -99,19 +100,49 @@ func handleIncomingMessage(message []byte) {
 	} else if msg.Type == MESSAGE_TYPE_SIGN {
 		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
+		// When looking up the channel to send back the signature, we must encode the hash
+		// in the same format that was used when creating the channel in api.go.
+		// This ensures we find the correct channel for each chain's message format.
 		switch msg.KeyCurve {
 		case EDDSA_CURVE:
-			// Use base58 encoding for standard EdDSA
+			// Solana: Client sends base58 string -> decode -> process -> encode back to base58
+			// Channel key must match the original base58 format from client
 			if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
 				val <- msg
 			}
+		case SECP256K1_CURVE:
+			// Bitcoin: Client sends string -> hash -> process -> encode to hex
+			// Channel key must match the hex encoded hash
+			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
+		case APTOS_EDDSA_CURVE:
+			// Aptos: Client sends string -> process -> encode to hex
+			// Channel key must match the hex encoded format
+			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
+		case STELLAR_CURVE:
+			// Stellar: Client sends base64 string -> decode -> process -> encode back to base64
+			// Channel key must match the original base64 format from client, using StrKey encoding
+			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
 		case SUI_EDDSA_CURVE:
-			// Use base64 encoding for Sui
+			// Sui: Client sends base64 string -> decode -> process -> encode back to base64
+			// Channel key must match the original base32 format from client
+			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
+				val <- msg
+			}
+		case ALGORAND_CURVE:
+			// Algorand: Client sends base64 string -> decode -> process -> encode back to base64
+			// Channel key must match the original base32 format from client
 			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
 				val <- msg
 			}
 		default:
-			// Use raw bytes for other curves
+			// Ethereum: Client sends string -> process raw bytes
+			// Channel key must match the raw bytes as string
 			if val, ok := messageChan[string(msg.Hash)]; ok {
 				val <- msg
 			}

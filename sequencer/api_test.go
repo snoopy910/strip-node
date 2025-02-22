@@ -28,7 +28,7 @@ func TestCreateWalletEndpoint(t *testing.T) {
 			name:          "Missing identity",
 			identity:      "",
 			identityCurve: "ecdsa",
-			wantStatus:    http.StatusInternalServerError,
+			wantStatus:    http.StatusBadRequest,
 		},
 	}
 
@@ -40,7 +40,7 @@ func TestCreateWalletEndpoint(t *testing.T) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if tt.identity == "" {
-						http.Error(w, "identity required", http.StatusInternalServerError)
+						http.Error(w, "identity required", http.StatusBadRequest)
 						return
 					}
 					w.WriteHeader(http.StatusOK)
@@ -75,7 +75,7 @@ func TestGetWalletEndpoint(t *testing.T) {
 			name:          "Missing identity",
 			identity:      "",
 			identityCurve: "ecdsa",
-			wantStatus:    http.StatusInternalServerError,
+			wantStatus:    http.StatusBadRequest,
 		},
 	}
 
@@ -86,7 +86,7 @@ func TestGetWalletEndpoint(t *testing.T) {
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if tt.identity == "" {
-					http.Error(w, "identity required", http.StatusInternalServerError)
+					http.Error(w, "identity required", http.StatusBadRequest)
 					return
 				}
 				json.NewEncoder(w).Encode(map[string]string{"identity": tt.identity})

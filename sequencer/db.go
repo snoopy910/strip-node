@@ -30,6 +30,7 @@ type OperationSchema struct {
 	SerializedTxn    string
 	DataToSign       string
 	ChainId          string
+	GenesisHash      string
 	KeyCurve         string
 	Status           string
 	Result           string
@@ -54,6 +55,8 @@ type WalletSchema struct {
 	BitcoinRegtestPublicKey  string `json:"bitcoinRegtestPublicKey"`
 	SuiPublicKey             string `json:"suiPublicKey"`
 	Signers                  string `json:"signers"`
+	StellarPublicKey         string `json:"stellarPublicKey"`
+	AlgorandEDDSAPublicKey   string `json:"algorandEddsaPublicKey"`
 }
 
 type LockSchema struct {
@@ -193,6 +196,7 @@ func AddIntent(
 			SerializedTxn:  operation.SerializedTxn,
 			DataToSign:     operation.DataToSign,
 			ChainId:        operation.ChainId,
+			GenesisHash:    operation.GenesisHash,
 			KeyCurve:       operation.KeyCurve,
 			Status:         OPERATION_STATUS_PENDING,
 			Result:         "",
@@ -230,6 +234,7 @@ func GetIntent(intentId int64) (*Intent, error) {
 			SerializedTxn:    operationSchema.SerializedTxn,
 			DataToSign:       operationSchema.DataToSign,
 			ChainId:          operationSchema.ChainId,
+			GenesisHash:      operationSchema.GenesisHash,
 			KeyCurve:         operationSchema.KeyCurve,
 			Status:           operationSchema.Status,
 			Result:           operationSchema.Result,
@@ -281,6 +286,7 @@ func GetOperation(intentId int64, operationIndex int64) (*Operation, error) {
 			SerializedTxn:    operationSchema.SerializedTxn,
 			DataToSign:       operationSchema.DataToSign,
 			ChainId:          operationSchema.ChainId,
+			GenesisHash:      operationSchema.GenesisHash,
 			KeyCurve:         operationSchema.KeyCurve,
 			Status:           operationSchema.Status,
 			Result:           operationSchema.Result,
@@ -322,6 +328,7 @@ func getIntents(intentSchemas *([]IntentSchema)) ([]*Intent, error) {
 				SerializedTxn:    operationSchema.SerializedTxn,
 				DataToSign:       operationSchema.DataToSign,
 				ChainId:          operationSchema.ChainId,
+				GenesisHash:      operationSchema.GenesisHash,
 				KeyCurve:         operationSchema.KeyCurve,
 				Status:           operationSchema.Status,
 				Result:           operationSchema.Result,

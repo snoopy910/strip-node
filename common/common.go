@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"unsafe"
@@ -44,4 +45,22 @@ func byte32(s []byte) (a *[32]byte) {
 		a = (*[len(a)]byte)(unsafe.Pointer(&s[0]))
 	}
 	return a
+}
+
+type Curve string
+
+const (
+	CurveEddsa Curve = "eddsa"
+	CurveEcdsa Curve = "ecdsa"
+)
+
+func ParseCurve(curve string) (Curve, error) {
+	switch curve {
+	case "eddsa":
+		return CurveEddsa, nil
+	case "ecdsa":
+		return CurveEcdsa, nil
+	default:
+		return "", fmt.Errorf("invalid curve")
+	}
 }

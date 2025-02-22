@@ -4,6 +4,10 @@ import "fmt"
 
 type Chain struct {
 	ChainId     string
+	GenesisId   string
+	GenesisHash string
+	IndexerUrl  string
+	ChainApiKey string
 	ChainType   string
 	ChainUrl    string
 	KeyCurve    string
@@ -116,11 +120,52 @@ var Chains = []Chain{
 		KeyCurve:    "eddsa",
 		TokenSymbol: "SUI",
 	},
+	{
+		GenesisId:   "mainnet-v1.0",
+		GenesisHash: "wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=",
+		ChainType:   "algorand",
+		ChainUrl:    "https://mainnet-api.4160.nodely.dev",
+		IndexerUrl:  "https://mainnet-idx.4160.nodely.dev",
+		KeyCurve:    "ed25519",
+		TokenSymbol: "ALGO",
+	},
+	{
+		GenesisId:   "testnet-v1.0",
+		GenesisHash: "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+		ChainType:   "algorand",
+		ChainUrl:    "https://testnet-api.4160.nodely.dev",
+		IndexerUrl:  "https://testnet-idx.4160.nodely.dev",
+		KeyCurve:    "ed25519",
+		TokenSymbol: "ALGO",
+	},
+	{
+		GenesisId:   "betanet-v1.0",
+		GenesisHash: "mFgazF+2uRS1tMiL9dsj01hJGySEmPN28B/TjjvpVW0=",
+		ChainType:   "algorand",
+		ChainUrl:    "https://betanet-api.4160.nodely.dev",
+		IndexerUrl:  "https://betanet-idx.4160.nodely.dev", // port 443?
+		KeyCurve:    "ed25519",
+		TokenSymbol: "ALGO",
+	},
+	{
+		ChainId:     "testnet",
+		ChainType:   "stellar",
+		ChainUrl:    "https://horizon-testnet.stellar.org",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "XLM",
+	},
+	{
+		ChainId:     "mainnet",
+		ChainType:   "stellar",
+		ChainUrl:    "https://horizon.stellar.org",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "XLM",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {
 	for _, chain := range Chains {
-		if chain.ChainId == chainId {
+		if chain.ChainId == chainId || chain.GenesisHash == chainId {
 			return chain, nil
 		}
 	}

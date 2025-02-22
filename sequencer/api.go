@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
+	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
 )
 
@@ -19,6 +21,7 @@ type Operation struct {
 	SerializedTxn    string `json:"serializedTxn"`
 	DataToSign       string `json:"dataToSign"`
 	ChainId          string `json:"chainId"`
+	GenesisHash      string `json:"genesisHash"`
 	KeyCurve         string `json:"keyCurve"`
 	Status           string `json:"status"`
 	Result           string `json:"result"`
@@ -137,7 +140,9 @@ func startHTTPServer(port string) {
 	//   - identityCurve: The curve type for the identity
 	// Response:
 	//   - Success: "wallet already exists" if wallet exists
-	//   - Success: Empty response if wallet created
+	//   - Success: 201 if wallet created
+	//   - Error: 400 if identityCurve is invalid or identity is empty
+	//   - Error: 409 if wallet already exists
 	//   - Error: 500 with error message
 	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
@@ -148,7 +153,18 @@ func startHTTPServer(port string) {
 
 		_createWallet := false
 
-		_, err := GetWallet(identity, identityCurve)
+		if identity == "" {
+			http.Error(w, "identity required", http.StatusBadRequest)
+			return
+		}
+
+		curve, err := common.ParseCurve(identityCurve)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		_, err = GetWallet(identity, string(curve))
 		if err != nil {
 
 			if err.Error() == "pg: no rows in result set" {
@@ -160,6 +176,7 @@ func startHTTPServer(port string) {
 		}
 
 		if !_createWallet {
+			w.WriteHeader(http.StatusConflict)
 			fmt.Fprintf(w, "wallet already exists")
 			return
 		}
@@ -169,6 +186,8 @@ func startHTTPServer(port string) {
 			http.Error(w, CREATE_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
+
+		w.WriteHeader(http.StatusCreated)
 	})
 
 	// GetWallet endpoint - Retrieves wallet information
@@ -177,7 +196,9 @@ func startHTTPServer(port string) {
 	//   - identity: The unique identifier for the wallet
 	//   - identityCurve: The curve type for the identity
 	// Response:
-	//   - Success: JSON encoded wallet object
+	//   - Success: 200 JSON encoded wallet object
+	//   - Error: 400 if identityCurve is invalid or identity is empty
+	//   - Error: 404 if wallet not found
 	//   - Error: 500 with error message
 	http.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
@@ -185,17 +206,33 @@ func startHTTPServer(port string) {
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
 
-		wallet, err := GetWallet(identity, identityCurve)
+		if identity == "" {
+			http.Error(w, "identity required", http.StatusBadRequest)
+			return
+		}
+
+		curve, err := common.ParseCurve(identityCurve)
 		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		wallet, err := GetWallet(identity, string(curve))
+		if err != nil {
+			if err.Error() == "pg: no rows in result set" {
+				http.Error(w, "wallet not found", http.StatusNotFound)
+				return
+			}
 			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(wallet)
-		if err != nil {
+		if err := json.NewEncoder(w).Encode(wallet); err != nil {
 			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 	})
 
 	// GetBridgeAddress endpoint - Retrieves the bridge contract wallet address
@@ -593,6 +630,30 @@ func startHTTPServer(port string) {
 				return
 			}
 
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "stellar_eddsa" {
+			transfers, err := stellar.GetStellarTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "algorand_eddsa" {
+			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
 			err = json.NewEncoder(w).Encode(transfers)
 			if err != nil {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)

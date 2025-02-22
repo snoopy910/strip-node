@@ -254,7 +254,7 @@ func WithdrawSuiTxn(
 		[]any{signatureBase64},
 		&types.SuiTransactionBlockResponseOptions{
 			ShowEffects: true,
-			ShowEvents: true,
+			ShowEvents:  true,
 		},
 		types.TxnRequestTypeWaitForEffectsCert,
 	)

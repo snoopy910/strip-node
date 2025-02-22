@@ -14,12 +14,11 @@ import (
 	"strconv"
 	"strings"
 
-
-
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/algorand/go-algorand-sdk/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1" // Add this import
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/mr-tron/base58"
 	"golang.org/x/crypto/blake2b"
 )
@@ -29,13 +28,16 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
-	SUI_EDDSA_CURVE   = "sui_eddsa"    // Sui uses Ed25519 for native transactions
+	SUI_EDDSA_CURVE   = "sui_eddsa" // Sui uses Ed25519 for native transactions
+	STELLAR_CURVE     = "stellar_eddsa"
+	ALGORAND_CURVE    = "algorand_eddsa"
 )
 
 type OperationForSigning struct {
-	SerializedTxn  string `json:"serializedTxn"`
-	DataToSign     string `json:"dataToSign"`
-	ChainId        string `json:"chainId"`
+	SerializedTxn string `json:"serializedTxn"`
+	DataToSign    string `json:"dataToSign"`
+	ChainId       string `json:"chainId"`
+	// GenesisHash    string `json:"genesisHash"`
 	KeyCurve       string `json:"keyCurve"`
 	Type           string `json:"type"`
 	Solver         string `json:"solver"`
@@ -222,6 +224,34 @@ func VerifySignature(
 		fmt.Printf("[VERIFY SUI_EDDSA] Verification result: %v\n", verified)
 		return verified, nil
 
+	} else if identityCurve == ALGORAND_CURVE {
+		// Decode the public key from the Algorand address (base32 encoded with checksum)
+		address, err := types.DecodeAddress(identity)
+		if err != nil {
+			return false, fmt.Errorf("invalid Algorand address: %v", err)
+		}
+
+		// Convert public key bytes to ed25519.PublicKey
+		pubKeyBytes := address[:]
+		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+		copy(pubKey, pubKeyBytes)
+
+		// Convert message to bytes
+		// msgBytes := []byte(message) ?
+		fmt.Println("verify message: ", message)
+		msgBytes, err := base64.StdEncoding.DecodeString(message)
+		if err != nil {
+			return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
+		}
+
+		// Decode signature from base64 (Algorand standard)
+		fmt.Println("verify signature: ", signature)
+		sigBytes, err := base64.StdEncoding.DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
+		}
+
+		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
 	} else if identityCurve == APTOS_EDDSA_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 
@@ -278,9 +308,10 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 
 	for _, operation := range intent.Operations {
 		operationForSigning := OperationForSigning{
-			SerializedTxn:  operation.SerializedTxn,
-			DataToSign:     operation.DataToSign,
-			ChainId:        operation.ChainId,
+			SerializedTxn: operation.SerializedTxn,
+			DataToSign:    operation.DataToSign,
+			ChainId:       operation.ChainId,
+			// GenesisHash:    operation.GenesisHash,
 			KeyCurve:       operation.KeyCurve,
 			Type:           operation.Type,
 			Solver:         operation.Solver,

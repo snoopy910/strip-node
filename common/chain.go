@@ -134,17 +134,17 @@ var Chains = []Chain{
 		TokenSymbol: "XLM",
 	},
 	{
-		ChainId:     "1003",
+		ChainId:     "1003", // Made up id for ripple mainnet
 		ChainType:   "ripple",
 		ChainUrl:    "wss://s1.ripple.com:51233",
-		KeyCurve:    "ecdsa",
+		KeyCurve:    "eddsa",
 		TokenSymbol: "XRP",
 	},
 	{
-		ChainId:     "1004",
+		ChainId:     "1004", // Made up id for ripple testnet
 		ChainType:   "ripple",
 		ChainUrl:    "wss://s.altnet.rippletest.net:51233",
-		KeyCurve:    "ecdsa",
+		KeyCurve:    "eddsa",
 		TokenSymbol: "XRP",
 	},
 }

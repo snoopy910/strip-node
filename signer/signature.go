@@ -135,7 +135,8 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 	} else if keyCurve == SECP256K1_CURVE {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
+		// msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
+		msg, _ := new(big.Int).SetString(string(hash), 16)
 		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}

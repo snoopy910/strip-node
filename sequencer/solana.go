@@ -122,7 +122,12 @@ type HeliusRequest struct {
 	Transactions []string `json:"transactions"`
 }
 
+// GetSolanaTransfers retrieves and parses transfer information from a Solana transaction
+// Uses Helius API for transaction data and native RPC for token metadata
+// Handles both native SOL transfers and SPL token transfers
 func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common.Transfer, error) {
+	// Configure Helius API URL based on chain ID
+	// Currently only supports devnet (chainId 901)
 	var url string
 	if chainId == "901" {
 		url = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
@@ -130,28 +135,33 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 		return nil, fmt.Errorf("unsupported chainId: %s", chainId)
 	}
 
+	// Get chain configuration for native token info and RPC URL
 	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return nil, err
 	}
 
+	// Prepare request body with transaction hash
 	requestBody := HeliusRequest{
 		Transactions: []string{txnHash},
 	}
 
+	// Marshal request to JSON
 	requestBodyBytes, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, err
 	}
 
+	// Create HTTP request to Helius API
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBodyBytes))
 	if err != nil {
 		return nil, err
 	}
 
+	// Set content type for JSON request
 	req.Header.Set("Content-Type", "application/json")
 
-	// Send the request
+	// Send request to Helius API
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -159,11 +169,13 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	}
 	defer resp.Body.Close()
 
+	// Read response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
+	// Parse Helius API response
 	var heliusResponse []HeliusResponse
 	err = json.Unmarshal(body, &heliusResponse)
 	if err != nil {
@@ -172,12 +184,15 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 
 	var transfers []common.Transfer
 
+	// Process each transaction in the response
 	for _, response := range heliusResponse {
+		// Handle native SOL transfers
 		for _, nativeTransfer := range response.NativeTransfers {
-
+			// Convert amount to big.Int and format with 9 decimals (SOL decimal places)
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", nativeTransfer.Amount), 10)
 			formattedAmount, _ := FormatUnits(num, 9)
 
+			// Create transfer record for native SOL
 			transfers = append(transfers, common.Transfer{
 				From:         nativeTransfer.FromUserAccount,
 				To:           nativeTransfer.ToUserAccount,
@@ -189,14 +204,19 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 			})
 		}
 
+		// Handle SPL token transfers
 		for _, tokenTransfer := range response.TokenTransfers {
+			// Skip non-fungible token transfers (e.g., NFTs)
 			if tokenTransfer.TokenStandard != "Fungible" {
 				continue
 			}
 
+			// Initialize RPC client for token metadata
 			c := rpc.New(chain.ChainUrl)
 
+			// Get token mint account address
 			accountAddress := solana.MustPublicKeyFromBase58(tokenTransfer.Mint)
+			// Fetch token mint account data for decimals
 			accountInfo, err := c.GetAccountInfo(context.Background(), accountAddress)
 
 			if err != nil {
@@ -205,6 +225,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 
 			spew.Dump(accountInfo)
 
+			// Decode mint account data to get token decimals
 			var mint token.Mint
 			// Account{}.Data.GetBinary() returns the *decoded* binary data
 			// regardless the original encoding (it can handle them all).
@@ -214,6 +235,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 			}
 			spew.Dump(mint)
 
+			// Format token amount using the correct number of decimals
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", tokenTransfer.TokenAmount), 10)
 			formattedAmount, err := FormatUnits(num, int(mint.Decimals))
 
@@ -221,6 +243,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 				return nil, err
 			}
 
+			// Create transfer record for SPL token
 			transfers = append(transfers, common.Transfer{
 				From:         tokenTransfer.FromUserAccount,
 				To:           tokenTransfer.ToUserAccount,

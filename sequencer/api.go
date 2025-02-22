@@ -7,7 +7,11 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/StripChain/strip-node/algorand"
+	"github.com/StripChain/strip-node/aptos"
+	"github.com/StripChain/strip-node/common"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
+	"github.com/StripChain/strip-node/stellar"
 )
 
 type Operation struct {
@@ -15,6 +19,7 @@ type Operation struct {
 	SerializedTxn    string `json:"serializedTxn"`
 	DataToSign       string `json:"dataToSign"`
 	ChainId          string `json:"chainId"`
+	GenesisHash      string `json:"genesisHash"`
 	KeyCurve         string `json:"keyCurve"`
 	Status           string `json:"status"`
 	Result           string `json:"result"`
@@ -57,6 +62,20 @@ const (
 	OPERATION_TYPE_SWAP           = "swap"
 	OPERATION_TYPE_BURN           = "burn"
 	OPERATION_TYPE_WITHDRAW       = "withdraw"
+)
+
+const (
+	GET_WALLET_ERROR              = "failed to get wallet"
+	CREATE_WALLET_ERROR           = "failed to create wallet"
+	ENCODE_ERROR                  = "failed to encode response"
+	DECODE_ERROR                  = "request decode error"
+	ADD_INTENT_ERROR              = "failed to add intent"
+	GET_INTENT_ERROR              = "failed to get intent"
+	GET_SOLVER_STATS_ERROR        = "failed to get solver stats"
+	GET_OPERATION_ERROR           = "failed to get operation"
+	OPERATION_NOT_COMPLETED_ERROR = "operation not completed"
+	GET_TRANSFERS_ERROR           = "failed to get transfers"
+	PARSE_INT_ERROR               = "int parsing error"
 )
 
 type CreateWalletRequest struct {
@@ -114,7 +133,9 @@ func startHTTPServer(port string) {
 	//   - identityCurve: The curve type for the identity
 	// Response:
 	//   - Success: "wallet already exists" if wallet exists
-	//   - Success: Empty response if wallet created
+	//   - Success: 201 if wallet created
+	//   - Error: 400 if identityCurve is invalid or identity is empty
+	//   - Error: 409 if wallet already exists
 	//   - Error: 500 with error message
 	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
@@ -125,27 +146,41 @@ func startHTTPServer(port string) {
 
 		_createWallet := false
 
-		_, err := GetWallet(identity, identityCurve)
+		if identity == "" {
+			http.Error(w, "identity required", http.StatusBadRequest)
+			return
+		}
+
+		curve, err := common.ParseCurve(identityCurve)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		_, err = GetWallet(identity, string(curve))
 		if err != nil {
 
 			if err.Error() == "pg: no rows in result set" {
 				_createWallet = true
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 				return
 			}
 		}
 
 		if !_createWallet {
+			w.WriteHeader(http.StatusConflict)
 			fmt.Fprintf(w, "wallet already exists")
 			return
 		}
 
 		err = createWallet(identity, identityCurve)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, CREATE_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
+
+		w.WriteHeader(http.StatusCreated)
 	})
 
 	// GetWallet endpoint - Retrieves wallet information
@@ -154,7 +189,9 @@ func startHTTPServer(port string) {
 	//   - identity: The unique identifier for the wallet
 	//   - identityCurve: The curve type for the identity
 	// Response:
-	//   - Success: JSON encoded wallet object
+	//   - Success: 200 JSON encoded wallet object
+	//   - Error: 400 if identityCurve is invalid or identity is empty
+	//   - Error: 404 if wallet not found
 	//   - Error: 500 with error message
 	http.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
@@ -162,17 +199,33 @@ func startHTTPServer(port string) {
 		identity := r.URL.Query().Get("identity")
 		identityCurve := r.URL.Query().Get("identityCurve")
 
-		wallet, err := GetWallet(identity, identityCurve)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if identity == "" {
+			http.Error(w, "identity required", http.StatusBadRequest)
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(wallet)
+		curve, err := common.ParseCurve(identityCurve)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		wallet, err := GetWallet(identity, string(curve))
+		if err != nil {
+			if err.Error() == "pg: no rows in result set" {
+				http.Error(w, "wallet not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(wallet); err != nil {
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 	})
 
 	// GetBridgeAddress endpoint - Retrieves the bridge contract wallet address
@@ -185,13 +238,13 @@ func startHTTPServer(port string) {
 
 		wallet, err := GetWallet(BridgeContractAddress, "ecdsa")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(wallet)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -204,6 +257,7 @@ func startHTTPServer(port string) {
 	//   - Error: 400 for invalid request body
 	//   - Error: 500 for processing errors
 	// Notes: Triggers async intent processing after creation
+	// TODO: Intent validation
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
@@ -216,14 +270,14 @@ func startHTTPServer(port string) {
 
 		err := json.NewDecoder(r.Body).Decode(&intent)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, DECODE_ERROR, http.StatusBadRequest)
 			return
 		}
 
 		id, err := AddIntent(&intent)
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ADD_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -243,17 +297,21 @@ func startHTTPServer(port string) {
 		enableCors(&w)
 
 		intentId := r.URL.Query().Get("id")
-		i, _ := strconv.ParseInt(intentId, 10, 64)
+		i, err := strconv.ParseInt(intentId, 10, 64)
+		if err != nil {
+			http.Error(w, PARSE_INT_ERROR, http.StatusInternalServerError)
+			return
+		}
 
 		intent, err := GetIntent(i)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(intent)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -277,7 +335,7 @@ func startHTTPServer(port string) {
 
 		intents, count, err := GetIntentsWithPagination(l, s)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -288,7 +346,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -314,7 +372,7 @@ func startHTTPServer(port string) {
 
 		intents, count, err := GetSolverIntents(solver, l, s)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -325,7 +383,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -351,7 +409,7 @@ func startHTTPServer(port string) {
 
 		intents, count, err := GetIntentsOfAddress(address, l, s)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -362,7 +420,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -390,7 +448,7 @@ func startHTTPServer(port string) {
 		)
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_SOLVER_STATS_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -402,7 +460,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(solverStatResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -424,7 +482,7 @@ func startHTTPServer(port string) {
 		)
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_SOLVER_STATS_ERROR, http.StatusInternalServerError)
 			return
 
 		}
@@ -432,7 +490,7 @@ func startHTTPServer(port string) {
 		totalIntents, err := GetTotalIntents()
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -443,7 +501,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(totalStats)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -467,25 +525,25 @@ func startHTTPServer(port string) {
 
 		operation, err := GetOperation(j, i)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_OPERATION_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		intent, err := GetIntent(j)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		if operation.Result == "" || operation.Status != OPERATION_STATUS_COMPLETED {
-			http.Error(w, "operation not completed", http.StatusInternalServerError)
+			http.Error(w, OPERATION_NOT_COMPLETED_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -493,26 +551,76 @@ func startHTTPServer(port string) {
 			transfers, err := GetEthereumTransfers(operation.ChainId, operation.Result, wallet.ECDSAPublicKey)
 
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
 				return
 			}
 
 			err = json.NewEncoder(w).Encode(transfers)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 				return
 			}
-		} else {
+		} else if operation.KeyCurve == "eddsa" {
 			transfers, err := GetSolanaTransfers(operation.ChainId, operation.Result, HeliusApiKey)
 
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
 				return
 			}
 
 			err = json.NewEncoder(w).Encode(transfers)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "aptos_eddsa" {
+			transfers, err := aptos.GetAptosTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "secp256k1" {
+			transfers, _, err := GetBitcoinTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "stellar_eddsa" {
+			transfers, err := stellar.GetStellarTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "algorand_eddsa" {
+			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 				return
 			}
 		}

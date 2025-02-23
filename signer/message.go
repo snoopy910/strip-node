@@ -113,7 +113,7 @@ func handleIncomingMessage(message []byte) {
 		case BITCOIN_CURVE:
 			// Bitcoin: Client sends string -> hash -> process -> encode to hex
 			// Channel key must match the hex encoded hash
-			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+			if val, ok := messageChan[string(msg.Hash)]; ok {
 				val <- msg
 			}
 		case APTOS_EDDSA_CURVE:

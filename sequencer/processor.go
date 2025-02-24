@@ -1164,6 +1164,8 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -1211,6 +1213,8 @@ func ProcessIntent(intentId int64) {
 							signature, err := getSignature(intent, i)
 							if err != nil {
 								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 

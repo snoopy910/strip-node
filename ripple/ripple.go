@@ -92,11 +92,6 @@ func GetRippleTransfers(chainId string, txHash string) ([]common.Transfer, error
 
 // SendRippleTransaction submits a signed XRP Ledger transaction to the network.
 func SendRippleTransaction(serializedTxn string, chainId string, keyCurve string, publicKey string, signatureHex string) (string, error) {
-	fmt.Printf("serializedTxn: %v\n", serializedTxn)
-	fmt.Printf("chainId: %v\n", chainId)
-	fmt.Printf("keyCurve: %v\n", keyCurve)
-	fmt.Printf("publicKey: %v\n", publicKey)
-	fmt.Printf("signatureHex: %v\n", signatureHex)
 	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", fmt.Errorf("error getting chain: %v", err)

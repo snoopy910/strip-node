@@ -80,6 +80,7 @@ func ProcessIntent(intentId int64) {
 
 		// now process the operations of the intent
 		for i, operation := range intent.Operations {
+			log.Printf("Operation: %v\n", operation)
 			if operation.Status == OPERATION_STATUS_COMPLETED || operation.Status == OPERATION_STATUS_FAILED {
 				continue
 			}
@@ -132,7 +133,18 @@ func ProcessIntent(intentId int64) {
 						var txnHash string
 
 						if chain.ChainType == "bitcoin" {
-							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							// Convert public key
+							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Printf("error getting public key: %v", err)
+								break
+							}
+							bitcoinAddress, err := readBitcoinAddress(wallet, operation.ChainId)
+							if err != nil {
+								fmt.Printf("error getting public key: %v", err)
+								break
+							}
+							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinAddress, signature)
 
 							if err != nil {
 								fmt.Println(err)
@@ -808,13 +820,13 @@ func ProcessIntent(intentId int64) {
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "bitcoin_ecdsa" {
-						bridgeWalletBitcoinAddress, err := ReadBitcoinAddress(bridgeWallet, withdrawalChain)
+						bridgeWalletBitcoinAddress, err := readBitcoinAddress(bridgeWallet, withdrawalChain.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
 
-						userBitcoinAddress, err := ReadBitcoinAddress(user, withdrawalChain)
+						userBitcoinAddress, err := readBitcoinAddress(user, withdrawalChain.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -1873,17 +1885,13 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	return hash.String(), nil
 }
 
-// ReadBitcoinAddress returns the appropriate Bitcoin public key based on the chain configuration
-func ReadBitcoinAddress(wallet *WalletSchema, chain common.Chain) (string, error) {
+// readBitcoinAddress returns the appropriate Bitcoin public key based on the chain configuration
+func readBitcoinAddress(wallet *WalletSchema, chainId string) (string, error) {
 	if wallet == nil {
 		return "", fmt.Errorf("wallet is nil")
 	}
 
-	if chain.ChainType != "bitcoin" {
-		return "", fmt.Errorf("invalid chain type: expected 'bitcoin', got '%s'", chain.ChainType)
-	}
-
-	switch chain.ChainId {
+	switch chainId {
 	case "1000": // Bitcoin mainnet
 		if wallet.BitcoinMainnetPublicKey == "" {
 			return "", fmt.Errorf("bitcoin mainnet public key not found in wallet")
@@ -1900,6 +1908,6 @@ func ReadBitcoinAddress(wallet *WalletSchema, chain common.Chain) (string, error
 		}
 		return wallet.BitcoinRegtestPublicKey, nil
 	default:
-		return "", fmt.Errorf("unsupported bitcoin chain ID: %s", chain.ChainId)
+		return "", fmt.Errorf("unsupported bitcoin chain ID: %s", chainId)
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 
 	"github.com/StripChain/strip-node/common"
@@ -121,12 +123,33 @@ func GetBitcoinTransfers(chainId string, txHash string) ([]common.Transfer, *Fee
 	return transfers, feeDetails, nil
 }
 
-func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
+func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, address string, signatureHex string) (string, error) {
+	log.Println("SendBitcoinTransaction", serializedTxn, chainId, keyCurve, dataToSign, address, signatureHex)
 	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
 	}
 	log.Println("rpcURL", chain.ChainUrl)
+
+	// Step 0: Decode address
+	// Parse the address into a scriptPubKey
+	var netParam *chaincfg.Params
+	if chain.ChainId == "1000" {
+		netParam = &chaincfg.MainNetParams
+	} else if chain.ChainId == "1001" {
+		netParam = &chaincfg.TestNet3Params
+	} else if chain.ChainId == "1002" {
+		netParam = &chaincfg.RegressionNetParams
+	} else {
+		return "", fmt.Errorf("unsupported bitcoin chain ID: %s", chain.ChainId)
+	}
+	decodedAddress, err := btcutil.DecodeAddress(address, netParam)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode address: %v", err)
+	}
+
+	// Create P2PKH scriptPubKey
+	publicKey := decodedAddress.ScriptAddress()
 
 	// Step 1: Decode the signature from hex
 	signature, err := hex.DecodeString(signatureHex)
@@ -141,15 +164,16 @@ func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 		return "", fmt.Errorf("error parsing transaction: %v", err)
 	}
 
-	// Step 3: Create proper signature script
+	// Step 3: Create proper signature script for the first input
 	if len(msgTx.TxIn) == 0 {
 		return "", fmt.Errorf("transaction has no inputs")
 	}
 
-	// Create a proper Bitcoin script that only contains push operations
+	// Use the txscript package to create the signature script
 	builder := txscript.NewScriptBuilder()
-	builder.AddData(signature)          // Push the signature
-	builder.AddData([]byte(dataToSign)) // Push the public key
+	builder.AddData(signature) // Push the signature to the script
+	builder.AddData(publicKey) // Push the public key to the script
+
 	signatureScript, err := builder.Script()
 	if err != nil {
 		return "", fmt.Errorf("error building signature script: %v", err)

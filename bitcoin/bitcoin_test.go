@@ -613,13 +613,13 @@ func TestBitcoinPsbtSerilizedTxn(t *testing.T) {
 }
 
 func TestSendBitcoinTransaction(t *testing.T) {
-	serializedTxn := "cHNidP8BAHQCAAAAAbzOlSXVYBO8x+11Btz6/aQStOQn7AcGl+MPj6wYWEyqAAAAAAD/////AugDAAAAAAAAFgAUSGWbePkEw7w7okG9RjjsaTwOKVskxJo7AAAAABl2qRT2cW9Eqq1ybINmC64ZyBJ+IgabJ4isAAAAAAABASIAypo7AAAAABl2qRT2cW9Eqq1ybINmC64ZyBJ+IgabJ4isAAAA"
+	serializedTxn := "cHNidP8BAHQCAAAAAVyEWOyxcswV29Myun4T+VmaEZnpFehv98477SwhO/fTAAAAAAD/////AugDAAAAAAAAFgAU25WSvxmGbKEaRRyHzOpjMIdneCskxJo7AAAAABl2qRTn/M5ydrEPV67CR28LNM3w4Z4JQYisAAAAAAABASIAypo7AAAAABl2qRTn/M5ydrEPV67CR28LNM3w4Z4JQYisAAAA"
 	chainId := "1002"
 	keyCurve := "bitcoin_ecdsa"
-	dataToSign := "7bb3a60651a0c7e5a39ac42d308bc6b35fa66cd799414f796c1145fd326292f4"
-	signatureHex := "d8949b22405f76ef5331cd6c0219b6b214e177ad8e92491904999ee5db2a150a2354612ca392ddebabf66c4fb79754ecf1c322ce047d28b6f89fa2ce677a8cdc01"
-
-	rlt, err := SendBitcoinTransaction(serializedTxn, chainId, keyCurve, dataToSign, signatureHex)
+	dataToSign := "005e04e1b287664afef826d309b4ff9da6ab115bc5dcc86bc3411bd67721f73a"
+	address := "n2fbEfa6gvUwwrHP23fxKtgGYjznn7JGPe"
+	signatureHex := "015c4b62ea6ba511ffaea6bae880593ea37dcab055403bd458b6f5c82716cc576b12e04e696a5bf546f6c5c308eadaa197345f2ce4ec3b0dc6f21fb19029281800"
+	rlt, err := SendBitcoinTransaction(serializedTxn, chainId, keyCurve, dataToSign, address, signatureHex)
 	if err != nil {
 		t.Fatal(err)
 	}

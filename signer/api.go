@@ -407,6 +407,7 @@ func startHTTPServer(port string) {
 		} else if keyCurve == BITCOIN_CURVE {
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
+			log.Println("signatureResponse", signatureResponse)
 		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))

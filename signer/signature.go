@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/StripChain/strip-node/ripple"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	ecdsaSigning "github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
@@ -153,7 +154,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
-	} else if keyCurve == STELLAR_CURVE {
+	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := new(big.Int).SetBytes(hash)
 
@@ -347,7 +348,19 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				}
 
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				go broadcast(message)
+			} else if keyCurve == RIPPLE_CURVE {
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       ripple.PublicKeyToAddress(rawKeyEddsa),
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
 
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 				go broadcast(message)
 			} else {
 				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)

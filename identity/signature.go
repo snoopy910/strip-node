@@ -28,7 +28,7 @@ var (
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	SECP256K1_CURVE   = "secp256k1"
 	STELLAR_CURVE     = "stellar_eddsa"
-        ALGORAND_CURVE    = "algorand_eddsa"
+	ALGORAND_CURVE    = "algorand_eddsa"
 )
 
 type OperationForSigning struct {
@@ -183,19 +183,31 @@ func VerifySignature(
 
 		// Convert message to bytes
 		// msgBytes := []byte(message) ?
-		fmt.Println("verify message: ", message)
-		msgBytes, err := base64.StdEncoding.DecodeString(message)
-		if err != nil {
-			return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
-		}
 
+		fmt.Println("verify message: ", message)
+		var msgBytes []byte
+		var js map[string]interface{}
+		// Unmarshal the string into the map. If no error, it's valid JSON.
+		err = json.Unmarshal([]byte(message), &js)
+		if err == nil {
+			prefix := []byte("MX")
+			messageBytes := []byte(message)
+			msgBytes = append(prefix, messageBytes...)
+		} else {
+			msgBytes, err = base64.StdEncoding.DecodeString(message)
+			fmt.Println("verify message algorand bytes: ", message)
+			if err != nil {
+				return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
+			}
+		}
 		// Decode signature from base64 (Algorand standard)
 		fmt.Println("verify signature: ", signature)
 		sigBytes, err := base64.StdEncoding.DecodeString(signature)
 		if err != nil {
 			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
 		}
-
+		verified := ed25519.Verify(pubKey, msgBytes, sigBytes)
+		fmt.Println("verified signature algorand: ", verified)
 		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
 	} else if identityCurve == APTOS_EDDSA_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")

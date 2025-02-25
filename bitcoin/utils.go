@@ -6,14 +6,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"regexp"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 type BitcoinNetworkConfig struct {
@@ -113,6 +116,42 @@ func HashToSign(serializedTxn string) (string, error) {
 	}
 	hashToSignHex := hex.EncodeToString(hashToSign)
 	return hashToSignHex, nil
+}
+
+func PublicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
+	log.Println("pubkey", pubkey) // NOTE: don't remove this log
+	mainnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.MainNetParams)
+	if err != nil {
+		return "", "", ""
+	}
+	fmt.Println("mainnetPubkey: ", mainnetPubkey)
+
+	testnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.TestNet3Params)
+	if err != nil {
+		return mainnetPubkey.EncodeAddress(), "", ""
+	}
+	fmt.Println("testnetPubkey: ", testnetPubkey)
+
+	regtestPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.RegressionNetParams)
+	if err != nil {
+		return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), ""
+	}
+	fmt.Println("regtestPubkey: ", regtestPubkey)
+
+	return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), regtestPubkey.EncodeAddress()
+}
+
+// Convert uncompressed public key to compressed public key
+func ConvertToCompressedPublicKey(uncompressedPubKey string) (string, error) {
+	uncompressedBytes, _ := hex.DecodeString(uncompressedPubKey)
+
+	// Parse the uncompressed key
+	pubKey, err := secp256k1.ParsePubKey(uncompressedBytes)
+	if err != nil {
+		return "", err
+	}
+	compressedBytes := pubKey.SerializeCompressed()
+	return hex.EncodeToString(compressedBytes), nil
 }
 
 // fetchTransaction fetches transaction details from BlockCypher
@@ -289,4 +328,10 @@ func formatUnits(value *big.Int, decimals int) (string, error) {
 
 	// Convert the result to a string with the appropriate precision
 	return result.Text('f', decimals), nil
+}
+
+// Check if the Y coordinate is even
+func isEven(y []byte) bool {
+	// The least significant byte of the Y coordinate determines parity
+	return y[len(y)-1]%2 == 0
 }

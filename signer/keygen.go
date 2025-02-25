@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StripChain/strip-node/bitcoin"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -273,7 +274,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			y := toHexInt(save.ECDSAPub.Y())
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-			bitcoinAddressStr, _, _ := publicKeyToBitcoinAddresses(publicKeyBytes)
+			bitcoinAddressStr, _, _ := bitcoin.PublicKeyToBitcoinAddresses(publicKeyBytes)
 
 			fmt.Println("new TSS Address (BTC) is: ", bitcoinAddressStr)
 

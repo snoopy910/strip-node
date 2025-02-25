@@ -124,27 +124,15 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						signature, err := getSignature(intent, i)
-						if err != nil {
-							fmt.Printf("error getting signature: %+v\n", err)
-							break
-						}
-
 						var txnHash string
 
 						if chain.ChainType == "bitcoin" {
-							// Convert public key
-							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							signature, bitcoinPubkey, err := getSignatureEx(intent, i)
 							if err != nil {
-								fmt.Printf("error getting public key: %v", err)
+								fmt.Printf("error getting signature: %+v\n", err)
 								break
 							}
-							bitcoinAddress, err := readBitcoinAddress(wallet, operation.ChainId)
-							if err != nil {
-								fmt.Printf("error getting public key: %v", err)
-								break
-							}
-							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinAddress, signature)
+							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinPubkey, signature)
 
 							if err != nil {
 								fmt.Println(err)
@@ -153,6 +141,12 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						} else {
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Printf("error getting signature: %+v\n", err)
+								break
+							}
+
 							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 							// @TODO: For our infra errors, don't mark the intent and operation as failed
@@ -1689,10 +1683,18 @@ type SignatureResponse struct {
 }
 
 func getSignature(intent *Intent, operationIndex int) (string, error) {
+	signature, _, err := getSignatureEx(intent, operationIndex)
+	if err != nil {
+		return "", err
+	}
+	return signature, nil
+}
+
+func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) {
 	// get wallet
 	wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// get the signer
@@ -1700,12 +1702,12 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	signer, err := GetSigner(signers[0])
 
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	intentBytes, err := json.Marshal(intent)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
@@ -1714,7 +1716,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 
 	if err != nil {
 		fmt.Printf("error creating request: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1723,7 +1725,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 
 	if err != nil {
 		fmt.Printf("error sending request: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
 	defer resp.Body.Close()
@@ -1731,17 +1733,17 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("error reading response body: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
 	var signatureResponse SignatureResponse
 	err = json.Unmarshal(body, &signatureResponse)
 	if err != nil {
 		fmt.Printf("error unmarshalling response body: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
-	return signatureResponse.Signature, nil
+	return signatureResponse.Signature, signatureResponse.Address, nil
 }
 
 func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) {

@@ -16,6 +16,7 @@ import (
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/stellar/go/strkey"
 
+	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/solver"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
@@ -145,7 +146,7 @@ func startHTTPServer(port string) {
 
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-			mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
+			mainnetAddress, testnetAddress, regtestAddress := bitcoin.PublicKeyToBitcoinAddresses(publicKeyBytes)
 
 			getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
 				MainnetAddress: mainnetAddress,

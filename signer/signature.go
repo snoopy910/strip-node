@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"time"
 
+	"github.com/StripChain/strip-node/bitcoin"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	ecdsaSigning "github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
@@ -238,7 +240,14 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 			} else if keyCurve == BITCOIN_CURVE {
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
-				publicKeyStr := "04" + x + y
+				uncompressedPubKeyStr := "04" + x + y
+				log.Println("Uncompressed public key:", uncompressedPubKeyStr)
+				compressedPubKeyStr, err := bitcoin.ConvertToCompressedPublicKey(uncompressedPubKeyStr)
+				if err != nil {
+					fmt.Println("Error converting to compressed public key:", err)
+					return
+				}
+				log.Println("Compressed public key:", compressedPubKeyStr)
 
 				final := hex.EncodeToString(save.Signature)
 
@@ -246,7 +255,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Type:          MESSAGE_TYPE_SIGNATURE,
 					Hash:          hash,
 					Message:       []byte(final),
-					Address:       publicKeyStr, // we pass the public key in string format, hex string with length 130 starts with 04
+					Address:       compressedPubKeyStr, // we pass the public key in string format, hex string with length 130 starts with 04
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

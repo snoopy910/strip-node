@@ -399,7 +399,7 @@ func startHTTPServer(port string) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		signatureResponse := SignatureReponse{}
+		signatureResponse := SignatureResponse{}
 
 		if keyCurve == ECDSA_CURVE {
 			signatureResponse.Signature = string(sig.Message)
@@ -437,7 +437,7 @@ func startHTTPServer(port string) {
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
 }
 
-type SignatureReponse struct {
+type SignatureResponse struct {
 	Signature string `json:"signature"`
 	Address   string `json:"address"`
 }

@@ -3,6 +3,7 @@ package bitcoin
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -93,6 +95,24 @@ type FeeDetails struct {
 	FormattedFee string `json:"formattedFee"` // Fee amount formatted in BTC
 	TotalInputs  int64  `json:"totalInputs"`  // Total input value in satoshis
 	TotalOutputs int64  `json:"totalOutputs"` // Total output value in satoshis
+}
+
+func HashToSign(serializedTxn string) (string, error) {
+	msgTx, err := parseSerializedTransaction(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("error parsing transaction: %v", err)
+	}
+
+	txBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("error decoding transaction: %v", err)
+	}
+	hashToSign, err := txscript.CalcSignatureHash(txBytes, txscript.SigHashAll, msgTx, 0)
+	if err != nil {
+		return "", fmt.Errorf("error calculating hash to sign: %v", err)
+	}
+	hashToSignHex := hex.EncodeToString(hashToSign)
+	return hashToSignHex, nil
 }
 
 // fetchTransaction fetches transaction details from BlockCypher

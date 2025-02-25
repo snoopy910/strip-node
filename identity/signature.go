@@ -147,14 +147,46 @@ func VerifySignature(
 			return false, fmt.Errorf("failed to decode signature: %v", err)
 		}
 
-		// The signature should be exactly 64 bytes (32 bytes for r, 32 bytes for s)
-		if len(sigBytes) != 64 {
-			return false, errors.New("signature must be 64 bytes long")
-		}
+		var r, s *big.Int
 
-		// Extract r and s values
-		r := new(big.Int).SetBytes(sigBytes[:32])
-		s := new(big.Int).SetBytes(sigBytes[32:64])
+		// Handle different signature formats
+		switch len(sigBytes) {
+		case 64: // Compact format: [R (32 bytes) | S (32 bytes)]
+			r = new(big.Int).SetBytes(sigBytes[:32])
+			s = new(big.Int).SetBytes(sigBytes[32:])
+		case 65: // Compact format with recovery ID: [R (32 bytes) | S (32 bytes) | V (1 byte)]
+			r = new(big.Int).SetBytes(sigBytes[:32])
+			s = new(big.Int).SetBytes(sigBytes[32:64])
+			// v := sigBytes[64] // recovery ID (0-3), not needed for verification
+		default:
+			// Try to parse as DER format
+			if len(sigBytes) < 8 || len(sigBytes) > 72 || sigBytes[0] != 0x30 {
+				return false, errors.New("invalid signature format: must be 64/65 bytes compact or DER format")
+			}
+
+			// Parse DER format
+			// DER format: 0x30 [total-length] 0x02 [r-length] [r] 0x02 [s-length] [s]
+			var offset int = 2 // Skip 0x30 and total-length
+
+			// Extract R value
+			if sigBytes[offset] != 0x02 {
+				return false, errors.New("invalid DER signature format: missing R marker")
+			}
+			offset++
+			rLen := int(sigBytes[offset])
+			offset++
+			r = new(big.Int).SetBytes(sigBytes[offset : offset+rLen])
+			offset += rLen
+
+			// Extract S value
+			if sigBytes[offset] != 0x02 {
+				return false, errors.New("invalid DER signature format: missing S marker")
+			}
+			offset++
+			sLen := int(sigBytes[offset])
+			offset++
+			s = new(big.Int).SetBytes(sigBytes[offset : offset+sLen])
+		}
 
 		// Hash the message using double SHA-256 (as required by Bitcoin)
 		firstHash := sha256.Sum256([]byte(message))

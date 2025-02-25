@@ -239,16 +239,14 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y
-				publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-				address, _, _ := publicKeyToBitcoinAddresses(publicKeyBytes)
 
-				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
+				final := hex.EncodeToString(save.Signature)
 
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,
 					Hash:          hash,
 					Message:       []byte(final),
-					Address:       address,
+					Address:       publicKeyStr, // we pass the public key in string format, hex string with length 130 starts with 04
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

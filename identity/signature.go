@@ -188,7 +188,8 @@ func VerifySignature(
 		var msgBytes []byte
 		var js map[string]interface{}
 		// Unmarshal the string into the map. If no error, it's valid JSON.
-		if json.Unmarshal([]byte(message), &js) == nil {
+		err = json.Unmarshal([]byte(message), &js)
+		if err == nil {
 			prefix := []byte("MX")
 			messageBytes := []byte(message)
 			msgBytes = append(prefix, messageBytes...)

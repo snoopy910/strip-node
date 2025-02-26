@@ -2,7 +2,6 @@ package bitcoin
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"regexp"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -106,16 +106,20 @@ func HashToSign(serializedTxn string) (string, error) {
 		return "", fmt.Errorf("error parsing transaction: %v", err)
 	}
 
-	txBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
+	// Set the SIGHASH type (we'll use SIGHASH_ALL here as an example)
+	sighashType := txscript.SigHashAll
+
+	// Generate the dataToSign using txscript
+	dataToSign, err := txscript.CalcSignatureHash(msgTx.TxIn[0].SignatureScript, sighashType, msgTx, 0)
 	if err != nil {
-		return "", fmt.Errorf("error decoding transaction: %v", err)
+		log.Fatal("Error creating signature hash: ", err)
 	}
-	hashToSign, err := txscript.CalcSignatureHash(txBytes, txscript.SigHashAll, msgTx, 0)
-	if err != nil {
-		return "", fmt.Errorf("error calculating hash to sign: %v", err)
-	}
-	hashToSignHex := hex.EncodeToString(hashToSign)
-	return hashToSignHex, nil
+	dataToSign2 := msgTx.TxHash().String()
+	log.Println("dataToSign", dataToSign2)
+
+	// Convert the dataToSign (SIGHASH) to hex for further use in the signing process
+	dataToSignHex := hex.EncodeToString(dataToSign)
+	return dataToSignHex, nil
 }
 
 func PublicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
@@ -236,10 +240,9 @@ func isValidBitcoinAddress(address string) bool {
 // If the input is a PSBT, it extracts the unsigned transaction from the global map.
 // If the input is a raw transaction, it deserializes it directly.
 func parseSerializedTransaction(serializedTxn string) (*wire.MsgTx, error) {
-	// Decode base64 transaction
-	txBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
+	txBytes, err := hex.DecodeString(serializedTxn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode base64 transaction: %v", err)
+		return nil, fmt.Errorf("failed to decode hex transaction: %v", err)
 	}
 
 	// Check if this is a PSBT by looking for magic bytes
@@ -330,8 +333,64 @@ func formatUnits(value *big.Int, decimals int) (string, error) {
 	return result.Text('f', decimals), nil
 }
 
-// Check if the Y coordinate is even
-func isEven(y []byte) bool {
-	// The least significant byte of the Y coordinate determines parity
-	return y[len(y)-1]%2 == 0
+func derEncode(signature string) (string, error) {
+	// Decode hex signature
+	sigBytes, err := hex.DecodeString(signature)
+	if err != nil {
+		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+
+	if len(sigBytes) != 64 {
+		return "", fmt.Errorf("invalid signature length: expected 64 bytes, got %d", len(sigBytes))
+	}
+
+	// Split into r and s components (32 bytes each)
+	r := new(big.Int).SetBytes(sigBytes[:32])
+	s := new(big.Int).SetBytes(sigBytes[32:])
+
+	// Get curve parameters
+	curve := btcec.S256()
+	halfOrder := new(big.Int).Rsh(curve.N, 1)
+
+	// Normalize S value to be in the lower half of the curve
+	if s.Cmp(halfOrder) > 0 {
+		s = new(big.Int).Sub(curve.N, s)
+	}
+
+	// Convert r and s to bytes, removing leading zeros
+	rBytes := r.Bytes()
+	sBytes := s.Bytes()
+
+	// Add 0x00 prefix if the highest bit is set (to ensure positive number)
+	if rBytes[0]&0x80 == 0x80 {
+		rBytes = append([]byte{0x00}, rBytes...)
+	}
+	if sBytes[0]&0x80 == 0x80 {
+		sBytes = append([]byte{0x00}, sBytes...)
+	}
+
+	// Calculate lengths
+	rLen := len(rBytes)
+	sLen := len(sBytes)
+	totalLen := rLen + sLen + 4 // 4 additional bytes for DER sequence
+
+	// Create DER signature
+	derSig := make([]byte, 0, totalLen+1)   // +1 for sighash type
+	derSig = append(derSig, 0x30)           // sequence tag
+	derSig = append(derSig, byte(totalLen)) // length of sequence
+
+	// Encode R value
+	derSig = append(derSig, 0x02) // integer tag
+	derSig = append(derSig, byte(rLen))
+	derSig = append(derSig, rBytes...)
+
+	// Encode S value
+	derSig = append(derSig, 0x02) // integer tag
+	derSig = append(derSig, byte(sLen))
+	derSig = append(derSig, sBytes...)
+
+	// Add SIGHASH_ALL
+	derSig = append(derSig, 0x01)
+
+	return hex.EncodeToString(derSig), nil
 }

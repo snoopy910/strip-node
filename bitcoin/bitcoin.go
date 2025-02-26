@@ -11,7 +11,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 
 	"github.com/StripChain/strip-node/common"
 )
@@ -151,34 +151,32 @@ func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 	// Create P2PKH scriptPubKey
 	publicKey := decodedAddress.ScriptAddress()
 
-	// Step 1: Decode the signature from hex
-	signature, err := hex.DecodeString(signatureHex)
-	if err != nil {
-		return "", fmt.Errorf("error decoding signature: %v", err)
-	}
-	log.Println("Decoded signature length:", len(signature))
-
-	// Step 2: Parse the serialized transaction
+	// Step 1: Parse the transaction first
 	msgTx, err := parseSerializedTransaction(serializedTxn)
 	if err != nil {
 		return "", fmt.Errorf("error parsing transaction: %v", err)
 	}
 
-	// Step 3: Create proper signature script for the first input
-	if len(msgTx.TxIn) == 0 {
-		return "", fmt.Errorf("transaction has no inputs")
-	}
-
-	// Use the txscript package to create the signature script
-	builder := txscript.NewScriptBuilder()
-	builder.AddData(signature) // Push the signature to the script
-	builder.AddData(publicKey) // Push the public key to the script
-
-	signatureScript, err := builder.Script()
+	// Step 2: Create DER signature
+	derSignatureHex, err := derEncode(signatureHex)
 	if err != nil {
-		return "", fmt.Errorf("error building signature script: %v", err)
+		return "", fmt.Errorf("error encoding signature: %v", err)
 	}
-	msgTx.TxIn[0].SignatureScript = signatureScript
+	log.Println("DER signature:", derSignatureHex)
+	derSignature, err := hex.DecodeString(derSignatureHex)
+	if err != nil {
+		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+
+	// Step 3: Create witness data
+	witness := make(wire.TxWitness, 2)
+	// The DER signature already includes SIGHASH_ALL from derEncode
+	witness[0] = derSignature
+	witness[1] = publicKey
+	msgTx.TxIn[0].Witness = witness
+
+	// Empty the signature script for witness transactions
+	msgTx.TxIn[0].SignatureScript = []byte{}
 
 	// Step 4: Serialize the signed transaction
 	var signedTxBuffer bytes.Buffer
@@ -186,6 +184,91 @@ func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 		return "", fmt.Errorf("error serializing signed transaction: %v", err)
 	}
 	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
+	log.Println("Signed transaction hex:", signedTxHex)
+
+	// Step 5: Prepare and send RPC request
+	rpcRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "sendrawtransaction",
+		"params":  []interface{}{signedTxHex},
+	}
+
+	jsonData, err := json.Marshal(rpcRequest)
+	if err != nil {
+		return "", fmt.Errorf("error marshaling RPC request: %v", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", chain.ChainUrl, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("error creating HTTP request: %v", err)
+	}
+
+	// Add headers
+	req.Header.Set("Content-Type", "application/json")
+	if chainId == "1002" {
+		req.SetBasicAuth("your_rpc_user", "your_rpc_password")
+	}
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending transaction: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read and parse response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %v", err)
+	}
+
+	var rpcResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(body, &rpcResponse); err != nil {
+		return "", fmt.Errorf("error parsing response: %v", err)
+	}
+
+	// Check for RPC error
+	if rpcResponse.Error != nil {
+		return "", fmt.Errorf("RPC error %d: %s", rpcResponse.Error.Code, rpcResponse.Error.Message)
+	}
+
+	return rpcResponse.Result, nil
+}
+
+func CheckBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	txn, err := fetchTransaction(chain.ChainUrl, txnHash)
+	if err != nil {
+		return false, err
+	}
+
+	// Assuming a transaction is confirmed if it has at least 3 confirmations
+	if txn != nil && txn.Confirmations >= 3 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func sendSignedBitcoinTransaction(signedTxHex string) (string, error) {
+	chain, err := common.GetChain("1002")
+	if err != nil {
+		return "", err
+	}
 
 	// Step 5: Prepare and send RPC request
 	rpcRequest := map[string]interface{}{
@@ -242,23 +325,4 @@ func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 	}
 
 	return rpcResponse.Result, nil
-}
-
-func CheckBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return false, err
-	}
-
-	txn, err := fetchTransaction(chain.ChainUrl, txnHash)
-	if err != nil {
-		return false, err
-	}
-
-	// Assuming a transaction is confirmed if it has at least 3 confirmations
-	if txn != nil && txn.Confirmations >= 3 {
-		return true, nil
-	}
-
-	return false, nil
 }

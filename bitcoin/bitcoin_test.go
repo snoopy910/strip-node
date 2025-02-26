@@ -1,7 +1,6 @@
 package bitcoin
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -584,44 +583,31 @@ func TestIsValidBitcoinAddress(t *testing.T) {
 	})
 }
 
-func TestBitcoinPsbtSerilizedTxn(t *testing.T) {
-	serializedTxn := "cHNidP8BAHQCAAAAAQrNIZka3cgdzRlhZXX1YwG5zwZCdmtwg/M3eiBjuJJHAAAAAAD/////AmQAAAAAAAAAFgAUhHfs0h8qvtrZ9eCDwcAAk7NR8j2SyZo7AAAAABl2qRTupX02brO38k+CEHq86KDosx1PUoisAAAAAAABASIAypo7AAAAABl2qRTupX02brO38k+CEHq86KDosx1PUoisAAAA"
-
-	unsignedTx, err := parseSerializedTransaction(serializedTxn)
-	require.NoError(t, err)
-	require.NotNil(t, unsignedTx)
-
-	// Verify transaction details
-	require.Equal(t, 2, int(unsignedTx.Version))
-	require.Equal(t, 1, len(unsignedTx.TxIn))
-	require.Equal(t, 2, len(unsignedTx.TxOut))
-
-	// Verify input details
-	txIn := unsignedTx.TxIn[0]
-	require.Equal(t, "4792b863207a37f383706b764206cfb90163f575656119cd1dc8dd1a9921cd0a", txIn.PreviousOutPoint.Hash.String())
-	require.Equal(t, uint32(0), txIn.PreviousOutPoint.Index)
-	require.Equal(t, uint32(4294967295), txIn.Sequence)
-
-	// Verify output details
-	require.Equal(t, int64(100), unsignedTx.TxOut[0].Value)
-	require.Equal(t, 22, len(unsignedTx.TxOut[0].PkScript))
-	require.Equal(t, "00148477ecd21f2abedad9f5e083c1c00093b351f23d", hex.EncodeToString(unsignedTx.TxOut[0].PkScript))
-
-	require.Equal(t, int64(999999890), unsignedTx.TxOut[1].Value)
-	require.Equal(t, 25, len(unsignedTx.TxOut[1].PkScript))
-	require.Equal(t, "76a914eea57d366eb3b7f24f82107abce8a0e8b31d4f5288ac", hex.EncodeToString(unsignedTx.TxOut[1].PkScript))
-}
-
 func TestSendBitcoinTransaction(t *testing.T) {
-	serializedTxn := "cHNidP8BAHQCAAAAAVyEWOyxcswV29Myun4T+VmaEZnpFehv98477SwhO/fTAAAAAAD/////AugDAAAAAAAAFgAU25WSvxmGbKEaRRyHzOpjMIdneCskxJo7AAAAABl2qRTn/M5ydrEPV67CR28LNM3w4Z4JQYisAAAAAAABASIAypo7AAAAABl2qRTn/M5ydrEPV67CR28LNM3w4Z4JQYisAAAA"
+	serializedTxn := "010000000146f7914b0b30e98e0ddb882a92a9f601325cec007bd3298b16280553405d89450000000000ffffffff0210270000000000001600146531028e213cad9c43a0f93a4ad746676fa62c19fca09a3b000000001976a914d9c3f1feec2ccb6a35dc4b1136ec35a77b8f958888ac00000000"
 	chainId := "1002"
 	keyCurve := "bitcoin_ecdsa"
-	dataToSign := "005e04e1b287664afef826d309b4ff9da6ab115bc5dcc86bc3411bd67721f73a"
-	address := "n2fbEfa6gvUwwrHP23fxKtgGYjznn7JGPe"
-	signatureHex := "015c4b62ea6ba511ffaea6bae880593ea37dcab055403bd458b6f5c82716cc576b12e04e696a5bf546f6c5c308eadaa197345f2ce4ec3b0dc6f21fb19029281800"
+	dataToSign := "1d75ba8f40fdc1cbf9c76ab15547674154b4a33217ecafd5d39dad65f94500d8"
+	address := "034a0e3c27a379e6a095c4b348704aae398e109800fa05e051b6c33fec9b103a74"
+	signatureHex := "0fb6dd446e45f929a07d6e6a10a333303888d37a0df54fdfbd263f16ce6d510749413d706df56568aa99cec523178ae65dec439d6373c40faca6c5795aa186a4"
+
 	rlt, err := SendBitcoinTransaction(serializedTxn, chainId, keyCurve, dataToSign, address, signatureHex)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(rlt)
+}
+
+func TestDerEncode(t *testing.T) {
+	signatureHex := "4e48cf9a2f08be3e29a29b66c56a079535f09b0a4d22a05eecc85bc65a6a5c987a15b6e7f942f8b4b0a3ac09a3f5da0ed5d8687b4f2ac47cfe3cd170b01e98ab"
+	expected := "304402204e48cf9a2f08be3e29a29b66c56a079535f09b0a4d22a05eecc85bc65a6a5c9802207a15b6e7f942f8b4b0a3ac09a3f5da0ed5d8687b4f2ac47cfe3cd170b01e98ab01"
+
+	encoded, err := derEncode(signatureHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if encoded != expected {
+		t.Errorf("DER encoding mismatch:\nwant: %s\ngot:  %s", expected, encoded)
+	}
 }

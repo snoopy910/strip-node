@@ -50,13 +50,14 @@ type WalletSchema struct {
 	ECDSAPublicKey           string `json:"ecdsaPublicKey"`
 	BitcoinMainnetPublicKey  string `json:"bitcoinMainnetPublicKey"`
 	BitcoinTestnetPublicKey  string `json:"bitcoinTestnetPublicKey"`
-	DogecoinMainnetPublicKey string `json:"dogecoinMainnetPublicKey"`
-	DogecoinTestnetPublicKey string `json:"dogecoinTestnetPublicKey"`
 	BitcoinRegtestPublicKey  string `json:"bitcoinRegtestPublicKey"`
-	SuiPublicKey             string `json:"suiPublicKey"`
-	Signers                  string `json:"signers"`
 	StellarPublicKey         string `json:"stellarPublicKey"`
+	DogecoinMainnetPublicKey string `json:"dogecoinMainnetAddress"`
+	DogecoinTestnetPublicKey string `json:"dogecoinTestnetAddress"`
+	SuiPublicKey             string `json:"suiAddress"`
 	AlgorandEDDSAPublicKey   string `json:"algorandEddsaPublicKey"`
+	RippleEDDSAPublicKey     string `json:"rippleEddsaPublicKey"`
+	Signers                  string `json:"signers"`
 }
 
 type LockSchema struct {

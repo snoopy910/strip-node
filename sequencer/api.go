@@ -11,6 +11,7 @@ import (
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
+	"github.com/StripChain/strip-node/ripple"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
@@ -64,6 +65,7 @@ const (
 	OPERATION_TYPE_SWAP           = "swap"
 	OPERATION_TYPE_BURN           = "burn"
 	OPERATION_TYPE_WITHDRAW       = "withdraw"
+	OPERATION_TYPE_SEND_TO_BRIDGE = "sendToBridge"
 )
 
 const (
@@ -650,6 +652,20 @@ func startHTTPServer(port string) {
 			}
 		} else if operation.KeyCurve == "algorand_eddsa" {
 			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "ripple_eddsa" {
+			transfers, err := ripple.GetRippleTransfers(operation.ChainId, operation.Result)
+
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
 				return

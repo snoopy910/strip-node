@@ -50,8 +50,9 @@ func byte32(s []byte) (a *[32]byte) {
 type Curve string
 
 const (
-	CurveEddsa Curve = "eddsa"
-	CurveEcdsa Curve = "ecdsa"
+	CurveEddsa    Curve = "eddsa"
+	CurveEcdsa    Curve = "ecdsa"
+	CurveAlgorand Curve = "algorand_eddsa"
 )
 
 func ParseCurve(curve string) (Curve, error) {
@@ -60,6 +61,8 @@ func ParseCurve(curve string) (Curve, error) {
 		return CurveEddsa, nil
 	case "ecdsa":
 		return CurveEcdsa, nil
+	case "algorand_eddsa":
+		return CurveAlgorand, nil
 	default:
 		return "", fmt.Errorf("invalid curve")
 	}

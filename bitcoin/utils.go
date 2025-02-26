@@ -12,6 +12,7 @@ import (
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -156,6 +157,37 @@ func ConvertToCompressedPublicKey(uncompressedPubKey string) (string, error) {
 	}
 	compressedBytes := pubKey.SerializeCompressed()
 	return hex.EncodeToString(compressedBytes), nil
+}
+
+func VerifyECDSASignature(messageHashHex, signatureHex, pubKeyHex string) bool {
+	// Decode message hash
+	messageHash, err := hex.DecodeString(messageHashHex)
+	if err != nil {
+		log.Fatal("Invalid message hash:", err)
+	}
+
+	// Decode public key
+	pubKeyBytes, err := hex.DecodeString(pubKeyHex)
+	if err != nil {
+		log.Fatal("Invalid public key:", err)
+	}
+	pubKey, err := btcec.ParsePubKey(pubKeyBytes)
+	if err != nil {
+		log.Fatal("Failed to parse public key:", err)
+	}
+
+	// Decode signature
+	sigBytes, err := hex.DecodeString(signatureHex)
+	if err != nil {
+		log.Fatal("Invalid signature:", err)
+	}
+	signature, err := ecdsa.ParseSignature(sigBytes)
+	if err != nil {
+		log.Fatal("Failed to parse signature:", err)
+	}
+
+	// Verify the signature
+	return signature.Verify(messageHash, pubKey)
 }
 
 // fetchTransaction fetches transaction details from BlockCypher

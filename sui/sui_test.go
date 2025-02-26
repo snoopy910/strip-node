@@ -17,14 +17,14 @@ func TestCheckSuiTransactionConfirmed(t *testing.T) {
 	}{
 		{
 			name:    "Valid transaction",
-			chainId: "3002",
-			txHash:  "9K4ab1uerCaTbSBfF2GANgV5nQcTSQn2oCntPvxkSiGL",
+			chainId: "3001",
+			txHash:  "EydNT1W9iyQ8jzXqTAxN2MwgaVcqruxfxwr6jjK1rTcD",
 			want:    true,
 			wantErr: false,
 		},
 		{
 			name:    "Invalid transaction hash",
-			chainId: "3002",
+			chainId: "3001",
 			txHash:  "invalid",
 			want:    false,
 			wantErr: true,
@@ -53,13 +53,13 @@ func TestGetSuiTransfersError(t *testing.T) {
 	}{
 		{
 			Name:        "Valid sui transfer",
-			ChainID:     "3002",
-			TxHash:      "9K4ab1uerCaTbSBfF2GANgV5nQcTSQn2oCntPvxkSiGL",
+			ChainID:     "3001",
+			TxHash:      "EydNT1W9iyQ8jzXqTAxN2MwgaVcqruxfxwr6jjK1rTcD",
 			ExpectError: false,
 		},
 		{
 			Name:        "Empty TxHash",
-			ChainID:     "11",
+			ChainID:     "3001",
 			TxHash:      "",
 			ExpectError: true,
 		},

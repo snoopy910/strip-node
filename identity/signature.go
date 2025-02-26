@@ -16,6 +16,7 @@ import (
 
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/algorand/go-algorand-sdk/types"
+	"github.com/algorand/go-algorand-sdk/encoding/msgpack"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -177,39 +178,39 @@ func VerifySignature(
 			return false, fmt.Errorf("invalid Algorand address: %v", err)
 		}
 
-		// Convert public key bytes to ed25519.PublicKey
 		pubKeyBytes := address[:]
 		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
 		copy(pubKey, pubKeyBytes)
 
-		// Convert message to bytes
-		// msgBytes := []byte(message) ?
+		// Decode the signed dummy transaction from base64 signature parameter
+		stxBytes, err := base64.StdEncoding.DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("invalid Algorand signed transaction encoding: %v", err)
+		}
 
-		fmt.Println("verify message: ", message)
-		var msgBytes []byte
-		var js map[string]interface{}
-		// Unmarshal the string into the map. If no error, it's valid JSON.
-		err = json.Unmarshal([]byte(message), &js)
-		if err == nil {
-			prefix := []byte("MX")
-			messageBytes := []byte(message)
-			msgBytes = append(prefix, messageBytes...)
-		} else {
-			msgBytes, err = base64.StdEncoding.DecodeString(message)
-			fmt.Println("verify message algorand bytes: ", message)
-			if err != nil {
-				return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
+		// Decode the signed transaction using msgpack
+		var stx types.SignedTxn
+		if err = msgpack.Decode(stxBytes, &stx); err != nil {
+			return false, fmt.Errorf("failed to decode Algorand signed transaction: %v", err)
+		}
+
+		// Recreate the canonical transaction bytes that were signed (prefixed with "TX")
+		txnBytes := msgpack.Encode(stx.Txn)
+		signingBytes := append([]byte("TX"), txnBytes...)
+
+		// Optionally, verify that the intent from the frontend matches the note in the transaction
+		if len(stx.Txn.Note) > 0 && message != "" {
+			noteStr := string(stx.Txn.Note)
+			if noteStr != message {
+				return false, fmt.Errorf("transaction note does not match the provided intent message")
 			}
 		}
-		// Decode signature from base64 (Algorand standard)
-		fmt.Println("verify signature: ", signature)
-		sigBytes, err := base64.StdEncoding.DecodeString(signature)
-		if err != nil {
-			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
+
+		if !ed25519.Verify(pubKey, signingBytes, stx.Sig[:]) {
+			return false, fmt.Errorf("algorand signature verification failed")
 		}
-		verified := ed25519.Verify(pubKey, msgBytes, sigBytes)
-		fmt.Println("verified signature algorand: ", verified)
-		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
+		fmt.Println("verified Algorand dummy transaction signature successfully")
+		return true, nil
 	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 

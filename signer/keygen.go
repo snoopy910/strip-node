@@ -389,36 +389,6 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			}
 
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
-		case save := <-saveChanRippleEddsa:
-			fmt.Println("saving key")
-
-			publicKeyStr := ripple.PublicKeyToAddress(save)
-
-			fmt.Println("new TSS Address (Ripple) is: ", publicKeyStr)
-
-			out, err := json.Marshal(save)
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			_json := string(out)
-			AddKeyShare(identity, identityCurve, keyCurve, _json)
-
-			signersOut, err := json.Marshal(signers)
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
-
-			completed = true
-			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
-
-			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
-				val <- "generated keygen"
-			}
-
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
 		case save := <-saveChanSuiEddsa:
 			fmt.Println("saving key")
 

@@ -172,45 +172,130 @@ func VerifySignature(
 		}())
 		return valid, nil
 	} else if identityCurve == ALGORAND_CURVE {
-		// Decode the public key from the Algorand address (base32 encoded with checksum)
-		address, err := types.DecodeAddress(identity)
+		// First try to decode the signature as a dummy transaction
+		sigBytes, err := base64.StdEncoding.DecodeString(signature)
 		if err != nil {
-			return false, fmt.Errorf("invalid Algorand address: %v", err)
+			return false, fmt.Errorf("failed to decode signature: %v", err)
 		}
 
-		pubKeyBytes := address[:]
-		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
-		copy(pubKey, pubKeyBytes)
-
-		// Decode the signed dummy transaction from base64 signature parameter
-		stxBytes, err := base64.StdEncoding.DecodeString(signature)
-		if err != nil {
-			return false, fmt.Errorf("invalid Algorand signed transaction encoding: %v", err)
-		}
-
-		// Decode the signed transaction using msgpack
+		// Try to parse as a signed transaction
 		var stx types.SignedTxn
-		if err = msgpack.Decode(stxBytes, &stx); err != nil {
-			return false, fmt.Errorf("failed to decode Algorand signed transaction: %v", err)
-		}
+		err = msgpack.Decode(sigBytes, &stx)
 
-		// Recreate the canonical transaction bytes that were signed (prefixed with "TX")
-		txnBytes := msgpack.Encode(stx.Txn)
-		signingBytes := append([]byte("TX"), txnBytes...)
+		// Check if this is a system-generated transaction (direct mode) vs user intent (dummy transaction mode)
+		isSystemTransaction := false
 
-		// Optionally, verify that the intent from the frontend matches the note in the transaction
-		if len(stx.Txn.Note) > 0 && message != "" {
-			noteStr := string(stx.Txn.Note)
-			if noteStr != message {
-				return false, fmt.Errorf("transaction note does not match the provided intent message")
+		if err == nil {
+			// Successfully decoded as transaction, check if it might be system-generated
+
+			// You can also check for specific receiver addresses if needed
+			if stx.Txn.Type == "pay" && stx.Txn.Receiver.String() != "" {
+				receiver := stx.Txn.Receiver.String()
+				// Check if this is a known system-to-system transfer pattern
+				// For example, if it's going to a specific treasury or bridge address
+
+				// Example check for specific receiver
+				systemReceivers := []string{
+					// Add system receiver addresses here
+				}
+
+				for _, sysReceiver := range systemReceivers {
+					if receiver == sysReceiver {
+						isSystemTransaction = true
+						break
+					}
+				}
 			}
+		} else {
+			// Could not decode as transaction - assume it's a direct signature
+			isSystemTransaction = true
 		}
 
-		if !ed25519.Verify(pubKey, signingBytes, stx.Sig[:]) {
-			return false, fmt.Errorf("algorand signature verification failed")
+		if isSystemTransaction {
+			// Decode the public key from the Algorand address (base32 encoded with checksum)
+			address, err := types.DecodeAddress(identity)
+			if err != nil {
+				return false, fmt.Errorf("invalid Algorand address: %v", err)
+			}
+
+			// Convert public key bytes to ed25519.PublicKey
+			pubKeyBytes := address[:]
+			pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+			copy(pubKey, pubKeyBytes)
+
+			// Convert message to bytes
+			// msgBytes := []byte(message) ?
+
+			fmt.Println("verify message: ", message)
+			var msgBytes []byte
+			var js map[string]interface{}
+			// Unmarshal the string into the map. If no error, it's valid JSON.
+			err = json.Unmarshal([]byte(message), &js)
+			if err == nil {
+				prefix := []byte("MX")
+				messageBytes := []byte(message)
+				msgBytes = append(prefix, messageBytes...)
+			} else {
+				msgBytes, err = base64.StdEncoding.DecodeString(message)
+				fmt.Println("verify message algorand bytes: ", message)
+				if err != nil {
+					return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
+				}
+			}
+			// Decode signature from base64 (Algorand standard)
+			fmt.Println("verify signature: ", signature)
+			sigBytes, err := base64.StdEncoding.DecodeString(signature)
+			if err != nil {
+				return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
+			}
+			verified := ed25519.Verify(pubKey, msgBytes, sigBytes)
+			fmt.Println("verified signature algorand: ", verified)
+			return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
+		} else {
+			// Dummy transaction verification for user intents
+			fmt.Println("Using dummy transaction verification for user intent")
+
+			// We've already decoded the signature and transaction above, reuse it if possible
+			if err != nil || stx.Txn.Sender.String() == "" {
+				// If we couldn't decode it earlier, try again
+				sigBytes, err := base64.StdEncoding.DecodeString(signature)
+				if err != nil {
+					return false, fmt.Errorf("failed to decode signature: %v", err)
+				}
+
+				// Parse the signed transaction
+				err = msgpack.Decode(sigBytes, &stx)
+				if err != nil {
+					return false, fmt.Errorf("failed to decode Algorand transaction: %v", err)
+				}
+			}
+
+			// Extract the sender's address from the transaction
+			sender := stx.Txn.Sender.String()
+
+			// Compare with the claimed identity
+			if sender != identity {
+				return false, fmt.Errorf("sender address %s does not match claimed identity %s", sender, identity)
+			}
+
+			// Convert Algorand address to public key
+			pubKey, err := AlgorandAddressToPubKey(identity)
+			if err != nil {
+				return false, fmt.Errorf("failed to convert address to public key: %v", err)
+			}
+
+			// Recreate the canonical transaction bytes that were signed (prefixed with "TX")
+			txnBytes := msgpack.Encode(stx.Txn)
+			signingBytes := append([]byte("TX"), txnBytes...)
+
+			// Verify the signature
+			if !ed25519.Verify(pubKey, signingBytes, stx.Sig[:]) {
+				return false, fmt.Errorf("algorand signature verification failed")
+			}
+
+			fmt.Println("verified Algorand dummy transaction signature successfully")
+			return true, nil
 		}
-		fmt.Println("verified Algorand dummy transaction signature successfully")
-		return true, nil
 	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 
@@ -290,4 +375,12 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 	}
 
 	return dst.String(), nil
+}
+
+func AlgorandAddressToPubKey(address string) ([]byte, error) {
+	decodedAddress, err := types.DecodeAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	return decodedAddress[:], nil
 }

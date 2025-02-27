@@ -442,7 +442,16 @@ func startHTTPServer(port string) {
 			// For Algorand, encode the signature in base64 (Algorand's standard)
 			signatureResponse.Signature = base64.StdEncoding.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
-			v, err := identityVerification.VerifySignature(sig.Address, "algorand_eddsa", msg, signatureResponse.Signature)
+			type algodMsg struct {
+				IsRealTransaction bool
+				Msg               string
+			}
+			m := algodMsg{IsRealTransaction: sig.AlgorandFlags.IsRealTransaction, Msg: msg}
+			jsonBytes, err := json.Marshal(m)
+			if err != nil {
+				log.Fatalf("Error marshaling to JSON: %v", err)
+			}
+			v, err := identityVerification.VerifySignature(sig.Address, "algorand_eddsa", string(jsonBytes), signatureResponse.Signature)
 			if !v {
 				http.Error(w, fmt.Sprintf("error verifying algorand signature: %v", err), http.StatusInternalServerError)
 				return

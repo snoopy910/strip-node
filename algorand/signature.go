@@ -26,25 +26,29 @@ func DecodeSignature(signature string) ([]byte, error) {
 }
 
 // CheckFlags checks if a message contains AlgorandFlags with IsRealTransaction set
-func CheckFlags(message string) (bool, error) {
+func CheckFlags(message string) (bool, string, error) {
 	// Check if message is a JSON with AlgorandFlags.IsRealTransaction set to true
-	var messageObj struct {
-		AlgorandFlags *struct {
-			IsRealTransaction bool `json:"isRealTransaction"`
-		} `json:"algorandFlags"`
+	type algodMsg struct {
+		IsRealTransaction bool   `json:"isRealTransaction"`
+		Msg               string `json:"msg"`
 	}
+
+	var messageObj *algodMsg
 
 	jsonErr := json.Unmarshal([]byte(message), &messageObj)
 	isRealTransaction := false
-	if jsonErr == nil && messageObj.AlgorandFlags != nil {
-		isRealTransaction = messageObj.AlgorandFlags.IsRealTransaction
+	msg := ""
+	if jsonErr == nil && messageObj != nil {
+		isRealTransaction = messageObj.IsRealTransaction
+		msg = messageObj.Msg
 	}
-	return isRealTransaction, jsonErr
+	return isRealTransaction, msg, jsonErr
 }
 
 // VerifyDirectSignature verifies a direct ed25519 signature for Algorand
 func VerifyDirectSignature(identity string, message string, signature []byte) (bool, error) {
 	// Decode the public key from the Algorand address (base32 encoded with checksum)
+	fmt.Println("Verify Direct Signature algorand: ", identity)
 	address, err := types.DecodeAddress(identity)
 	if err != nil {
 		return false, fmt.Errorf("invalid Algorand address: %v", err)
@@ -80,13 +84,14 @@ func VerifyDirectSignature(identity string, message string, signature []byte) (b
 }
 
 // VerifyDummyTransaction verifies an Algorand signature using the dummy transaction approach
-func VerifyDummyTransaction(identity string, signature []byte) (bool, error) {
+func VerifyDummyTransaction(identity string, message string, signature []byte) (bool, error) {
 	// Try to decode as a SignedTxn (dummy transaction)
+	fmt.Println("Verify Dummy Transaction algorand: ", identity)
 	var stx types.SignedTxn
 	err := msgpack.Decode(signature, &stx)
 	if err != nil {
 		// If it's not a SignedTxn, try direct signature verification
-		return VerifyDirectSignature(identity, "", signature)
+		return VerifyDirectSignature(identity, message, signature)
 	}
 
 	// Extract the sender's address from the transaction

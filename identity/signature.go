@@ -174,18 +174,18 @@ func VerifySignature(
 		if err != nil {
 			return false, err
 		}
-
+		fmt.Println("Verify Signature algorand: ", message)
 		// Check if message contains AlgorandFlags to determine verification method
-		isRealTransaction, _ := algorand.CheckFlags(message)
+		isRealTransaction, msg, _ := algorand.CheckFlags(message)
 
 		// If using direct signature verification path
 		if isRealTransaction {
 			// This is a direct signature (not a SignedTxn)
-			return algorand.VerifyDirectSignature(identity, message, decoded)
+			return algorand.VerifyDirectSignature(identity, msg, decoded)
 		}
 
 		// Try to verify as a dummy transaction
-		return algorand.VerifyDummyTransaction(identity, decoded)
+		return algorand.VerifyDummyTransaction(identity, message, decoded)
 	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 

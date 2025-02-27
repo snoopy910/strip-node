@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
@@ -15,6 +16,7 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/mr-tron/base58"
 	"github.com/stellar/go/strkey"
+	"golang.org/x/crypto/blake2b"
 )
 
 func updateKeygen(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int, signers []string) {
@@ -105,9 +107,13 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 	outChanKeygen := make(chan tss.Message)
 
+	// EdDSA channels (for EdDSA-based curves)
 	saveChanEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
-	saveChanSecp256k1 := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanAptosEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+	saveChanSuiEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+
+	// ECDSA channels (for ECDSA-based curves)
+	saveChanSecp256k1 := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanStellarEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanAlgorandEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
@@ -118,12 +124,17 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
+	} else if keyCurve == SUI_EDDSA_CURVE {
+		// Sui uses Ed25519 for native transactions
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanSuiEddsa)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		go localParty.Start()
 	} else if keyCurve == STELLAR_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanStellarEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
-
 	} else if keyCurve == SECP256K1_CURVE {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
@@ -281,8 +292,13 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
 			bitcoinAddressStr, _, _ := publicKeyToBitcoinAddresses(publicKeyBytes)
+			dogecoinAddressStr, err := dogecoin.PublicKeyToAddress(publicKeyStr)
+			if err != nil {
+				fmt.Println("Error generating Dogecoin address:", err)
+			}
 
 			fmt.Println("new TSS Address (BTC) is: ", bitcoinAddressStr)
+			fmt.Println("new TSS Address (DOGE) is: ", dogecoinAddressStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
@@ -373,6 +389,47 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			}
 
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
+		case save := <-saveChanSuiEddsa:
+			fmt.Println("saving key")
+
+			pk := edwards.PublicKey{
+				Curve: save.EDDSAPub.Curve(),
+				X:     save.EDDSAPub.X(),
+				Y:     save.EDDSAPub.Y(),
+			}
+
+			// Serialize the Ed25519 public key
+			pkBytes := pk.Serialize()
+
+			// Hash the public key with Blake2b-256 to get Sui address
+			hasher := blake2b.Sum256(pkBytes)
+			suiAddress := "0x" + hex.EncodeToString(hasher[:])
+
+			fmt.Println("new Sui TSS Address is: ", suiAddress)
+
+			out, err := json.Marshal(save)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_json := string(out)
+			AddKeyShare(identity, identityCurve, keyCurve, _json)
+
+			signersOut, err := json.Marshal(signers)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
+
+			completed = true
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
+				val <- "generated keygen"
+			}
+
+			fmt.Println("completed saving of new keygen ", suiAddress)
 		case save := <-saveChanEcdsa:
 			fmt.Println("saving key")
 

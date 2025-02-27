@@ -16,6 +16,20 @@ type Chain struct {
 
 var Chains = []Chain{
 	{
+		ChainId:     "2000",
+		ChainType:   "dogecoin",
+		ChainUrl:    "https://api.blockcypher.com/v1/doge/main",
+		KeyCurve:    "secp256k1",
+		TokenSymbol: "DOGE",
+	},
+	{
+		ChainId:     "2001",
+		ChainType:   "dogecoin",
+		ChainUrl:    "https://api.blockcypher.com/v1/doge/test3",
+		KeyCurve:    "secp256k1",
+		TokenSymbol: "DOGE",
+	},
+	{
 		ChainId:     "1337",
 		ChainType:   "evm",
 		ChainUrl:    "http://ganache:8545",
@@ -91,6 +105,20 @@ var Chains = []Chain{
 		ChainUrl:    "http://127.0.0.1:18443",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
+	},
+	{
+		ChainId:     "3001",
+		ChainType:   "sui",
+		ChainUrl:    "https://fullnode.mainnet.sui.io:443",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "SUI",
+	},
+	{
+		ChainId:     "3002",
+		ChainType:   "sui",
+		ChainUrl:    "https://fullnode.devnet.sui.io:443",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "SUI",
 	},
 	{
 		GenesisId:   "mainnet-v1.0",

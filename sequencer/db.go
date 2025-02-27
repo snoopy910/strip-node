@@ -52,9 +52,9 @@ type WalletSchema struct {
 	BitcoinTestnetPublicKey  string `json:"bitcoinTestnetPublicKey"`
 	BitcoinRegtestPublicKey  string `json:"bitcoinRegtestPublicKey"`
 	StellarPublicKey         string `json:"stellarPublicKey"`
-	DogecoinMainnetPublicKey string `json:"dogecoinMainnetAddress"`
-	DogecoinTestnetPublicKey string `json:"dogecoinTestnetAddress"`
-	SuiPublicKey             string `json:"suiAddress"`
+	DogecoinMainnetPublicKey string `json:"dogecoinMainnetPublicKey"`
+	DogecoinTestnetPublicKey string `json:"dogecoinTestnetPublicKey"`
+	SuiPublicKey             string `json:"suiPublicKey"`
 	AlgorandEDDSAPublicKey   string `json:"algorandEddsaPublicKey"`
 	RippleEDDSAPublicKey     string `json:"rippleEddsaPublicKey"`
 	Signers                  string `json:"signers"`
@@ -598,6 +598,7 @@ func GetWallet(identity string, identityCurve string) (*WalletSchema, error) {
 }
 
 var AddWallet = func(wallet *WalletSchema) (int64, error) {
+	fmt.Println("Sui Address: ", wallet.SuiPublicKey)
 	_, err := client.Model(wallet).Insert()
 	if err != nil {
 		return 0, err

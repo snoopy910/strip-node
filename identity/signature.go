@@ -35,10 +35,10 @@ var (
 )
 
 type OperationForSigning struct {
-	SerializedTxn string `json:"serializedTxn"`
-	DataToSign    string `json:"dataToSign"`
-	ChainId       string `json:"chainId"`
-	// GenesisHash    string `json:"genesisHash"`
+	SerializedTxn  string `json:"serializedTxn"`
+	DataToSign     string `json:"dataToSign"`
+	ChainId        string `json:"chainId"`
+	GenesisHash    string `json:"genesisHash"`
 	KeyCurve       string `json:"keyCurve"`
 	Type           string `json:"type"`
 	Solver         string `json:"solver"`
@@ -320,10 +320,10 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 
 	for _, operation := range intent.Operations {
 		operationForSigning := OperationForSigning{
-			SerializedTxn: operation.SerializedTxn,
-			DataToSign:    operation.DataToSign,
-			ChainId:       operation.ChainId,
-			// GenesisHash:    operation.GenesisHash,
+			SerializedTxn:  operation.SerializedTxn,
+			DataToSign:     operation.DataToSign,
+			ChainId:        operation.ChainId,
+			GenesisHash:    operation.GenesisHash,
 			KeyCurve:       operation.KeyCurve,
 			Type:           operation.Type,
 			Solver:         operation.Solver,

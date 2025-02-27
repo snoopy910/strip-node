@@ -323,7 +323,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	stellarAddress := getAddressResponse.Address
 
-	// create the wallet whose keycurve is stellar_eddsa here
+	// create the wallet whose keycurve is ripple_eddsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
@@ -368,6 +368,51 @@ func createWallet(identity string, identityCurve string) error {
 
 	rippleAddress := getAddressResponse.Address
 
+	// create the wallet whose keycurve is cardano_eddsa here
+	createWalletRequest = CreateWalletRequest{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		KeyCurve:      "cardano_eddsa",
+		Signers:       signersPublicKeyList,
+	}
+
+	marshalled, err = json.Marshal(createWalletRequest)
+	if err != nil {
+		return err
+	}
+
+	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client = http.Client{Timeout: 3 * time.Minute}
+	_, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	// get the address of the wallet whose keycurve is cardano_eddsa here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=cardano_eddsa")
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(body, &getAddressResponse)
+	if err != nil {
+		return err
+	}
+
+	cardanoAddress := getAddressResponse.Address
+
 	// add created wallet to the store
 	wallet := WalletSchema{
 		Identity:                identity,
@@ -382,6 +427,7 @@ func createWallet(identity string, identityCurve string) error {
 		StellarPublicKey:        stellarAddress,
 		AlgorandEDDSAPublicKey:  algorandEddsaAddress,
 		RippleEDDSAPublicKey:    rippleAddress,
+		CardanoEDDSAPublicKey:   cardanoAddress,
 	}
 
 	_, err = AddWallet(&wallet)

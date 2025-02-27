@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/ripple"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -355,6 +356,25 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       save.Signature,
 					Address:       ripple.PublicKeyToAddress(rawKeyEddsa),
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				go broadcast(message)
+			} else if keyCurve == CARDANO_CURVE {
+				address, err := cardano.PublicKeyToAddress(rawKeyEddsa, "1006")
+				if err != nil {
+					fmt.Println("error converting Cardano public key to address: ", err)
+					return
+				}
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       address,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

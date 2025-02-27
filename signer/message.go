@@ -119,7 +119,7 @@ func handleIncomingMessage(message []byte) {
 				val <- msg
 				sentMessage = true
 			}
-		case APTOS_EDDSA_CURVE:
+		case APTOS_EDDSA_CURVE, CARDANO_CURVE:
 			// Aptos: Client sends string -> process -> encode to hex
 			// Channel key must match the hex encoded format
 			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {

@@ -54,6 +54,7 @@ type WalletSchema struct {
 	StellarPublicKey        string `json:"stellarPublicKey"`
 	AlgorandEDDSAPublicKey  string `json:"algorandEddsaPublicKey"`
 	RippleEDDSAPublicKey    string `json:"rippleEddsaPublicKey"`
+	CardanoEDDSAPublicKey   string `json:"cardanoEddsaPublicKey"`
 	Signers                 string `json:"signers"`
 }
 

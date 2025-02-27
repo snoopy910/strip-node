@@ -19,6 +19,7 @@ import (
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bridge"
+	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/solver"
@@ -187,7 +188,7 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chId := operation.ChainId
 						if chId == "" {
 							chId = operation.GenesisHash
@@ -270,6 +271,16 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = ripple.SendRippleTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.RippleEDDSAPublicKey, signature)
 							if err != nil {
 								fmt.Printf("error sending Ripple transaction: %+v", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							if err != nil {
+								fmt.Printf("error sending Cardano transaction: %+v", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -747,7 +758,7 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" ||
-						depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "stellar_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" {
+						depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "stellar_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" || depositOperation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -797,6 +808,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "ripple" {
 							transfers, err = ripple.GetRippleTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							transfers, err = cardano.GetCardanoTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1634,6 +1653,87 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
 						break
+					} else if withdrawalChain.KeyCurve == "cardano_eddsa" {
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// handle native token
+							transaction, dataToSign, err := cardano.WithdrawCardanoNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.CardanoEDDSAPublicKey,
+								burn.SolverOutput,
+								user.CardanoEDDSAPublicKey,
+							)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := cardano.SendCardanoTransaction(
+								transaction,
+								withdrawalChain.ChainId,
+								withdrawalChain.KeyCurve,
+								user.CardanoEDDSAPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						} else {
+
+							transaction, dataToSign, err := cardano.WithdrawCardanoTokenGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWallet.CardanoEDDSAPublicKey,
+								burn.SolverOutput,
+								user.CardanoEDDSAPublicKey,
+								tokenToWithdraw,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := cardano.SendCardanoTransaction(
+								transaction,
+								withdrawalChain.ChainId,
+								withdrawalChain.KeyCurve,
+								user.CardanoEDDSAPublicKey,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						}
+						break
 					}
 				}
 
@@ -1665,7 +1765,7 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chId := operation.ChainId
 						if chId == "" {
 							chId = operation.GenesisHash
@@ -1711,6 +1811,14 @@ func ProcessIntent(intentId int64) {
 							confirmed, err = ripple.CheckRippleTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Printf("error checking Ripple transaction: %v", err)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Cardano transaction: %v", err)
 								break
 							}
 						}
@@ -1789,7 +1897,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1832,6 +1940,14 @@ func ProcessIntent(intentId int64) {
 							confirmed, err = ripple.CheckRippleTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Printf("error checking Ripple transaction: %+v\n", err)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Cardano transaction: %+v\n", err)
 								break
 							}
 						}
@@ -1967,7 +2083,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -2014,6 +2130,13 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
+						if chain.ChainType == "cardano" {
+							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Cardano transaction: %+v\n", err)
+								break
+							}
+						}
 					}
 
 					if !confirmed {
@@ -2072,7 +2195,7 @@ func ProcessIntent(intentId int64) {
 									}
 								}
 							}
-						} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "stellar_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" {
+						} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "stellar_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" || depositOperation.KeyCurve == "cardano_eddsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
@@ -2157,6 +2280,24 @@ func ProcessIntent(intentId int64) {
 										fmt.Println(err)
 										break
 									}
+								}
+							}
+
+							if chain.ChainType == "cardano" {
+								txnConfirmed, err := cardano.CheckCardanoTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Printf("error checking Cardano transaction: %+v\n", err)
+									break
+								}
+
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+
 								}
 							}
 						}

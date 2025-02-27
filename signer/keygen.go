@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/ripple"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
@@ -112,6 +113,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	saveChanStellarEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanAlgorandEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanRippleEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+	saveChanCardanoEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 
 	if keyCurve == EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
@@ -146,6 +148,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 	} else if keyCurve == RIPPLE_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanRippleEddsa)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		go localParty.Start()
+	} else if keyCurve == CARDANO_CURVE {
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanCardanoEddsa)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	} else {
@@ -349,6 +356,40 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			publicKeyStr := ripple.PublicKeyToAddress(save)
 
 			fmt.Println("new TSS Address (Ripple) is: ", publicKeyStr)
+
+			out, err := json.Marshal(save)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			_json := string(out)
+			AddKeyShare(identity, identityCurve, keyCurve, _json)
+
+			signersOut, err := json.Marshal(signers)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
+
+			completed = true
+			delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
+				val <- "generated keygen"
+			}
+
+			fmt.Println("completed saving of new keygen ", publicKeyStr)
+		case save := <-saveChanCardanoEddsa:
+			fmt.Println("saving key")
+
+			publicKeyStr, err := cardano.PublicKeyToAddress(save, "1006")
+			if err != nil {
+				fmt.Println("error converting Cardano public key to address: ", err)
+				return
+			}
+
+			fmt.Println("new TSS Address (Cardano) is: ", publicKeyStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {

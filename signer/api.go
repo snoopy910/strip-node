@@ -449,7 +449,8 @@ func startHTTPServer(port string) {
 			m := algodMsg{IsRealTransaction: sig.AlgorandFlags.IsRealTransaction, Msg: msg}
 			jsonBytes, err := json.Marshal(m)
 			if err != nil {
-				log.Fatalf("Error marshaling to JSON: %v", err)
+				http.Error(w, fmt.Sprintf("Error marshaling algodMsg to JSON: %v", err), http.StatusInternalServerError)
+				return
 			}
 			v, err := identityVerification.VerifySignature(sig.Address, "algorand_eddsa", string(jsonBytes), signatureResponse.Signature)
 			if !v {

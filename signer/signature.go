@@ -310,6 +310,9 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					} else { // Mainnet
 						address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
 					}
+					if err != nil {
+						fmt.Printf("Error generating Dogecoin address: %v\n", err)
+					}
 				}
 
 				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)

@@ -42,19 +42,22 @@ type OperationSchema struct {
 }
 
 type WalletSchema struct {
-	Id                      int64  `json:"id"`
-	Identity                string `json:"identity"`
-	IdentityCurve           string `json:"identityCurve"`
-	EDDSAPublicKey          string `json:"eddsaPublicKey"`
-	AptosEDDSAPublicKey     string `json:"aptosEddsaPublicKey"`
-	ECDSAPublicKey          string `json:"ecdsaPublicKey"`
-	BitcoinMainnetPublicKey string `json:"bitcoinMainnetPublicKey"`
-	BitcoinTestnetPublicKey string `json:"bitcoinTestnetPublicKey"`
-	BitcoinRegtestPublicKey string `json:"bitcoinRegtestPublicKey"`
-	StellarPublicKey        string `json:"stellarPublicKey"`
-	AlgorandEDDSAPublicKey  string `json:"algorandEddsaPublicKey"`
-	RippleEDDSAPublicKey    string `json:"rippleEddsaPublicKey"`
-	Signers                 string `json:"signers"`
+	Id                       int64  `json:"id"`
+	Identity                 string `json:"identity"`
+	IdentityCurve            string `json:"identityCurve"`
+	EDDSAPublicKey           string `json:"eddsaPublicKey"`
+	AptosEDDSAPublicKey      string `json:"aptosEddsaPublicKey"`
+	ECDSAPublicKey           string `json:"ecdsaPublicKey"`
+	BitcoinMainnetPublicKey  string `json:"bitcoinMainnetPublicKey"`
+	BitcoinTestnetPublicKey  string `json:"bitcoinTestnetPublicKey"`
+	BitcoinRegtestPublicKey  string `json:"bitcoinRegtestPublicKey"`
+	StellarPublicKey         string `json:"stellarPublicKey"`
+	DogecoinMainnetPublicKey string `json:"dogecoinMainnetPublicKey"`
+	DogecoinTestnetPublicKey string `json:"dogecoinTestnetPublicKey"`
+	SuiPublicKey             string `json:"suiPublicKey"`
+	AlgorandEDDSAPublicKey   string `json:"algorandEddsaPublicKey"`
+	RippleEDDSAPublicKey     string `json:"rippleEddsaPublicKey"`
+	Signers                  string `json:"signers"`
 }
 
 type LockSchema struct {
@@ -595,6 +598,7 @@ func GetWallet(identity string, identityCurve string) (*WalletSchema, error) {
 }
 
 var AddWallet = func(wallet *WalletSchema) (int64, error) {
+	fmt.Println("Sui Address: ", wallet.SuiPublicKey)
 	_, err := client.Model(wallet).Insert()
 	if err != nil {
 		return 0, err

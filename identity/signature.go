@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/mr-tron/base58"
+	"golang.org/x/crypto/blake2b"
 )
 
 var (
@@ -27,6 +28,8 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	BITCOIN_CURVE     = "bitcoin_ecdsa"
+	SECP256K1_CURVE   = "secp256k1"
+	SUI_EDDSA_CURVE   = "sui_eddsa" // Sui uses Ed25519 for native transactions
 	STELLAR_CURVE     = "stellar_eddsa"
 	ALGORAND_CURVE    = "algorand_eddsa"
 	RIPPLE_CURVE      = "ripple_eddsa"
@@ -189,9 +192,19 @@ func VerifySignature(
 			s = new(big.Int).SetBytes(sigBytes[offset : offset+sLen])
 		}
 
-		// Hash the message using double SHA-256 (as required by Bitcoin)
-		firstHash := sha256.Sum256([]byte(message))
-		hash := sha256.Sum256(firstHash[:]) // Second round of SHA-256
+		// Check if this is a Dogecoin message
+		var hash [32]byte
+		if strings.HasPrefix(message, "DOGE:") {
+			// For Dogecoin, we use a special message prefix
+			messageBytes := []byte("Dogecoin Signed Message:\n" + strings.TrimPrefix(message, "DOGE:"))
+			firstHash := sha256.Sum256(messageBytes)
+			hash = sha256.Sum256(firstHash[:]) // Double SHA256 like Bitcoin
+			fmt.Println("[VERIFY SECP256K1] Using Dogecoin message format")
+		} else {
+			// Default Bitcoin double SHA-256
+			firstHash := sha256.Sum256([]byte(message))
+			hash = sha256.Sum256(firstHash[:]) // Second round of SHA-256
+		}
 
 		// Verify the signature using ECDSA
 		valid := ecdsa.Verify(pubKey, hash[:], r, s)
@@ -202,6 +215,49 @@ func VerifySignature(
 			return "in"
 		}())
 		return valid, nil
+	} else if identityCurve == SUI_EDDSA_CURVE {
+		fmt.Println("[VERIFY SUI_EDDSA] Verifying Sui EdDSA signature")
+
+		// Remove 0x prefix from public key
+		identity = strings.TrimPrefix(identity, "0x")
+		if len(identity) != 64 {
+			return false, fmt.Errorf("invalid public key length: expected 64 hex chars, got %d", len(identity))
+		}
+
+		// For Sui, we need to verify that the message has the correct prefix
+		if !strings.HasPrefix(message, "Sui Message:") {
+			return false, fmt.Errorf("invalid message format: must start with 'Sui Message:'")
+		}
+
+		// Convert message to bytes
+		messageBytes := []byte(message)
+		fmt.Printf("[VERIFY SUI_EDDSA] Message bytes: %x\n", messageBytes)
+
+		// Decode the public key from hex
+		publicKeyBytes, err := hex.DecodeString(identity)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode public key: %v", err)
+		}
+		fmt.Printf("[VERIFY SUI_EDDSA] Public key bytes: %x\n", publicKeyBytes)
+
+		// Decode base64 signature
+		signatureBytes, err := base64.StdEncoding.DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode base64 signature: %v", err)
+		}
+		fmt.Printf("[VERIFY SUI_EDDSA] Signature bytes: %x\n", signatureBytes)
+
+		// Hash the message with Blake2b as per Sui's requirement
+		hasher, _ := blake2b.New256(nil) // Using nil key for keyless hashing
+		hasher.Write(messageBytes)
+		msgHash := hasher.Sum(nil)
+
+		// Verify using ed25519 which internally uses SHA-512 as per RFC 8032
+		verified := ed25519.Verify(publicKeyBytes, msgHash, signatureBytes)
+
+		fmt.Printf("[VERIFY SUI_EDDSA] Verification result: %v\n", verified)
+		return verified, nil
+
 	} else if identityCurve == ALGORAND_CURVE {
 		// Decode the public key from the Algorand address (base32 encoded with checksum)
 		address, err := types.DecodeAddress(identity)

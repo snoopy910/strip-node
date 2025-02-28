@@ -11,9 +11,11 @@ import (
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/stellar"
+	"github.com/StripChain/strip-node/sui"
 )
 
 type Operation struct {
@@ -96,6 +98,11 @@ type GetBitcoinAddressesResponse struct {
 	MainnetAddress string `json:"mainnetAddress"`
 	TestnetAddress string `json:"testnetAddress"`
 	RegtestAddress string `json:"regtestAddress"`
+}
+
+type GetDogecoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
 }
 
 type IntentsResult struct {
@@ -591,6 +598,46 @@ func startHTTPServer(port string) {
 			}
 		} else if operation.KeyCurve == "bitcoin_ecdsa" {
 			transfers, _, err := bitcoin.GetBitcoinTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "sui_eddsa" {
+			transfers, err := sui.GetSuiTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "secp256k1" {
+			// Get chain information
+			chain, err := common.GetChain(operation.ChainId)
+			if err != nil {
+				http.Error(w, "Chain not found", http.StatusInternalServerError)
+				return
+			}
+
+			var transfers []common.Transfer
+			switch chain.ChainType {
+			case "dogecoin":
+				transfers, err = dogecoin.GetDogeTransfers(operation.ChainId, operation.Result)
+			default:
+				http.Error(w, "Unsupported chain type", http.StatusInternalServerError)
+				return
+			}
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

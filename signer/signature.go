@@ -1,16 +1,21 @@
 package signer
 
 import (
+	"bytes"
+	"crypto/ed25519"
 	"crypto/sha512"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/bitcoin"
+	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -18,10 +23,13 @@ import (
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	eddsaSigning "github.com/bnb-chain/tss-lib/v2/eddsa/signing"
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/coming-chat/go-sui/v2/lib"
+	"github.com/coming-chat/go-sui/v2/sui_types"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
 	"github.com/stellar/go/strkey"
+	"golang.org/x/crypto/blake2b"
 )
 
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
@@ -148,6 +156,27 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
+
+	} else if keyCurve == SUI_EDDSA_CURVE {
+		// Sui uses Ed25519 for transaction signing
+		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+
+		msg := (&big.Int{}).SetBytes(hash)
+
+		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
+
+	} else if keyCurve == SECP256K1_CURVE {
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
+		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
 	} else if keyCurve == APTOS_EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
@@ -257,6 +286,83 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       []byte(final),
 					Address:       compressedPubKeyStr, // we pass the public key in string format, hex string with length 130 starts with 04
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else if keyCurve == SECP256K1_CURVE {
+				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
+				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
+				publicKeyStr := "04" + x + y
+
+				// Get chain information from metadata
+				var address string
+				var metadata map[string]interface{}
+				// Get chain information
+				if chainId, ok := metadata["chainId"].(string); ok {
+					// Use Dogecoin address format
+					if strings.HasSuffix(chainId, "1") { // Testnet
+						address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
+					} else { // Mainnet
+						address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
+					}
+				}
+
+				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       []byte(final),
+					Address:       address,
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
+			} else if keyCurve == SUI_EDDSA_CURVE {
+				// Get the Ed25519 public key
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
+
+				// Serialize the full Ed25519 public key
+				pkBytes := pk.Serialize()
+
+				// Convert to Sui address format (Blake2b-256 hash of public key)
+				flag := byte(0x00)
+				hasher, _ := blake2b.New256(nil)
+				hasher.Write([]byte{flag})
+				hasher.Write(pkBytes)
+
+				arr := hasher.Sum(nil)
+				suiAddress := "0x" + hex.EncodeToString(arr)
+
+				// For Sui, we need to encode the signature in base64
+				var signatureBytes [ed25519.PublicKeySize + ed25519.SignatureSize + 1]byte
+				signatureBuffer := bytes.NewBuffer([]byte{})
+				scheme := sui_types.SignatureScheme{ED25519: &lib.EmptyEnum{}}
+				signatureBuffer.WriteByte(scheme.Flag())
+				signatureBuffer.Write(save.Signature)
+				signatureBuffer.Write(pkBytes[:])
+				copy(signatureBytes[:], signatureBuffer.Bytes())
+
+				signatureBase64 := base64.StdEncoding.EncodeToString(signatureBytes[:])
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       []byte(signatureBase64),
+					Address:       suiAddress,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

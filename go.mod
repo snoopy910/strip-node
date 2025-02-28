@@ -6,7 +6,10 @@ require (
 	github.com/algorand/go-algorand-sdk v1.24.0
 	github.com/bnb-chain/tss-lib/v2 v2.0.2
 	github.com/btcsuite/btcd v0.24.2
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/btcutil v1.1.6
+	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
+	github.com/coming-chat/go-sui/v2 v2.0.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.3
 	github.com/ethereum/go-ethereum v1.12.1
@@ -25,6 +28,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/test-go/testify v1.1.4
 	github.com/the729/lcs v0.1.5
+	golang.org/x/crypto v0.23.0
 )
 
 require (
@@ -39,11 +43,10 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.7.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
-	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/coming-chat/go-aptos v0.0.0-20240820145804-49d7fde9d027 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
@@ -54,6 +57,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/fardream/go-bcs v0.2.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
@@ -122,6 +126,7 @@ require (
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
+	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -155,6 +160,7 @@ require (
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/segmentio/go-loggly v0.5.1-0.20171222203950-eb91657e62b2 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
+	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/smartystreets/assertions v0.0.0-20190215210624-980c5ac6f3ac // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
@@ -181,7 +187,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/ratelimit v0.2.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.23.0 // indirect

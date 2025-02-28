@@ -207,8 +207,8 @@ func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 
 	// Add headers
 	req.Header.Set("Content-Type", "application/json")
-	if chainId == "1002" {
-		req.SetBasicAuth("your_rpc_user", "your_rpc_password")
+	if chain.RpcUsername != "" {
+		req.SetBasicAuth(chain.RpcUsername, chain.RpcPassword)
 	}
 
 	// Send request

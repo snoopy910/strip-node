@@ -12,6 +12,8 @@ type Chain struct {
 	ChainUrl    string
 	KeyCurve    string
 	TokenSymbol string
+	RpcUsername string
+	RpcPassword string
 }
 
 var Chains = []Chain{
@@ -91,6 +93,8 @@ var Chains = []Chain{
 		ChainUrl:    "http://172.17.0.1:18443", // Local Bitcoin Core RPC, calling from docker process
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
+		RpcUsername: "your_rpc_user",
+		RpcPassword: "your_rpc_password",
 	},
 	{
 		GenesisId:   "mainnet-v1.0",

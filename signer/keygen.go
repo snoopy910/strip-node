@@ -399,13 +399,13 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		case save := <-saveChanCardanoEddsa:
 			fmt.Println("saving key")
 
-			publicKeyStr, err := cardano.PublicKeyToAddress(save, "1006")
+			mainnetAddress, testnetAddress, err := cardano.PublicKeyToAddress(save)
 			if err != nil {
 				fmt.Println("error converting Cardano public key to address: ", err)
 				return
 			}
 
-			fmt.Println("new TSS Address (Cardano) is: ", publicKeyStr)
+			fmt.Println("new TSS Address (Cardano) is: ", mainnetAddress, testnetAddress)
 			out, err := json.Marshal(save)
 			if err != nil {
 				fmt.Println(err)
@@ -427,7 +427,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
 				val <- "generated keygen"
 			}
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			fmt.Println("completed saving of new keygen ", mainnetAddress, testnetAddress)
 		case save := <-saveChanSuiEddsa:
 			fmt.Println("saving key")
 

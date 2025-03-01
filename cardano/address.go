@@ -8,9 +8,9 @@ import (
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/btcsuite/btcutil/bech32"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/echovl/cardano-go"
 )
 
 // Network type constants
@@ -21,14 +21,14 @@ const (
 )
 
 // PublicKeyToAddress converts a TSS public key to a Cardano address
-func PublicKeyToAddress(rawKeyEddsa *eddsaKeygen.LocalPartySaveData, chainId string) (string, error) {
+func PublicKeyToAddress(rawKeyEddsa *eddsaKeygen.LocalPartySaveData) (string, string, error) {
 	if rawKeyEddsa == nil || rawKeyEddsa.EDDSAPub == nil {
-		return "", fmt.Errorf("invalid public key data")
+		return "", "", fmt.Errorf("invalid public key data")
 	}
 
 	// Get the public key
 	pk := edwards.PublicKey{
-		Curve: tss.Edwards(),
+		Curve: rawKeyEddsa.EDDSAPub.Curve(),
 		X:     rawKeyEddsa.EDDSAPub.X(),
 		Y:     rawKeyEddsa.EDDSAPub.Y(),
 	}
@@ -39,33 +39,47 @@ func PublicKeyToAddress(rawKeyEddsa *eddsaKeygen.LocalPartySaveData, chainId str
 	// Debug output
 	fmt.Printf("Raw public key bytes: %x\n", pkBytes)
 
-	// Determine network type based on chainId
-	network := NetworkMainnet
-	if chainId == "1006" {
-		network = NetworkTestnet
-	}
+	// addr, err := Blake224Hash(pkBytes)
+	// if err != nil {
+	// 	return "", "", fmt.Errorf("failed to create address: %v", err)
+	// }
 
-	// Create a Cardano-compatible public key
-	// pubKey := crypto.PubKey(pkBytes)
+	// mainnetAddrBytes := []byte{byte(EnterpriseType<<4) | (byte(NetworkMainnet) & 0xFF)}
+	// mainnetAddrBytes = append(mainnetAddrBytes, addr...)
 
-	addr, err := Blake224Hash(pkBytes)
+	// mainnetAddrStr, err := bech32.EncodeFromBase256("addr", mainnetAddrBytes)
+	// if err != nil {
+	// 	return "", "", fmt.Errorf("failed to create address: %v", err)
+	// }
+
+	// addrBytes := []byte{byte(EnterpriseType<<4) | (byte(NetworkTestnet) & 0xFF)}
+	// addrBytes = append(addrBytes, addr...)
+
+	// testnetAddrStr, err := bech32.EncodeFromBase256("addr_test", addrBytes)
+	// if err != nil {
+	// 	return "", "", fmt.Errorf("failed to create address: %v", err)
+	// }
+
+	keyCredential, err := cardano.NewKeyCredential(pkBytes)
 	if err != nil {
-		return "", fmt.Errorf("failed to create address: %v", err)
+		return "", "", fmt.Errorf("failed to create key credential: %v", err)
 	}
 
-	hrp := "addr"
-	if network == NetworkTestnet {
-		hrp = "addr_test"
-	}
-
-	addrBytes := []byte{byte(EnterpriseType<<4) | (byte(network) & 0xFF)}
-	addrBytes = append(addrBytes, addr...)
-
-	addrStr, err := bech32.EncodeFromBase256(hrp, addrBytes)
+	mainnetAddress, err := cardano.NewBaseAddress(cardano.Mainnet, keyCredential, keyCredential)
 	if err != nil {
-		return "", fmt.Errorf("failed to create address: %v", err)
+		return "", "", fmt.Errorf("failed to create address: %v", err)
 	}
-	return addrStr, nil
+
+	mainnetAddrStr := mainnetAddress.Bech32()
+
+	testnetAddress, err := cardano.NewBaseAddress(cardano.Testnet, keyCredential, keyCredential)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create address: %v", err)
+	}
+
+	testnetAddrStr := testnetAddress.Bech32()
+
+	return mainnetAddrStr, testnetAddrStr, nil
 
 	// Create a key credential from the public key
 	// credential, err := cardano.NewKeyCredential(pubKey)

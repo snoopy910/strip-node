@@ -60,7 +60,7 @@ func TestPublicKeyToAddress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAddress, err := PublicKeyToAddress(tt.keyData, tt.chainId)
+			gotAddress, gotTestnetAddress, err := PublicKeyToAddress(tt.keyData)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -71,7 +71,7 @@ func TestPublicKeyToAddress(t *testing.T) {
 
 			// Check that testnet addresses start with "addr_test" and mainnet with "addr"
 			if tt.chainId == "1006" || tt.chainId == "0" || tt.chainId == "1097" {
-				require.Contains(t, gotAddress, "addr_test")
+				require.Contains(t, gotTestnetAddress, "addr_test")
 			} else {
 				require.Contains(t, gotAddress, "addr")
 				require.NotContains(t, gotAddress, "addr_test")

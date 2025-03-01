@@ -185,7 +185,7 @@ var Chains = []Chain{
 	{
 		ChainId:     "1006", // Made up id for cardano testnet
 		ChainType:   "cardano",
-		ChainUrl:    "https://cardano-testnet.blockfrost.io/api/v0",
+		ChainUrl:    "https://cardano-preprod.blockfrost.io/api/v0",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "ADA",
 	},

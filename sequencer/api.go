@@ -239,8 +239,6 @@ func startHTTPServer(port string) {
 			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
 	})
 
 	// GetBridgeAddress endpoint - Retrieves the bridge contract wallet address

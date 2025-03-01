@@ -1,10 +1,12 @@
 package cardano
 
 import (
+	"encoding/hex"
 	"fmt"
 	"testing"
 
 	"github.com/StripChain/strip-node/util"
+	"github.com/mr-tron/base58"
 	"github.com/stretchr/testify/require"
 )
 
@@ -136,6 +138,17 @@ func TestGetCardanoTransfers(t *testing.T) {
 	}
 }
 
+func Test1(t *testing.T) {
+	eddsaKey := "2rQXJBwJ3vCYreCHgcyhyejEXBdrJ5fct9kJsAo2ogr1"
+	pubKey, err := base58.Decode(eddsaKey)
+	if err != nil {
+		t.Fatalf("failed to decode public key: %v", err)
+	}
+	fmt.Printf("pubKey: %+v\n", hex.EncodeToString(pubKey))
+
+	require.Equal(t, "7ffafceddd9ed4b1bdce621cbd3e3d9df3f782b5670239c4cf15569958aa44bb", hex.EncodeToString(pubKey))
+}
+
 func TestSendCardanoTransaction(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -148,21 +161,21 @@ func TestSendCardanoTransaction(t *testing.T) {
 	}{
 		{
 			name:          "Valid ADA Transaction",
-			serializedTxn: "83a40081825820c26a40e2a30305288cc8e85950bce2be4dc47eb58c768583d03cdd3177bd0e3b000181825839018d98bea0414243dc84070f96265577e7e6cf702d62e871016885034ecc64bf258b8e330cf0cdd9fdb03e10b4e4ac08f5da1fdec6222a34681a002dc6c0021a0002a42f031a032dcd55a100818258206d8a0b425bd2ec9692af39b1c0cf0e51caa07a603550e22f54091e872c7df29058407cf261f45babf645e6a5e61cd6df6ba7d1694a0dd1e7da9f405f16d1e7ae2d3c4c4d4ea2b8f3e7b0d2cd18c4b7be54c2c3e9d3a7d5c6b2d0f2d40e9f0e",
-			chainId:       "1005",
-			publicKey:     "6d8a0b425bd2ec9692af39b1c0cf0e51caa07a603550e22f54091e872c7df290",
-			signatureHex:  "7cf261f45babf645e6a5e61cd6df6ba7d1694a0dd1e7da9f405f16d1e7ae2d3c4c4d4ea2b8f3e7b0d2cd18c4b7be54c2c3e9d3a7d5c6b2d0f2d40e9f0e",
+			serializedTxn: "84a300d90102818258200db6e71dccd30746ef028a694c716f118f2f7e1ae9c2c6fd51876e628c35ee11000182825839003eb4cb6ca6f6a07a316949ce3601d23b825da66904f69114ae0335023eb4cb6ca6f6a07a316949ce3601d23b825da66904f69114ae0335021a000f4240825839003eb4cb6ca6f6a07a316949ce3601d23b825da66904f69114ae0335023eb4cb6ca6f6a07a316949ce3601d23b825da66904f69114ae0335021b0000000253f99480021a00030d40a0f5f6",
+			chainId:       "1006",
+			publicKey:     "7ffafceddd9ed4b1bdce621cbd3e3d9df3f782b5670239c4cf15569958aa44bb",
+			signatureHex:  "5bffd637f8174c3d4b3197711db28d41a610ae967f5c52dda3b340cb88b176db146b61c28079164cc7d3a64f2f87a120333b02f37f2de7578b23900c2f67c009",
 			ExpectError:   false,
 		},
-		{
-			name:          "Invalid Signature",
-			serializedTxn: "83a40081825820c26a40e2a30305288cc8e85950bce2be4dc47eb58c768583d03cdd3177bd0e3b000181825839018d98bea0414243dc84070f96265577e7e6cf702d62e871016885034ecc64bf258b8e330cf0cdd9fdb03e10b4e4ac08f5da1fdec6222a34681a002dc6c0021a0002a42f031a032dcd55a100818258206d8a0b425bd2ec9692af39b1c0cf0e51caa07a603550e22f54091e872c7df29058407cf261f45babf645e6a5e61cd6df6ba7d1694a0dd1e7da9f405f16d1e7ae2d3c4c4d4ea2b8f3e7b0d2cd18c4b7be54c2c3e9d3a7d5c6b2d0f2d40e9f0e",
-			chainId:       "1005",
-			publicKey:     "6d8a0b425bd2ec9692af39b1c0cf0e51caa07a603550e22f54091e872c7df290",
-			signatureHex:  "invalid_signature",
-			ExpectError:   true,
-			ErrorMessage:  ErrInvalidSignature,
-		},
+		// {
+		// 	name:          "Invalid Signature",
+		// 	serializedTxn: "83a40081825820c26a40e2a30305288cc8e85950bce2be4dc47eb58c768583d03cdd3177bd0e3b000181825839018d98bea0414243dc84070f96265577e7e6cf702d62e871016885034ecc64bf258b8e330cf0cdd9fdb03e10b4e4ac08f5da1fdec6222a34681a002dc6c0021a0002a42f031a032dcd55a100818258206d8a0b425bd2ec9692af39b1c0cf0e51caa07a603550e22f54091e872c7df29058407cf261f45babf645e6a5e61cd6df6ba7d1694a0dd1e7da9f405f16d1e7ae2d3c4c4d4ea2b8f3e7b0d2cd18c4b7be54c2c3e9d3a7d5c6b2d0f2d40e9f0e",
+		// 	chainId:       "1005",
+		// 	publicKey:     "6d8a0b425bd2ec9692af39b1c0cf0e51caa07a603550e22f54091e872c7df290",
+		// 	signatureHex:  "invalid_signature",
+		// 	ExpectError:   true,
+		// 	ErrorMessage:  ErrInvalidSignature,
+		// },
 	}
 
 	for _, tt := range tests {

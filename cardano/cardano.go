@@ -7,6 +7,7 @@ package cardano
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -17,6 +18,7 @@ import (
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util"
 	"github.com/blockfrost/blockfrost-go"
+	"github.com/echovl/cardano-go"
 )
 
 const (
@@ -40,16 +42,17 @@ func getClient(chainUrl string) (blockfrost.APIClient, error) {
 	projectID := "mainnet2NiLEqB498izHpWxY90otIxo8UxQ9YSC"
 
 	// Determine network from chain URL
-	// network := blockfrost.CardanoMainNet
-	// if strings.Contains(strings.ToLower(chainUrl), "testnet") {
-	// 	network = blockfrost.CardanoTestNet
-	// }
+	network := blockfrost.CardanoMainNet
+	if strings.Contains(strings.ToLower(chainUrl), "preprod") {
+		network = blockfrost.CardanoPreProd
+		projectID = "preprodQqR2rJIwZJFQmMCmjcTol3HqCWKi9ZKQ"
+	}
 
 	// Create new client
 	newClient := blockfrost.NewAPIClient(
 		blockfrost.APIClientOptions{
 			ProjectID: projectID,
-			// Server:    network,
+			Server:    network,
 		},
 	)
 	clientMap[chainUrl] = newClient
@@ -158,19 +161,77 @@ func SendCardanoTransaction(serializedTxn string, chainId string, keyCurve strin
 		return "", err
 	}
 
-	// Decode the serialized transaction
+	// Decode the transaction bytes
 	txBytes, err := hex.DecodeString(strings.TrimPrefix(serializedTxn, "0x"))
 	if err != nil {
-		return "", fmt.Errorf("error decoding transaction: %v", err)
+		fmt.Printf("error decoding transaction: %v\n", err)
+		return "", fmt.Errorf("failed to decode transaction: %v", err)
 	}
 
-	// Submit the CBOR-encoded transaction
-	txHash, err := client.TransactionSubmit(context.Background(), txBytes)
+	var tx cardano.Tx
+	err = tx.UnmarshalCBOR(txBytes)
 	if err != nil {
+		fmt.Printf("error unmarshalling transaction: %+v\n", err)
+		return "", fmt.Errorf("failed to unmarshal transaction: %v", err)
+	}
+
+	// Calculate the transaction hash that needs to be signed
+	txHash, err := tx.Hash()
+	if err != nil {
+		return "", fmt.Errorf("failed to calculate transaction hash: %v", err)
+	}
+
+	fmt.Printf("Transaction hash to be signed: %+v\n", hex.EncodeToString(txHash))
+
+	// Decode public key
+	pubKeyBytes, err := hex.DecodeString(strings.TrimPrefix(publicKey, "0x"))
+	if err != nil {
+		return "", fmt.Errorf("failed to decode public key: %v", err)
+	}
+
+	txHash, err = tx.Hash()
+	if err != nil {
+		return "", fmt.Errorf("failed to calculate transaction hash: %v", err)
+	}
+
+	fmt.Printf("Transaction hash to be signed: %+v\n", hex.EncodeToString(txHash))
+
+	// Decode signature
+	signatureHex = strings.TrimPrefix(signatureHex, "0x")
+	sigBytes, err := hex.DecodeString(signatureHex)
+	if err != nil {
+		fmt.Printf("error decoding signature: %v\n", err)
+		return "", fmt.Errorf("failed to decode signature: %v", err)
+	}
+
+	// Verify that the signature is actually for this transaction's hash
+	// using the provided public key
+	if !ed25519.Verify(pubKeyBytes, txHash, sigBytes) {
+		fmt.Printf("signature verification failed - signature doesn't match transaction hash")
+		return "", fmt.Errorf("signature verification failed - signature doesn't match transaction hash")
+	}
+
+	// Create the witness set
+	tx.WitnessSet = cardano.WitnessSet{
+		VKeyWitnessSet: []cardano.VKeyWitness{
+			{
+				VKey:      pubKeyBytes,
+				Signature: sigBytes,
+			},
+		},
+	}
+
+	// Log the transaction for debugging
+	fmt.Printf("Submitting transaction: %+v\n", tx)
+
+	// Submit the transaction
+	txHash2, err := client.TransactionSubmit(context.Background(), tx.Bytes())
+	if err != nil {
+		fmt.Printf("error submitting transaction: %v\n", err)
 		return "", fmt.Errorf("error submitting transaction: %v", err)
 	}
 
-	return txHash, nil
+	return txHash2, nil
 }
 
 // CheckCardanoTransactionConfirmed checks whether a Cardano transaction has been confirmed
@@ -196,4 +257,122 @@ func CheckCardanoTransactionConfirmed(chainId string, txHash string) (bool, erro
 
 	// Transaction is confirmed if it has a block number
 	return tx.Block != "", nil
+}
+
+// func ProcessCardanoTransaction(serializedTxn string, publicKeyHex string, signatureHex string) (string, error) {
+// 	// Remove 0x prefix if present
+// 	serializedTxn = strings.TrimPrefix(serializedTxn, "0x")
+// 	publicKeyHex = strings.TrimPrefix(publicKeyHex, "0x")
+// 	signatureHex = strings.TrimPrefix(signatureHex, "0x")
+
+// 	// Decode the transaction bytes
+// 	txBytes, err := hex.DecodeString(serializedTxn)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to decode transaction: %v", err)
+// 	}
+
+// 	// Parse the transaction
+// 	// tx, err := cardano.ParseTx(txBytes)
+// 	// if err != nil {
+// 	// 	return "", fmt.Errorf("failed to parse transaction: %v", err)
+// 	// }
+
+// 	sigBytes, err := hex.DecodeString(signatureHex)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to decode signature: %v", err)
+// 	}
+
+// 	// Decode public key
+// 	pubKeyBytes, err := hex.DecodeString(publicKeyHex)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to decode public key: %v", err)
+// 	}
+
+// 	// txBuilder := cardano.NewTxBuilder(&cardano.ProtocolParams{})
+
+// 	// tx2, err := txBuilder.Build()
+// 	// if err != nil {
+// 	// 	return "", fmt.Errorf("failed to build transaction: %v", err)
+// 	// }
+
+// 	var tx cardano.Tx
+// 	err = json.Unmarshal(txBytes, &tx)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to unmarshal transaction: %v", err)
+// 	}
+
+// 	tx.WitnessSet.VKeyWitnessSet = []cardano.VKeyWitness{
+// 		{
+// 			VKey:      pubKeyBytes,
+// 			Signature: sigBytes,
+// 		},
+// 	}
+
+// 	// Create a verification key from the public key bytes
+// 	// vkey, err := crypto.NewVerificationKey(pubKeyBytes)
+// 	// if err != nil {
+// 	// 	return "", fmt.Errorf("failed to create verification key: %v", err)
+// 	// }
+
+// 	// Decode signature
+
+// 	// Create a signature from bytes
+// 	// signature, err := crypto.NewSignature(sigBytes)
+// 	// if err != nil {
+// 	// 	return "", fmt.Errorf("failed to create signature: %v", err)
+// 	// }
+
+// 	// // Create a witness from the verification key and signature
+// 	// witness := cardano.NewWitness(vkey, signature)
+
+// 	// // Add witness to transaction
+// 	// tx.AddWitness(witness)
+
+// 	// Serialize the transaction
+// 	signedTxBytes, err := tx.Bytes()
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to serialize signed transaction: %v", err)
+// 	}
+
+// 	return hex.EncodeToString(signedTxBytes), nil
+// }
+
+func GetAddressPublicKey(address string) ([]byte, error) {
+	// Parse the address using cardano-go
+	addr, err := cardano.NewAddress(address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse address: %v", err)
+	}
+
+	// Get the payment credential
+	paymentCred := addr.Payment.Hash()
+	if paymentCred == nil {
+		return nil, fmt.Errorf("address has no payment credential")
+	}
+
+	// The key hash is what we need - it's derived from the public key
+	fmt.Printf("Key hash from address: %x\n", paymentCred)
+	return paymentCred, nil
+}
+
+// Alternative using Blockfrost API
+func GetAddressDetailsFromBlockfrost(chainId string, address string) ([]byte, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return nil, fmt.Errorf("error getting chain: %v", err)
+	}
+
+	client, err := getClient(chain.ChainUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get address details from Blockfrost
+	addrDetails, err := client.Address(context.Background(), address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get address details: %v", err)
+	}
+
+	fmt.Printf("Address details: %+v\n", addrDetails)
+	return nil, nil // You'll need to extract the key hash from the response
 }

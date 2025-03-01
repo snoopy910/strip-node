@@ -332,7 +332,29 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "cardano" {
-							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							fmt.Printf("operation.SerializedTxn: %v\n", operation.SerializedTxn)
+							fmt.Printf("operation.ChainId: %v\n", operation.ChainId)
+							fmt.Printf("operation.KeyCurve: %v\n", operation.KeyCurve)
+							fmt.Printf("operation.DataToSign: %v\n", operation.DataToSign)
+							fmt.Printf("signature: %v\n", signature)
+							// Convert public key
+							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Printf("error getting public key: %v", err)
+								break
+							}
+
+							publicKey, err := base58.Decode(wallet.EDDSAPublicKey)
+							if err != nil {
+								fmt.Printf("error decoding public key: %v", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							fmt.Printf("publicKey: %+v\n", hex.EncodeToString(publicKey))
+
+							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, hex.EncodeToString(publicKey), signature)
 							if err != nil {
 								fmt.Printf("error sending Cardano transaction: %+v", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)

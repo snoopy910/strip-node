@@ -1,11 +1,9 @@
 package identity
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/sequencer"
-	"github.com/algorand/go-algorand-sdk/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -226,45 +224,23 @@ func VerifySignature(
 		return verified, nil
 
 	} else if identityCurve == ALGORAND_CURVE {
-		// Decode the public key from the Algorand address (base32 encoded with checksum)
-		address, err := types.DecodeAddress(identity)
+		// First decode the signature
+		decoded, err := algorand.DecodeSignature(signature)
 		if err != nil {
-			return false, fmt.Errorf("invalid Algorand address: %v", err)
+			return false, err
+		}
+		fmt.Println("Verify Signature algorand: ", message)
+		// Check if message contains AlgorandFlags to determine verification method
+		isRealTransaction, msg, _ := algorand.CheckFlags(message)
+
+		// If using direct signature verification path
+		if isRealTransaction {
+			// This is a direct signature (not a SignedTxn)
+			return algorand.VerifyDirectSignature(identity, msg, decoded)
 		}
 
-		// Convert public key bytes to ed25519.PublicKey
-		pubKeyBytes := address[:]
-		pubKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
-		copy(pubKey, pubKeyBytes)
-
-		// Convert message to bytes
-		// msgBytes := []byte(message) ?
-
-		fmt.Println("verify message: ", message)
-		var msgBytes []byte
-		var js map[string]interface{}
-		// Unmarshal the string into the map. If no error, it's valid JSON.
-		err = json.Unmarshal([]byte(message), &js)
-		if err == nil {
-			prefix := []byte("MX")
-			messageBytes := []byte(message)
-			msgBytes = append(prefix, messageBytes...)
-		} else {
-			msgBytes, err = base64.StdEncoding.DecodeString(message)
-			fmt.Println("verify message algorand bytes: ", message)
-			if err != nil {
-				return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
-			}
-		}
-		// Decode signature from base64 (Algorand standard)
-		fmt.Println("verify signature: ", signature)
-		sigBytes, err := base64.StdEncoding.DecodeString(signature)
-		if err != nil {
-			return false, fmt.Errorf("invalid Algorand signature encoding: %v", err)
-		}
-		verified := ed25519.Verify(pubKey, msgBytes, sigBytes)
-		fmt.Println("verified signature algorand: ", verified)
-		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
+		// Try to verify as a dummy transaction
+		return algorand.VerifyDummyTransaction(identity, message, decoded)
 	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 
@@ -315,11 +291,12 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 	intentForSigning := IntentForSigning{
 		Identity:      intent.Identity,
 		IdentityCurve: intent.IdentityCurve,
+		Operations:    []OperationForSigning{},
 		Expiry:        intent.Expiry,
 	}
 
 	for _, operation := range intent.Operations {
-		operationForSigning := OperationForSigning{
+		intentForSigning.Operations = append(intentForSigning.Operations, OperationForSigning{
 			SerializedTxn:  operation.SerializedTxn,
 			DataToSign:     operation.DataToSign,
 			ChainId:        operation.ChainId,
@@ -328,20 +305,13 @@ func SanitiseIntent(intent sequencer.Intent) (string, error) {
 			Type:           operation.Type,
 			Solver:         operation.Solver,
 			SolverMetadata: operation.SolverMetadata,
-		}
-
-		intentForSigning.Operations = append(intentForSigning.Operations, operationForSigning)
+		})
 	}
 
-	jsonBytes, err := json.Marshal(intentForSigning)
+	data, err := json.Marshal(intentForSigning)
 	if err != nil {
 		return "", err
 	}
 
-	dst := &bytes.Buffer{}
-	if err := json.Compact(dst, jsonBytes); err != nil {
-		panic(err)
-	}
-
-	return dst.String(), nil
+	return string(data), nil
 }

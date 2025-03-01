@@ -449,6 +449,11 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					AlgorandFlags: &struct {
+						IsRealTransaction bool `json:"isRealTransaction"`
+					}{
+						IsRealTransaction: true,
+					},
 				}
 
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)

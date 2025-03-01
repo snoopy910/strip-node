@@ -405,6 +405,8 @@ func startHTTPServer(port string) {
 
 		if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_TRANSACTION {
 			msg = intent.Operations[operationIndexInt].DataToSign
+		} else if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SEND_TO_BRIDGE {
+			msg = intent.Operations[operationIndexInt].DataToSign
 		} else if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SOLVER {
 			intentBytes, err := json.Marshal(intent)
 			if err != nil {

@@ -26,18 +26,6 @@ func WithdrawCardanoNativeGetSignature(
 		return "", "", fmt.Errorf("amount not found in solver output")
 	}
 
-	// Initialize client
-	// client, err := getClient(rpcURL)
-	// if err != nil {
-	// 	return "", "", err
-	// }
-
-	// Get UTXOs for bridge address
-	// utxos, err := client.AddressUTXOs(context.Background(), bridgeAddress, blockfrost.APIQueryParams{})
-	// if err != nil {
-	// 	return "", "", fmt.Errorf("failed to get UTXOs: %v", err)
-	// }
-
 	// Build transaction
 	tx := &blockfrost.TransactionUTXOs{
 		Inputs: []blockfrost.TransactionInput{
@@ -84,20 +72,6 @@ func WithdrawCardanoTokenGetSignature(
 	if !ok {
 		return "", "", fmt.Errorf("amount not found in solver output")
 	}
-
-	// Initialize client
-	// client, err := getClient(rpcURL)
-	// if err != nil {
-	// 	return "", "", err
-	// }
-
-	// Get UTXOs for bridge address
-	// utxos, err := client.AddressUTXOs(context.Background(), bridgeAddress, blockfrost.APIQueryParams{})
-	// if err != nil {
-	// 	return "", "", fmt.Errorf("failed to get UTXOs: %v", err)
-	// }
-
-	// Build token unit identifier
 
 	// Build transaction
 	tx := &blockfrost.TransactionUTXOs{

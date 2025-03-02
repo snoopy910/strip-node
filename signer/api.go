@@ -425,6 +425,8 @@ func startHTTPServer(port string) {
 
 		if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_TRANSACTION {
 			msg = intent.Operations[operationIndexInt].DataToSign
+		} else if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SEND_TO_BRIDGE {
+			msg = intent.Operations[operationIndexInt].DataToSign
 		} else if intent.Operations[operationIndexInt].Type == sequencer.OPERATION_TYPE_SOLVER {
 			intentBytes, err := json.Marshal(intent)
 			if err != nil {
@@ -592,7 +594,17 @@ func startHTTPServer(port string) {
 			// For Algorand, encode the signature in base64 (Algorand's standard)
 			signatureResponse.Signature = base64.StdEncoding.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
-			v, err := identityVerification.VerifySignature(sig.Address, "algorand_eddsa", msg, signatureResponse.Signature)
+			type algodMsg struct {
+				IsRealTransaction bool
+				Msg               string
+			}
+			m := algodMsg{IsRealTransaction: sig.AlgorandFlags.IsRealTransaction, Msg: msg}
+			jsonBytes, err := json.Marshal(m)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error marshaling algodMsg to JSON: %v", err), http.StatusInternalServerError)
+				return
+			}
+			v, err := identityVerification.VerifySignature(sig.Address, "algorand_eddsa", string(jsonBytes), signatureResponse.Signature)
 			if !v {
 				http.Error(w, fmt.Sprintf("error verifying algorand signature: %v", err), http.StatusInternalServerError)
 				return

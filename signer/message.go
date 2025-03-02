@@ -43,6 +43,9 @@ type Message struct {
 	Address            string      `json:"address"`
 	Signature          []byte      `json:"signature"`
 	Signers            []string    `json:"signers"`
+	AlgorandFlags      *struct {
+		IsRealTransaction bool `json:"isRealTransaction"`
+	} `json:"algorandFlags,omitempty"`
 }
 
 type IsValid struct {

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -398,14 +397,16 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			fmt.Println("completed saving of new keygen ", publicKeyStr)
 		case save := <-saveChanCardanoEddsa:
 			fmt.Println("saving key")
-
-			mainnetAddress, testnetAddress, err := cardano.PublicKeyToAddress(save)
-			if err != nil {
-				fmt.Println("error converting Cardano public key to address: ", err)
-				return
+			// Get the public key
+			pk := edwards.PublicKey{
+				Curve: save.EDDSAPub.Curve(),
+				X:     save.EDDSAPub.X(),
+				Y:     save.EDDSAPub.Y(),
 			}
 
-			fmt.Println("new TSS Address (Cardano) is: ", mainnetAddress, testnetAddress)
+			publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+			fmt.Println("new TSS Address (Cardano) is: ", publicKeyStr)
 			out, err := json.Marshal(save)
 			if err != nil {
 				fmt.Println(err)
@@ -427,7 +428,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
 				val <- "generated keygen"
 			}
-			fmt.Println("completed saving of new keygen ", mainnetAddress, testnetAddress)
+			fmt.Println("completed saving of new keygen ", publicKeyStr)
 		case save := <-saveChanSuiEddsa:
 			fmt.Println("saving key")
 

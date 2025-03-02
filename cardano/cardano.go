@@ -7,7 +7,6 @@ package cardano
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -19,6 +18,7 @@ import (
 	"github.com/StripChain/strip-node/util"
 	"github.com/blockfrost/blockfrost-go"
 	"github.com/echovl/cardano-go"
+	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -164,74 +164,103 @@ func SendCardanoTransaction(serializedTxn string, chainId string, keyCurve strin
 	// Decode the transaction bytes
 	txBytes, err := hex.DecodeString(strings.TrimPrefix(serializedTxn, "0x"))
 	if err != nil {
-		fmt.Printf("error decoding transaction: %v\n", err)
 		return "", fmt.Errorf("failed to decode transaction: %v", err)
 	}
 
-	var tx cardano.Tx
-	err = tx.UnmarshalCBOR(txBytes)
+	// Decode signature and public key
+	sigBytes, err := hex.DecodeString(strings.TrimPrefix(signatureHex, "0x"))
 	if err != nil {
-		fmt.Printf("error unmarshalling transaction: %+v\n", err)
-		return "", fmt.Errorf("failed to unmarshal transaction: %v", err)
+		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}
 
-	// Calculate the transaction hash that needs to be signed
-	txHash, err := tx.Hash()
-	if err != nil {
-		return "", fmt.Errorf("failed to calculate transaction hash: %v", err)
-	}
-
-	fmt.Printf("Transaction hash to be signed: %+v\n", hex.EncodeToString(txHash))
-
-	// Decode public key
 	pubKeyBytes, err := hex.DecodeString(strings.TrimPrefix(publicKey, "0x"))
 	if err != nil {
 		return "", fmt.Errorf("failed to decode public key: %v", err)
 	}
 
-	txHash, err = tx.Hash()
+	// Use a custom CBOR decoder that preserves the exact structure
+	decMode, err := cbor.DecOptions{
+		TagsMd:            cbor.TagsAllowed,
+		ExtraReturnErrors: cbor.ExtraDecErrorUnknownField,
+	}.DecMode()
 	if err != nil {
-		return "", fmt.Errorf("failed to calculate transaction hash: %v", err)
+		return "", fmt.Errorf("failed to create decoder: %v", err)
 	}
 
-	fmt.Printf("Transaction hash to be signed: %+v\n", hex.EncodeToString(txHash))
-
-	// Decode signature
-	signatureHex = strings.TrimPrefix(signatureHex, "0x")
-	sigBytes, err := hex.DecodeString(signatureHex)
+	// Decode the transaction to get its structure
+	var txData interface{}
+	err = decMode.Unmarshal(txBytes, &txData)
 	if err != nil {
-		fmt.Printf("error decoding signature: %v\n", err)
-		return "", fmt.Errorf("failed to decode signature: %v", err)
+		return "", fmt.Errorf("failed to decode transaction: %v", err)
 	}
 
-	// Verify that the signature is actually for this transaction's hash
-	// using the provided public key
-	if !ed25519.Verify(pubKeyBytes, txHash, sigBytes) {
-		fmt.Printf("signature verification failed - signature doesn't match transaction hash")
-		return "", fmt.Errorf("signature verification failed - signature doesn't match transaction hash")
+	// For Cardano Shelley transactions, the structure is typically:
+	// [transaction_body, transaction_witness_set, transaction_metadata, auxiliary_data]
+	// We need to ensure we maintain this exact structure
+
+	txArray, ok := txData.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("unexpected transaction structure: %T", txData)
 	}
 
-	// Create the witness set
-	tx.WitnessSet = cardano.WitnessSet{
-		VKeyWitnessSet: []cardano.VKeyWitness{
-			{
-				VKey:      pubKeyBytes,
-				Signature: sigBytes,
-			},
-		},
+	// Create a witness with the public key and signature
+	vkeyWitness := []interface{}{
+		pubKeyBytes,
+		sigBytes,
 	}
 
-	// Log the transaction for debugging
-	fmt.Printf("Submitting transaction: %+v\n", tx)
+	// Check if we have a witness set (index 1)
+	if len(txArray) > 1 {
+		witnessSet, ok := txArray[1].(map[interface{}]interface{})
+		if !ok {
+			// If it's not a map, create a new one
+			witnessSet = make(map[interface{}]interface{})
+			txArray[1] = witnessSet
+		}
+
+		// Check if we have vkey witnesses
+		vkeyWitnesses, ok := witnessSet[uint64(0)].([]interface{})
+		if !ok {
+			// If not, create a new array with our witness
+			witnessSet[uint64(0)] = []interface{}{vkeyWitness}
+		} else {
+			// If we do, append our witness
+			witnessSet[uint64(0)] = append(vkeyWitnesses, vkeyWitness)
+		}
+	} else {
+		// If we don't have a witness set, create one
+		witnessSet := map[interface{}]interface{}{
+			uint64(0): []interface{}{vkeyWitness},
+		}
+		txArray = append(txArray, witnessSet)
+	}
+
+	// Ensure we have all required elements (at least 3 for a valid Shelley transaction)
+	for len(txArray) < 3 {
+		txArray = append(txArray, nil)
+	}
+
+	// Re-encode the transaction
+	encMode, err := cbor.EncOptions{
+		Sort:   cbor.SortCanonical,
+		TagsMd: cbor.TagsAllowed,
+	}.EncMode()
+	if err != nil {
+		return "", fmt.Errorf("failed to create encoder: %v", err)
+	}
+
+	signedTxBytes, err := encMode.Marshal(txArray)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal signed transaction: %v", err)
+	}
 
 	// Submit the transaction
-	txHash2, err := client.TransactionSubmit(context.Background(), tx.Bytes())
+	txHash, err := client.TransactionSubmit(context.Background(), signedTxBytes)
 	if err != nil {
-		fmt.Printf("error submitting transaction: %v\n", err)
 		return "", fmt.Errorf("error submitting transaction: %v", err)
 	}
 
-	return txHash2, nil
+	return txHash, nil
 }
 
 // CheckCardanoTransactionConfirmed checks whether a Cardano transaction has been confirmed

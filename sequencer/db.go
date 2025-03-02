@@ -57,8 +57,7 @@ type WalletSchema struct {
 	SuiPublicKey             string `json:"suiPublicKey"`
 	AlgorandEDDSAPublicKey   string `json:"algorandEddsaPublicKey"`
 	RippleEDDSAPublicKey     string `json:"rippleEddsaPublicKey"`
-	CardanoMainnetPublicKey  string `json:"cardanoMainnetPublicKey"`
-	CardanoTestnetPublicKey  string `json:"cardanoTestnetPublicKey"`
+	CardanoPublicKey         string `json:"cardanoPublicKey"`
 	Signers                  string `json:"signers"`
 }
 

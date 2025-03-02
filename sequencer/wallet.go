@@ -475,15 +475,14 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
-	var getCardanoAddressesResponse GetCardanoAddressesResponse
+	var getCardanoAddressesResponse GetAddressResponse
 
 	err = json.Unmarshal(body, &getCardanoAddressesResponse)
 	if err != nil {
 		return err
 	}
 
-	cardanoMainnetAddress := getCardanoAddressesResponse.MainnetAddress
-	cardanoTestnetAddress := getCardanoAddressesResponse.TestnetAddress
+	cardanoAddress := getCardanoAddressesResponse.Address
 
 	// add created wallet to the store
 	wallet := WalletSchema{
@@ -502,8 +501,7 @@ func createWallet(identity string, identityCurve string) error {
 		StellarPublicKey:         stellarAddress,
 		AlgorandEDDSAPublicKey:   algorandEddsaAddress,
 		RippleEDDSAPublicKey:     rippleAddress,
-		CardanoMainnetPublicKey:  cardanoMainnetAddress,
-		CardanoTestnetPublicKey:  cardanoTestnetAddress,
+		CardanoPublicKey:         cardanoAddress,
 	}
 
 	_, err = AddWallet(&wallet)

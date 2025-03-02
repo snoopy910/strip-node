@@ -332,29 +332,13 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "cardano" {
-							fmt.Printf("operation.SerializedTxn: %v\n", operation.SerializedTxn)
-							fmt.Printf("operation.ChainId: %v\n", operation.ChainId)
-							fmt.Printf("operation.KeyCurve: %v\n", operation.KeyCurve)
-							fmt.Printf("operation.DataToSign: %v\n", operation.DataToSign)
-							fmt.Printf("signature: %v\n", signature)
-							// Convert public key
 							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
 								fmt.Printf("error getting public key: %v", err)
 								break
 							}
 
-							publicKey, err := base58.Decode(wallet.EDDSAPublicKey)
-							if err != nil {
-								fmt.Printf("error decoding public key: %v", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-								break
-							}
-
-							fmt.Printf("publicKey: %+v\n", hex.EncodeToString(publicKey))
-
-							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, hex.EncodeToString(publicKey), signature)
+							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.CardanoPublicKey, signature)
 							if err != nil {
 								fmt.Printf("error sending Cardano transaction: %+v", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -1889,12 +1873,8 @@ func ProcessIntent(intentId int64) {
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "cardano_eddsa" {
-						bridgeWalletAddress := bridgeWallet.CardanoMainnetPublicKey
-						userAddress := user.CardanoMainnetPublicKey
-						if withdrawalChain.ChainId == "1006" {
-							bridgeWalletAddress = bridgeWallet.CardanoTestnetPublicKey
-							userAddress = user.CardanoTestnetPublicKey
-						}
+						bridgeWalletAddress := bridgeWallet.CardanoPublicKey
+						userAddress := user.CardanoPublicKey
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native token
 							transaction, dataToSign, err := cardano.WithdrawCardanoNativeGetSignature(

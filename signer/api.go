@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/StripChain/strip-node/cardano"
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/StripChain/strip-node/common"
@@ -362,15 +361,17 @@ func startHTTPServer(port string) {
 		} else if keyCurve == CARDANO_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
 
-			address, testnetAddress, err := cardano.PublicKeyToAddress(rawKeyEddsa)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-				return
+			// Get the public key
+			pk := edwards.PublicKey{
+				Curve: rawKeyEddsa.EDDSAPub.Curve(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
 			}
 
-			getAddressResponse := GetCardanoAddressesResponse{
-				MainnetAddress: address,
-				TestnetAddress: testnetAddress,
+			publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+			getAddressResponse := GetAddressResponse{
+				Address: publicKeyStr,
 			}
 			err = json.NewEncoder(w).Encode(getAddressResponse)
 			if err != nil {
@@ -544,37 +545,13 @@ func startHTTPServer(port string) {
 				return
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
-		} else if keyCurve == RIPPLE_CURVE {
+		} else if keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 			msgBytes, err := hex.DecodeString(msg)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error decoding %s message: %v", keyCurve, err), http.StatusInternalServerError)
 				return
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
-		} else if keyCurve == CARDANO_CURVE {
-			chainId := intent.Operations[operationIndexInt].ChainId
-
-			msgBytes, err := hex.DecodeString(msg)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("error decoding %s message: %v", keyCurve, err), http.StatusInternalServerError)
-				return
-			}
-			chain, err := common.GetChain(chainId)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("error getting chain info: %v", err), http.StatusInternalServerError)
-				return
-			}
-
-			metadata := map[string]interface{}{
-				"chainId": chain.ChainId,
-				"msg":     string(msgBytes),
-			}
-			metadataBytes, err := json.Marshal(metadata)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("error decoding %s message: %v", keyCurve, err), http.StatusInternalServerError)
-				return
-			}
-			go generateSignatureMessage(identity, identityCurve, keyCurve, metadataBytes)
 		} else {
 			http.Error(w, "invalid key curve", http.StatusBadRequest)
 			return
@@ -659,9 +636,4 @@ type GetDogecoinAddressesResponse struct {
 type GetSuiAddressResponse struct {
 	Address   string `json:"address"`
 	PublicKey string `json:"publicKey"` // Full Ed25519 public key in hex
-}
-
-type GetCardanoAddressesResponse struct {
-	MainnetAddress string `json:"mainnetAddress"`
-	TestnetAddress string `json:"testnetAddress"`
 }

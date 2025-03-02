@@ -105,11 +105,6 @@ type GetDogecoinAddressesResponse struct {
 	TestnetAddress string `json:"testnetAddress"`
 }
 
-type GetCardanoAddressesResponse struct {
-	MainnetAddress string `json:"mainnetAddress"`
-	TestnetAddress string `json:"testnetAddress"`
-}
-
 type IntentsResult struct {
 	Intents []*Intent `json:"intents"`
 	Total   int       `json:"total"`

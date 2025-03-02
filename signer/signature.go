@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
@@ -176,22 +175,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
-	} else if keyCurve == CARDANO_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		var metadata map[string]interface{}
-		json.Unmarshal(hash, &metadata)
-		msg1 := metadata["msg"].(string)
-		msg, ok := new(big.Int).SetString(msg1, 16)
-		if !ok {
-			fmt.Println("error setting string  ", err)
-		}
-
-		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
-		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
-	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE {
+	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := new(big.Int).SetBytes(hash)
 
@@ -219,12 +203,10 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		go localParty.Start()
 	}
 
-	fmt.Printf("outChanKeygen: %+v\n", outChanKeygen)
 	completed := false
 	for !completed {
 		select {
 		case msg := <-outChanKeygen:
-			fmt.Printf("msg5: %+v\n", msg)
 			dest := msg.GetTo()
 			bytes, _, _ := msg.WireBytes()
 			to := 0
@@ -254,7 +236,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 			if keyCurve == EDDSA_CURVE {
 				pk := edwards.PublicKey{
-					Curve: tss.Edwards(),
+					Curve: rawKeyEcdsa.ECDSAPub.Curve(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
 					Y:     rawKeyEddsa.EDDSAPub.Y(),
 				}
@@ -485,32 +467,20 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 				go broadcast(message)
 			} else if keyCurve == CARDANO_CURVE {
-				var metadata map[string]interface{}
-				address, testnetAddress, err := cardano.PublicKeyToAddress(rawKeyEddsa)
-				if err != nil {
-					fmt.Println("error converting Cardano public key to address: ", err)
-					return
+
+				pk := edwards.PublicKey{
+					Curve: rawKeyEddsa.EDDSAPub.Curve(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
 				}
 
-				if err := json.Unmarshal(hash, &metadata); err != nil {
-					fmt.Println("Error parsing metadata:", err)
-					return
-				}
+				publicKeyStr := hex.EncodeToString(pk.Serialize())
 
-				if chainId, ok := metadata["chainId"].(string); ok && chainId == "1006" {
-					address = testnetAddress
-				}
-
-				hashBytes, err := hex.DecodeString(metadata["msg"].(string))
-				if err != nil {
-					fmt.Println("error decoding msg hash: ", err)
-					return
-				}
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,
-					Hash:          hashBytes,
+					Hash:          hash,
 					Message:       save.Signature,
-					Address:       address,
+					Address:       publicKeyStr,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

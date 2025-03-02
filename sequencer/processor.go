@@ -31,6 +31,7 @@ import (
 	algorandTypes "github.com/algorand/go-algorand-sdk/types"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	cardanolib "github.com/echovl/cardano-go"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -39,6 +40,7 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/mr-tron/base58"
+	"github.com/rubblelabs/ripple/data"
 	"github.com/stellar/go/xdr"
 )
 
@@ -579,7 +581,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)
@@ -656,6 +658,35 @@ func ProcessIntent(intentId int64) {
 								fmt.Printf("Unknown transaction type: %s\n", txn.Type)
 								break
 							}
+						case "ripple":
+							// For Ripple, the destination is in the transaction payload
+							// Decode the serialized transaction
+							txBytes, err := hex.DecodeString(strings.TrimPrefix(operation.SerializedTxn, "0x"))
+							if err != nil {
+								fmt.Printf("error decoding transaction: %v", err)
+								break
+							}
+
+							// Parse the transaction
+							var tx data.Payment
+							err = json.Unmarshal(txBytes, &tx)
+							if err != nil {
+								fmt.Printf("error unmarshalling transaction: %v", err)
+								break
+							}
+							destAddress = tx.Destination.String()
+						case "cardano":
+							var tx cardanolib.Tx
+							txBytes, err := hex.DecodeString(operation.SerializedTxn)
+							if err != nil {
+								fmt.Printf("error decoding Cardano transaction: %v\n", err)
+								break
+							}
+							if err := json.Unmarshal(txBytes, &tx); err != nil {
+								fmt.Printf("error parsing Cardano transaction: %v\n", err)
+								break
+							}
+							destAddress = tx.Body.Outputs[0].Address.String()
 						}
 
 						// Verify the extracted destination matches the bridge wallet
@@ -673,6 +704,10 @@ func ProcessIntent(intentId int64) {
 							// add algorand case
 							case "algorand":
 								validDestination = strings.EqualFold(destAddress, bridgeWallet.AlgorandEDDSAPublicKey)
+							case "ripple":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.RippleEDDSAPublicKey)
+							case "cardano":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.CardanoPublicKey)
 							}
 						}
 

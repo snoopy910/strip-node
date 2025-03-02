@@ -32,6 +32,7 @@ var (
 	STELLAR_CURVE     = "stellar_eddsa"
 	ALGORAND_CURVE    = "algorand_eddsa"
 	RIPPLE_CURVE      = "ripple_eddsa"
+	CARDANO_CURVE     = "cardano_eddsa"
 )
 
 type OperationForSigning struct {
@@ -265,7 +266,7 @@ func VerifySignature(
 		verified := ed25519.Verify(pubKey, msgBytes, sigBytes)
 		fmt.Println("verified signature algorand: ", verified)
 		return ed25519.Verify(pubKey, msgBytes, sigBytes), nil
-	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE {
+	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE || identityCurve == CARDANO_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 
 		// Remove 0x prefix from public key

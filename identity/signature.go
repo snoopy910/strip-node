@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -241,7 +242,7 @@ func VerifySignature(
 
 		// Try to verify as a dummy transaction
 		return algorand.VerifyDummyTransaction(identity, message, decoded)
-	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE {
+	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE || identityCurve == STELLAR_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 
 		// Remove 0x prefix from public key

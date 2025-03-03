@@ -64,6 +64,7 @@ const (
 	OPERATION_TYPE_BRIDGE_DEPOSIT = "bridgeDeposit"
 	OPERATION_TYPE_SWAP           = "swap"
 	OPERATION_TYPE_BURN           = "burn"
+	OPERATION_TYPE_BURN_SYNTHETIC = "burn_synthetic"
 	OPERATION_TYPE_WITHDRAW       = "withdraw"
 	OPERATION_TYPE_SEND_TO_BRIDGE = "sendToBridge"
 )

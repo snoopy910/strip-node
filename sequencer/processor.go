@@ -2548,7 +2548,7 @@ func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) 
 
 	client, err := ethclient.Dial(chain.ChainUrl)
 	if err != nil {
-		log.Fatal(err)
+		return false, fmt.Errorf("failed to dial EVM client: %v", err)
 	}
 
 	_, isPending, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))

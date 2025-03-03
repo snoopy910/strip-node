@@ -38,7 +38,7 @@ import (
 	"github.com/mr-tron/base58"
 )
 
-func initiaiseBridge() {
+func initialiseBridge() {
 
 	// Generate bridge accounts
 	// Configure SC
@@ -679,12 +679,12 @@ func withdrawSolanaSPLGetSignature(
 
 	senderTokenAccount, _, err := solana.FindAssociatedTokenAddress(accountFrom, tokenMint)
 	if err != nil {
-		log.Fatalf("failed to get sender token account: %v", err)
+		return "", "", fmt.Errorf("failed to get sender token account: %v", err)
 	}
 
 	recipientTokenAccount, _, err := solana.FindAssociatedTokenAddress(accountTo, tokenMint)
 	if err != nil {
-		log.Fatalf("failed to get recipient token account: %v", err)
+		return "", "", fmt.Errorf("failed to get recipient token account: %v", err)
 	}
 
 	// convert amount to uint64

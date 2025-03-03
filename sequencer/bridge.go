@@ -221,7 +221,7 @@ func mintBridge(amount string, account string, token string, signature string) (
 
 	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	data, err := abi.Pack("mint", amountBigInt, common.HexToAddress(token), common.HexToAddress(account), nonce, ethSigHexBytes)
@@ -344,7 +344,7 @@ func swapBridge(
 
 	ethSigHexBytes, err := hex.DecodeString(ethSigHex)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	data, err := abi.Pack("swap", params, common.HexToAddress(account), nonce, ethSigHexBytes)

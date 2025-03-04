@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
@@ -205,7 +206,7 @@ func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 	}
 
 	// Send request
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("error sending transaction: %v", err)

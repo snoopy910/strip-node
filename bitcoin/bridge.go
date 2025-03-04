@@ -87,8 +87,7 @@ func WithdrawBitcoinTxn(
 	transaction string,
 	signature string,
 ) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	// Get chain URL from chainId
 	chain, err := common.GetChain(chainId)

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -197,7 +198,8 @@ func fetchTransaction(chainUrl string, txHash string) (*BlockCypherTransaction, 
 	url := fmt.Sprintf("%s/txs/%s", chainUrl, txHash)
 
 	// Send GET request to BlockCypher API
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transaction: %v", err)
 	}

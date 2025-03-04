@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -91,6 +92,11 @@ func startHTTPServer(port string) {
 		err := json.NewDecoder(r.Body).Decode(&createWallet)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if reflect.DeepEqual(createWallet, CreateWallet{}) {
+			http.Error(w, "Invalid wallet", http.StatusBadRequest)
 			return
 		}
 

@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/mr-tron/base58"
+	"github.com/stellar/go/keypair"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -242,7 +243,7 @@ func VerifySignature(
 
 		// Try to verify as a dummy transaction
 		return algorand.VerifyDummyTransaction(identity, message, decoded)
-	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE || identityCurve == STELLAR_CURVE {
+	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE {
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 
 		// Remove 0x prefix from public key
@@ -282,6 +283,42 @@ func VerifySignature(
 
 		fmt.Printf("[VERIFY APTOS_EDDSA] Verification result: %v\n", verified)
 		return verified, nil
+	} else if identityCurve == STELLAR_CURVE {
+		fmt.Println("[VERIFY STELLAR] Verifying Stellar EdDSA signature")
+
+		// Decode the signature from base64
+		fmt.Printf("[VERIFY STELLAR] Raw signature: %s\n", signature)
+
+		// First base64 decode
+		signatureBytes, err := base64.StdEncoding.DecodeString(signature)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode first layer of Stellar signature: %v", err)
+		}
+
+		// Second base64 decode - according to client code
+		decodedSig, err := base64.StdEncoding.DecodeString(string(signatureBytes))
+		if err != nil {
+			return false, fmt.Errorf("failed to decode second layer of Stellar signature: %v", err)
+		}
+
+		fmt.Printf("[VERIFY STELLAR] Decoded signature length: %d bytes\n", len(decodedSig))
+
+		// Decode the public key from Stellar format
+		kp, err := keypair.Parse(identity)
+		if err != nil {
+			return false, fmt.Errorf("failed to parse Stellar keypair: %v", err)
+		}
+
+		// Based on the logs, verification succeeds with the original message
+		err = kp.Verify([]byte(message), decodedSig)
+		if err == nil {
+			fmt.Println("[VERIFY STELLAR] Verification succeeded with original message")
+			return true, nil
+		}
+
+		// If verification failed, return false with error
+		fmt.Printf("[VERIFY STELLAR] Verification failed: %v\n", err)
+		return false, nil
 	} else {
 		fmt.Printf("unsupported curve: %s", identityCurve)
 		return false, fmt.Errorf("unsupported curve: %s", identityCurve)

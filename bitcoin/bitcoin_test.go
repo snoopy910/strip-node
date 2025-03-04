@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -584,24 +586,29 @@ func TestIsValidBitcoinAddress(t *testing.T) {
 }
 
 func TestSendBitcoinTransaction(t *testing.T) {
-	serializedTxn := "01000000018be5c497555fd91ac3987e7eea01c89f7f7a9f7d1a1f8033f10e780e9fee2d820000000000ffffffff021027000000000000160014bd1979541c3abe7557f0c2a28bb7607cdc62b2dffca09a3b000000001976a91467f25b9570fdd49754970aadb14e6a1dbf4b469188ac00000000"
-	chainId := "1002"
+	// Create a valid Simnet address
+	pubKeyHash := []byte{118, 169, 82, 84, 36, 23, 237, 52, 71, 4, 218, 23, 74, 247, 134, 103, 127, 119, 163, 82}
+	_, err := btcutil.NewAddressWitnessPubKeyHash(pubKeyHash, &chaincfg.SimNetParams)
+	require.NoError(t, err)
+
+	// Test transaction data
+	serializedTxn := "01000000018be5c497555fd91ac3987e7eea01c89f7f7a9f7d1a1f8033f10e780e9fee2d820000000000ffffffff021027000000000000160014bd1979541c3abe7557f0c2a28bb7607cdc62b2dffca09a3b000000001600148d7a0a3461e3891dbdf560f0f45c18fe5dd2274d00000000"
+	chainId := "1003" // Simnet
 	keyCurve := "bitcoin_ecdsa"
 	dataToSign := "badce2c5be9dba537fe0e370681699d029e777eb2abb185aa5ae244ea78012f4"
 	address := "021b43d4eda394393e130a333af4ac6d553c2f34b3aeed2dcaa2d6c7bb6139bbae"
 	signatureHex := "d18297fe4cf25a05077be893bc14fefed531a93d1abd5269f01ffc235539240a11b721b18225ff9597fdd99af4f80720df7846257e74408d02f888abff45c59f"
 
-	// serializedTxn := "0100000001e86b0b3ce3f903b2b850e8b2d3fe2570ea5e97b515eeaf9b003992453ba15b690000000000ffffffff021027000000000000160014c6b86b60aabd529d22fa5cd74993c443f4b28c2bfca09a3b0000000016001490c549774de1532ec33672acad04cc67536db0af00000000"
-	// chainId := "1002"
-	// keyCurve := "bitcoin_ecdsa"
-	// dataToSign := "3cd892296e6ff4ec5c03ab63f9703ed7aad098f1d48f54dfb76ffd0e5729995e"
-	// address := "0328d860ac276444a31fca9fb28657bc02e305000a2b64f8afbe4a52844eeafd04"
-	// signatureHex := "ffb89f862401f53b0df023e2d2676581bd440a9ef9a5641a8912899bdb96433d10035902effc9d2e45e3c1aa4c306a65ac350c78a5a6d4ace14f1edbacdedf71"
+	// Setup mock Simnet server
+	server, chain := MockSimnetServer(t)
+	defer server.Close()
+
+	// Setup test chain
+	common.Chains = []common.Chain{chain}
 
 	rlt, err := SendBitcoinTransaction(serializedTxn, chainId, keyCurve, dataToSign, address, signatureHex)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.NotEmpty(t, rlt)
 	t.Log(rlt)
 }
 

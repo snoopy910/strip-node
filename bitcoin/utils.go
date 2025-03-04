@@ -426,3 +426,24 @@ func derEncode(signature string) (string, error) {
 
 	return hex.EncodeToString(derSig), nil
 }
+
+// GetChainParams returns the appropriate Bitcoin chain parameters based on chainId
+// chainId mapping:
+// - "1000": MainNet
+// - "1001": TestNet3
+// - "1002": RegTest
+// - "1003": SimNet
+func GetChainParams(chainId string) (*chaincfg.Params, error) {
+	switch chainId {
+	case "1000":
+		return &chaincfg.MainNetParams, nil
+	case "1001":
+		return &chaincfg.TestNet3Params, nil
+	case "1002":
+		return &chaincfg.RegressionNetParams, nil
+	case "1003":
+		return &chaincfg.SimNetParams, nil
+	default:
+		return nil, fmt.Errorf("unsupported chain ID: %s", chainId)
+	}
+}

@@ -11,14 +11,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
 func WithdrawBitcoinGetSignature(
-	rpcURL string,
+	chainId string,
 	account string,
 	amount string,
 	recipient string,
@@ -27,7 +28,7 @@ func WithdrawBitcoinGetSignature(
 	var msgTx wire.MsgTx
 	msgTx.Version = wire.TxVersion
 
-	// Parse solver output for transaction details
+	// Parse amount
 	amountFloat, err := strconv.ParseFloat(amount, 64)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse amount: %w", err)
@@ -36,8 +37,14 @@ func WithdrawBitcoinGetSignature(
 	// Convert amount to satoshis
 	amountSatoshis := int64(amountFloat * 100000000)
 
+	// Get chain parameters based on chainId
+	chainParams, err := GetChainParams(chainId)
+	if err != nil {
+		return "", err
+	}
+
 	// Create transaction output
-	addr, err := btcutil.DecodeAddress(recipient, &chaincfg.MainNetParams)
+	addr, err := btcutil.DecodeAddress(recipient, chainParams)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode recipient address: %w", err)
 	}
@@ -47,8 +54,24 @@ func WithdrawBitcoinGetSignature(
 		return "", fmt.Errorf("failed to create output script: %w", err)
 	}
 
+	// Add the main transaction output
 	txOut := wire.NewTxOut(amountSatoshis, pkScript)
 	msgTx.AddTxOut(txOut)
+
+	// Add a dummy input (will be updated with actual UTXO later)
+	dummyHash := chainhash.Hash{}
+	dummyOutpoint := wire.NewOutPoint(&dummyHash, 0)
+	txIn := wire.NewTxIn(dummyOutpoint, nil, nil)
+	msgTx.AddTxIn(txIn)
+
+	// Create P2WPKH script for the input
+	_, err = btcutil.DecodeAddress(account, chainParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode from address: %w", err)
+	}
+
+	// For P2WPKH, we use empty SignatureScript and put the actual script in witness
+	txIn.SignatureScript = []byte{}
 
 	// Serialize the transaction
 	var buf bytes.Buffer
@@ -60,33 +83,61 @@ func WithdrawBitcoinGetSignature(
 }
 
 func WithdrawBitcoinTxn(
-	rpcURL string,
+	chainId string,
 	transaction string,
 	signature string,
 ) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Decode and prepare transaction
-	txBytes, _ := hex.DecodeString(transaction)
-	sigBytes, _ := hex.DecodeString(signature)
-
-	msgTx := wire.NewMsgTx(wire.TxVersion)
-	msgTx.Deserialize(bytes.NewReader(txBytes))
-
-	// Create and apply signature script
-	builder := txscript.NewScriptBuilder()
-	builder.AddData(sigBytes)
-	builder.AddData(txBytes)
-	signatureScript, _ := builder.Script()
-
-	for i := range msgTx.TxIn {
-		msgTx.TxIn[i].SignatureScript = signatureScript
+	// Get chain URL from chainId
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", fmt.Errorf("failed to get chain: %w", err)
 	}
+
+	// Decode transaction and signature
+	txBytes, err := hex.DecodeString(transaction)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode transaction: %w", err)
+	}
+
+	// Create DER signature
+	derSignatureHex, err := derEncode(signature)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode signature: %w", err)
+	}
+	derSignature, err := hex.DecodeString(derSignatureHex)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode DER signature: %w", err)
+	}
+
+	// Deserialize transaction
+	msgTx := wire.NewMsgTx(wire.TxVersion)
+	if err := msgTx.Deserialize(bytes.NewReader(txBytes)); err != nil {
+		return "", fmt.Errorf("failed to deserialize transaction: %w", err)
+	}
+
+	// For SegWit transactions, we use witness data instead of signature script
+	if len(msgTx.TxIn) == 0 {
+		return "", fmt.Errorf("transaction has no inputs")
+	}
+
+	// Add SIGHASH_ALL byte to signature
+	derSignature = append(derSignature, byte(txscript.SigHashAll))
+
+	// Set witness data for the input
+	// For P2WPKH, the witness stack must contain exactly two items:
+	// 1. The signature (including sighash type byte)
+	// 2. The public key
+	witness := wire.TxWitness{derSignature}
+	msgTx.TxIn[0].Witness = witness
 
 	// Serialize signed transaction
 	var signedTxBuffer bytes.Buffer
-	msgTx.Serialize(&signedTxBuffer)
+	if err := msgTx.Serialize(&signedTxBuffer); err != nil {
+		return "", fmt.Errorf("failed to serialize signed transaction: %w", err)
+	}
 	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
 
 	// Prepare and send RPC request
@@ -97,18 +148,33 @@ func WithdrawBitcoinTxn(
 		"params":  []interface{}{signedTxHex},
 	}
 
-	jsonData, _ := json.Marshal(rpcRequest)
-	req, _ := http.NewRequestWithContext(ctx, "POST", rpcURL, bytes.NewBuffer(jsonData))
+	jsonData, err := json.Marshal(rpcRequest)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal RPC request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", chain.ChainUrl, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
+	if chain.RpcUsername != "" {
+		req.SetBasicAuth(chain.RpcUsername, chain.RpcPassword)
+	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %v", err)
+		return "", fmt.Errorf("failed to send transaction: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Parse response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var rpcResponse struct {
 		Result string `json:"result"`
 		Error  *struct {
@@ -117,8 +183,9 @@ func WithdrawBitcoinTxn(
 		} `json:"error"`
 	}
 
-	body, _ := io.ReadAll(resp.Body)
-	json.Unmarshal(body, &rpcResponse)
+	if err := json.Unmarshal(body, &rpcResponse); err != nil {
+		return "", fmt.Errorf("failed to parse RPC response: %w", err)
+	}
 
 	if rpcResponse.Error != nil {
 		return "", fmt.Errorf("RPC error: %v", rpcResponse.Error.Message)

@@ -1234,7 +1234,7 @@ func ProcessIntent(intentId int64) {
 
 						// handle bitcoin withdrawal
 						dataToSign, err := bitcoin.WithdrawBitcoinGetSignature(
-							withdrawalChain.ChainUrl,
+							withdrawalChain.ChainId,
 							bridgeWalletBitcoinAddress,
 							burn.SolverOutput,
 							userBitcoinAddress,
@@ -1255,7 +1255,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						result, err := bitcoin.WithdrawBitcoinTxn(
-							withdrawalChain.ChainUrl,
+							withdrawalChain.ChainId,
 							dataToSign,
 							signature,
 						)

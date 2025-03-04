@@ -10,7 +10,6 @@ import (
 	"net/http"
 
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 
 	"github.com/StripChain/strip-node/common"
@@ -133,15 +132,9 @@ func SendBitcoinTransaction(serializedTxn string, chainId string, keyCurve strin
 
 	// Step 0: Decode address
 	// Parse the address into a scriptPubKey
-	var netParam *chaincfg.Params
-	if chain.ChainId == "1000" {
-		netParam = &chaincfg.MainNetParams
-	} else if chain.ChainId == "1001" {
-		netParam = &chaincfg.TestNet3Params
-	} else if chain.ChainId == "1002" {
-		netParam = &chaincfg.RegressionNetParams
-	} else {
-		return "", fmt.Errorf("unsupported bitcoin chain ID: %s", chain.ChainId)
+	netParam, err := GetChainParams(chain.ChainId)
+	if err != nil {
+		return "", err
 	}
 	decodedAddress, err := btcutil.DecodeAddress(address, netParam)
 	if err != nil {
@@ -262,67 +255,4 @@ func CheckBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, err
 	}
 
 	return false, nil
-}
-
-func sendSignedBitcoinTransaction(signedTxHex string) (string, error) {
-	chain, err := common.GetChain("1002")
-	if err != nil {
-		return "", err
-	}
-
-	// Step 5: Prepare and send RPC request
-	rpcRequest := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "sendrawtransaction",
-		"params":  []interface{}{signedTxHex},
-	}
-
-	jsonData, err := json.Marshal(rpcRequest)
-	if err != nil {
-		return "", fmt.Errorf("error marshaling RPC request: %v", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", chain.ChainUrl, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("error creating HTTP request: %v", err)
-	}
-
-	// Add headers
-	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth("your_rpc_user", "your_rpc_password")
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending transaction: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Read and parse response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response: %v", err)
-	}
-
-	var rpcResponse struct {
-		Result string `json:"result"`
-		Error  *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &rpcResponse); err != nil {
-		return "", fmt.Errorf("error parsing response: %v", err)
-	}
-
-	// Check for RPC error
-	if rpcResponse.Error != nil {
-		return "", fmt.Errorf("RPC error %d: %s", rpcResponse.Error.Code, rpcResponse.Error.Message)
-	}
-
-	return rpcResponse.Result, nil
 }

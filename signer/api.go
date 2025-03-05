@@ -96,7 +96,7 @@ func startHTTPServer(port string) {
 		}
 
 		if reflect.DeepEqual(createWallet, CreateWallet{}) {
-			http.Error(w, "Invalid wallet", http.StatusBadRequest)
+			http.Error(w, "Invalid wallet parameters", http.StatusBadRequest)
 			return
 		}
 

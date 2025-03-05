@@ -2,10 +2,13 @@ package signer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"testing"
@@ -95,6 +98,104 @@ func TestKeygenEndpoint(t *testing.T) {
 			if w.Code != tt.statusCode {
 				t.Errorf("CreateWallet returned wrong status code: got %v want %v", w.Code, tt.statusCode)
 			}
+		})
+	}
+}
+
+// Topic is an interface for publishing messages.
+type Topic interface {
+	Publish(ctx context.Context, message []byte) error
+}
+
+func TestBroadcastMessage(t *testing.T) {
+
+	oldNodePublicKey := NodePublicKey
+	oldNodePrivateKey := NodePrivateKey
+	defer func() { NodePublicKey = oldNodePublicKey }()
+	defer func() { NodePrivateKey = oldNodePrivateKey }()
+
+	identity := "0x7d2e55B99cA3bd06977fB499d70B896A90b2A19e"
+	identityCurve := "ecdsa"
+	keyCurve := "ecdsa"
+	signers := []string{"0x04dae88f5367ea7f086f2a680f212034b73f4c26438b174bd093a71d9b78904eb3b20bc874ef4a04a2ac9531ce29cffacdacd347edbc25133dddf07fac07feedca"}
+	message := Message{
+		Type:          MESSAGE_TYPE_GENERATE_START_KEYGEN,
+		Identity:      identity + ",",
+		IdentityCurve: identityCurve,
+		KeyCurve:      keyCurve,
+		Signers:       signers,
+	}
+
+	tests := []struct {
+		name        string
+		message     Message
+		nodePubKey  string
+		nodePrivKey string
+		body        interface{}
+		signers     []string
+		panic       bool
+		expected    string
+	}{
+		{
+			name:        "Valid data",
+			message:     message,
+			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
+			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
+			body:        nil,
+			panic:       false,
+		},
+		{
+			name:        "Invalid node private key",
+			message:     message,
+			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34",
+			nodePrivKey: "invalid-key",
+			body:        nil,
+			panic:       false,
+			expected:    "invalid hex character 'x' in private key",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.panic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Errorf("Expected panic, but function did not panic")
+					} else {
+						// Optionally, check the panic value:
+						expected := tt.expected
+						if r != expected {
+							t.Errorf("Expected panic %q, got %q", expected, r)
+						}
+					}
+				}()
+			}
+			NodePrivateKey = tt.nodePrivKey
+			NodePublicKey = tt.nodePubKey
+
+			if os.Getenv("TEST_BROADCAST_FATAL") == "1" {
+				broadcast(tt.message)
+			}
+
+			// Otherwise, spawn a subprocess that will execute the fatal path.
+			cmd := exec.Command(os.Args[0], "-test.run=TestBroadcastMessage")
+			// Pass an environment variable so that the subprocess knows to run the fatal code.
+			cmd.Env = append(os.Environ(), "TEST_BROADCAST_FATAL=1")
+			err := cmd.Run()
+
+			if err == nil {
+				t.Fatalf("Expected broadcast to call log.Fatal and exit with non-zero status, but it did not")
+			}
+			// If err is an ExitError, check that it indicates a non-zero exit code.
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				if exitErr.Success() {
+					t.Fatalf("Expected a non-zero exit status, but got success")
+				}
+				// The test passed: the subprocess exited as expected.
+			} else {
+				t.Fatalf("Expected an ExitError, got: %v", err)
+			}
+
 		})
 	}
 }

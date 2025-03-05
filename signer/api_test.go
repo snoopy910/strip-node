@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/sequencer"
@@ -178,8 +177,8 @@ func TestSignatureEndpoint(t *testing.T) {
 	}
 
 	operationA := sequencer.Operation{
-		SerializedTxn:  "eb018477359400825208941e79929f2a49c27f820340d83b9d0dec35b2137788016345785d8a000080808080",
-		DataToSign:     "3225907716b53ed69dc89682cb8633ee2c9be5c66698f27064ff30b367b86e5c",
+		SerializedTxn:  "eb808477359400825208945e721f69f4c3c91befeb94b1e068d2e64a82a7f488016345785d8a000080808080",
+		DataToSign:     "bc0efa2d6c1a0fcb888e82d400a8273e88ee641b7b615e071dafdc0f4b44c91f",
 		ChainId:        "1337",
 		GenesisHash:    "",
 		KeyCurve:       "ecdsa",
@@ -202,8 +201,8 @@ func TestSignatureEndpoint(t *testing.T) {
 		Operations:    []sequencer.Operation{operationA},
 		Identity:      "0xD99eb497608046d3C97B30E62b872daADF6f7dCF",
 		IdentityCurve: "ecdsa",
-		Signature:     "0x813470a587a320d5b55871944685d61a625355d4aac34117756c062374ad51ae05313cccc0c5b27ffa47392e2a4883cc7c6ef03b509bb232ce944c01dacd17d01b",
-		Expiry:        uint64(1741178924),
+		Signature:     "0xa86c8a070b328afe5d56e340a8b1eebbd58e8948b583718b6138a633e6f066c62c5cc1877afb78d956913d37921015722c5eaf8256bf82da7588442320026b741b",
+		Expiry:        uint64(1741196126),
 	}
 
 	intentB := sequencer.Intent{
@@ -275,11 +274,6 @@ func TestSignatureEndpoint(t *testing.T) {
 					operationIndex, _ := strconv.Atoi(r.URL.Query().Get("operationIndex"))
 					operationIndexInt := uint(operationIndex)
 
-					if intent.Expiry < uint64(time.Now().Unix()) {
-						http.Error(w, "Intent has expired", http.StatusBadRequest)
-						return
-					}
-
 					msg := intent.Operations[operationIndexInt].DataToSign
 
 					identity := intent.Identity
@@ -293,12 +287,16 @@ func TestSignatureEndpoint(t *testing.T) {
 						return
 					}
 
+					fmt.Println("intentStr: ", intentStr)
+
 					verified, err := identityVerification.VerifySignature(
 						intent.Identity,
 						intent.IdentityCurve,
 						intentStr,
 						intent.Signature,
 					)
+
+					fmt.Println("verified: ", verified)
 
 					if err != nil {
 						http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)

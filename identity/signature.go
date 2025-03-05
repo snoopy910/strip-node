@@ -27,7 +27,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	BITCOIN_CURVE     = "bitcoin_ecdsa"
-	SECP256K1_CURVE   = "secp256k1"
+	DOGECOIN_CURVE    = "dogecoin_ecdsa"
 	SUI_EDDSA_CURVE   = "sui_eddsa" // Sui uses Ed25519 for native transactions
 	STELLAR_CURVE     = "stellar_eddsa"
 	ALGORAND_CURVE    = "algorand_eddsa"

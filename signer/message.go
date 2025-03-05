@@ -127,10 +127,11 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case SECP256K1_CURVE:
-			// Bitcoin: Client sends string -> hash -> process -> encode to hex
+		case DOGECOIN_CURVE:
+			// Dogecoin: Client sends string -> hash -> process -> encode to hex
 			// Channel key must match the hex encoded hash
-			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+			// if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
+			if val, ok := messageChan[string(msg.Hash)]; ok {
 				val <- msg
 				go func() {
 					sendMsg <- true

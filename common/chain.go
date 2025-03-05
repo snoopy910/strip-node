@@ -20,14 +20,14 @@ var Chains = []Chain{
 	{
 		ChainId:     "2000",
 		ChainType:   "dogecoin",
-		ChainUrl:    "https://api.blockcypher.com/v1/doge/main",
+		ChainUrl:    "https://doge-mainnet.gateway.tatum.io",
 		KeyCurve:    "secp256k1",
 		TokenSymbol: "DOGE",
 	},
 	{
 		ChainId:     "2001",
 		ChainType:   "dogecoin",
-		ChainUrl:    "https://api.blockcypher.com/v1/doge/test3",
+		ChainUrl:    "https://doge-testnet.gateway.tatum.io",
 		KeyCurve:    "secp256k1",
 		TokenSymbol: "DOGE",
 	},

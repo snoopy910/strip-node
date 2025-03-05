@@ -126,7 +126,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)
@@ -441,7 +441,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)
@@ -450,18 +450,18 @@ func ProcessIntent(intentId int64) {
 
 						// Extract destination address from serialized transaction
 						var destAddress string
-						if chain.ChainType == "bitcoin" {
+						if chain.ChainType == "bitcoin" || chain.ChainType == "dogecoin" {
 							// For Bitcoin, decode the serialized transaction to get output address
 							var tx wire.MsgTx
 							txBytes, err := hex.DecodeString(operation.SerializedTxn)
 							if err != nil {
-								fmt.Printf("error decoding bitcoin transaction: %+v\n", err)
+								fmt.Printf("error decoding bitcoin&dogecoin transaction: %+v\n", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 							if err := tx.Deserialize(bytes.NewReader(txBytes)); err != nil {
-								fmt.Printf("error deserializing bitcoin transaction: %+v\n", err)
+								fmt.Printf("error deserializing bitcoin&dogecoin transaction: %+v\n", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -470,7 +470,7 @@ func ProcessIntent(intentId int64) {
 							if len(tx.TxOut) > 0 {
 								_, addrs, _, err := txscript.ExtractPkScriptAddrs(tx.TxOut[0].PkScript, nil)
 								if err != nil || len(addrs) == 0 {
-									fmt.Printf("error extracting bitcoin address: %+v\n", err)
+									fmt.Printf("error extracting bitcoin&dogecoin address: %+v\n", err)
 									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 									break
@@ -500,6 +500,8 @@ func ProcessIntent(intentId int64) {
 						var expectedAddress string
 						if chain.ChainType == "bitcoin" {
 							expectedAddress = bridgeWallet.BitcoinMainnetPublicKey
+						} else if chain.ChainType == "dogecoin" {
+							expectedAddress = bridgeWallet.DogecoinMainnetPublicKey
 						} else {
 							expectedAddress = bridgeWallet.ECDSAPublicKey
 						}
@@ -526,6 +528,8 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinPubkey, signature)
+						case "dogecoin":
+							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						default: // EVM chains
 							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						}
@@ -789,7 +793,7 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "sui_eddsa" ||
-						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "stellar_eddsa" ||
+						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "dogecoin_ecdsa" || depositOperation.KeyCurve == "stellar_eddsa" ||
 						depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
@@ -1113,111 +1117,46 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if withdrawalChain.KeyCurve == "ecdsa" || withdrawalChain.KeyCurve == "secp256k1" {
-						if withdrawalChain.ChainType == "dogecoin" {
-							// handle dogecoin withdrawal
-							var solverData map[string]interface{}
-							if err := json.Unmarshal([]byte(burn.SolverOutput), &solverData); err != nil {
-								fmt.Println("failed to parse solver output:", err)
-								break
-							}
+					if withdrawalChain.KeyCurve == "ecdsa" {
+						// handle ERC20 token
+						dataToSign, tx, err := withdrawERC20GetSignature(
+							withdrawalChain.ChainUrl,
+							bridgeWallet.ECDSAPublicKey,
+							burn.SolverOutput,
+							user.ECDSAPublicKey,
+							operation.ChainId,
+							tokenToWithdraw,
+						)
 
-							amount, ok := solverData["amount"].(string)
-							if !ok {
-								fmt.Println("amount not found in solver output")
-								break
-							}
-
-							// Get appropriate Dogecoin addresses based on network
-							var userAddress, bridgeAddress string
-							userAddress = user.DogecoinMainnetPublicKey
-							bridgeAddress = bridgeWallet.DogecoinMainnetPublicKey
-
-							// Validate that we have the Dogecoin addresses
-							if userAddress == "" || bridgeAddress == "" {
-								fmt.Println("Dogecoin addresses not found in wallet")
-								break
-							}
-
-							txn, dataToSign, err := dogecoin.WithdrawDogeNativeGetSignature(
-								withdrawalChain.ChainUrl,
-								bridgeAddress,
-								amount,
-								userAddress,
-							)
-
-							if err != nil {
-								fmt.Println(err)
-								break
-							}
-
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
-							intent.Operations[i].SolverDataToSign = dataToSign
-
-							signature, err := getSignature(intent, i)
-							if err != nil {
-								fmt.Println(err)
-								break
-							}
-
-							// Use the same Dogecoin address we used for signing
-							result, err := dogecoin.WithdrawDogeTxn(
-								withdrawalChain.ChainUrl,
-								txn,         // Use the serialized transaction instead of dataToSign
-								userAddress, // Use Dogecoin address instead of ECDSA key
-								signature,
-							)
-
-							if err != nil {
-								fmt.Println(err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-								break
-							}
-
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						if err != nil {
+							fmt.Println(err)
 							break
-						} else {
-							// handle ERC20 token
-							dataToSign, tx, err := withdrawERC20GetSignature(
-								withdrawalChain.ChainUrl,
-								bridgeWallet.ECDSAPublicKey,
-								burn.SolverOutput,
-								user.ECDSAPublicKey,
-								operation.ChainId,
-								tokenToWithdraw,
-							)
-
-							if err != nil {
-								fmt.Println(err)
-								break
-							}
-
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
-							intent.Operations[i].SolverDataToSign = dataToSign
-
-							signature, err := getSignature(intent, i)
-							if err != nil {
-								fmt.Println(err)
-								break
-							}
-
-							result, err := withdrawEVMTxn(
-								withdrawalChain.ChainUrl,
-								signature,
-								tx,
-								operation.ChainId,
-							)
-
-							if err != nil {
-								fmt.Println(err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-								break
-							}
-
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
+
+						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						intent.Operations[i].SolverDataToSign = dataToSign
+
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						result, err := withdrawEVMTxn(
+							withdrawalChain.ChainUrl,
+							signature,
+							tx,
+							operation.ChainId,
+						)
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						break
 					} else if withdrawalChain.KeyCurve == "bitcoin_ecdsa" {
 						bridgeWalletBitcoinAddress, err := readBitcoinAddress(bridgeWallet, withdrawalChain.ChainId)
@@ -1257,6 +1196,69 @@ func ProcessIntent(intentId int64) {
 						result, err := bitcoin.WithdrawBitcoinTxn(
 							withdrawalChain.ChainId,
 							dataToSign,
+							signature,
+						)
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						break
+					} else if withdrawalChain.KeyCurve == "dogecoin_ecdsa" {
+						// handle dogecoin withdrawal
+						var solverData map[string]interface{}
+						if err := json.Unmarshal([]byte(burn.SolverOutput), &solverData); err != nil {
+							fmt.Println("failed to parse solver output:", err)
+							break
+						}
+
+						amount, ok := solverData["amount"].(string)
+						if !ok {
+							fmt.Println("amount not found in solver output")
+							break
+						}
+
+						// Get appropriate Dogecoin addresses based on network
+						var userAddress, bridgeAddress string
+						userAddress = user.DogecoinMainnetPublicKey
+						bridgeAddress = bridgeWallet.DogecoinMainnetPublicKey
+
+						// Validate that we have the Dogecoin addresses
+						if userAddress == "" || bridgeAddress == "" {
+							fmt.Println("Dogecoin addresses not found in wallet")
+							break
+						}
+
+						txn, dataToSign, err := dogecoin.WithdrawDogeNativeGetSignature(
+							withdrawalChain.ChainUrl,
+							bridgeAddress,
+							amount,
+							userAddress,
+						)
+
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						intent.Operations[i].SolverDataToSign = dataToSign
+
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						// Use the same Dogecoin address we used for signing
+						result, err := dogecoin.WithdrawDogeTxn(
+							withdrawalChain.ChainUrl,
+							txn,         // Use the serialized transaction instead of dataToSign
+							userAddress, // Use Dogecoin address instead of ECDSA key
 							signature,
 						)
 
@@ -1805,7 +1807,7 @@ func ProcessIntent(intentId int64) {
 				// check for confirmations and update the status to completed
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1915,6 +1917,8 @@ func ProcessIntent(intentId int64) {
 					switch chain.ChainType {
 					case "bitcoin":
 						confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+					case "dogecoin":
+						confirmed, err = dogecoin.CheckDogeTransactionConfirmed(operation.ChainId, operation.Result)
 					case "solana":
 						confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 					case "aptos":
@@ -1946,7 +1950,7 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -2142,7 +2146,7 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -2245,7 +2249,7 @@ func ProcessIntent(intentId int64) {
 						depositOperation := intent.Operations[i-4]
 						// check for confirmations
 						confirmed = false
-						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "bitcoin_ecdsa" {
+						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)

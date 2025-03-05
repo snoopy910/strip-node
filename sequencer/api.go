@@ -622,7 +622,7 @@ func startHTTPServer(port string) {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 				return
 			}
-		} else if operation.KeyCurve == "secp256k1" {
+		} else if operation.KeyCurve == "dogecoin_ecdsa" {
 			// Get chain information
 			chain, err := common.GetChain(operation.ChainId)
 			if err != nil {

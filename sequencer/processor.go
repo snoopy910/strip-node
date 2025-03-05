@@ -441,7 +441,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)

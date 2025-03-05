@@ -1,4 +1,4 @@
-package sequencer
+package bitcoin
 
 import (
 	"encoding/json"
@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -446,7 +448,7 @@ func TestFetchUTXOValue(t *testing.T) {
 			}
 
 			// Call the function
-			value, err := FetchUTXOValue(tt.chainUrl, tt.txHash)
+			value, err := fetchUTXOValue(tt.chainUrl, tt.txHash)
 
 			// Check error
 			if tt.expectError {
@@ -560,7 +562,7 @@ func TestFetchUTXOValueErrors(t *testing.T) {
 			}
 
 			// Call the function
-			value, err := FetchUTXOValue(tt.chainUrl, tt.txHash)
+			value, err := fetchUTXOValue(tt.chainUrl, tt.txHash)
 
 			// Verify error
 			require.Error(t, err)
@@ -581,4 +583,45 @@ func TestIsValidBitcoinAddress(t *testing.T) {
 		address := "InvalidAddress123"
 		require.False(t, isValidBitcoinAddress(address))
 	})
+}
+
+func TestSendBitcoinTransaction(t *testing.T) {
+	// Create a valid Simnet address
+	pubKeyHash := []byte{118, 169, 82, 84, 36, 23, 237, 52, 71, 4, 218, 23, 74, 247, 134, 103, 127, 119, 163, 82}
+	_, err := btcutil.NewAddressWitnessPubKeyHash(pubKeyHash, &chaincfg.SimNetParams)
+	require.NoError(t, err)
+
+	// Test transaction data
+	serializedTxn := "01000000018be5c497555fd91ac3987e7eea01c89f7f7a9f7d1a1f8033f10e780e9fee2d820000000000ffffffff021027000000000000160014bd1979541c3abe7557f0c2a28bb7607cdc62b2dffca09a3b000000001600148d7a0a3461e3891dbdf560f0f45c18fe5dd2274d00000000"
+	chainId := "1003" // Simnet
+	keyCurve := "bitcoin_ecdsa"
+	dataToSign := "badce2c5be9dba537fe0e370681699d029e777eb2abb185aa5ae244ea78012f4"
+	address := "021b43d4eda394393e130a333af4ac6d553c2f34b3aeed2dcaa2d6c7bb6139bbae"
+	signatureHex := "d18297fe4cf25a05077be893bc14fefed531a93d1abd5269f01ffc235539240a11b721b18225ff9597fdd99af4f80720df7846257e74408d02f888abff45c59f"
+
+	// Setup mock Simnet server
+	server, chain := MockSimnetServer(t)
+	defer server.Close()
+
+	// Setup test chain
+	common.Chains = []common.Chain{chain}
+
+	rlt, err := SendBitcoinTransaction(serializedTxn, chainId, keyCurve, dataToSign, address, signatureHex)
+	require.NoError(t, err)
+	require.NotEmpty(t, rlt)
+	t.Log(rlt)
+}
+
+func TestDerEncode(t *testing.T) {
+	signatureHex := "4e48cf9a2f08be3e29a29b66c56a079535f09b0a4d22a05eecc85bc65a6a5c987a15b6e7f942f8b4b0a3ac09a3f5da0ed5d8687b4f2ac47cfe3cd170b01e98ab"
+	expected := "304402204e48cf9a2f08be3e29a29b66c56a079535f09b0a4d22a05eecc85bc65a6a5c9802207a15b6e7f942f8b4b0a3ac09a3f5da0ed5d8687b4f2ac47cfe3cd170b01e98ab01"
+
+	encoded, err := derEncode(signatureHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if encoded != expected {
+		t.Errorf("DER encoding mismatch:\nwant: %s\ngot:  %s", expected, encoded)
+	}
 }

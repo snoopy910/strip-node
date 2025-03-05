@@ -27,11 +27,11 @@ func PublicKeyToAddress(publicKeyHex string) (string, error) {
 
 	// Convert the public key to a Dogecoin address
 	// Using mainnet parameters with Dogecoin-specific settings
-	params := &chaincfg.MainNetParams
+	params := chaincfg.MainNetParams
 	params.PubKeyHashAddrID = 0x1E // Dogecoin mainnet P2PKH prefix (30)
 
 	pubKeyHash := btcutil.Hash160(publicKey.SerializeCompressed())
-	addr, err := btcutil.NewAddressPubKeyHash(pubKeyHash, params)
+	addr, err := btcutil.NewAddressPubKeyHash(pubKeyHash, &params)
 	if err != nil {
 		return "", fmt.Errorf("failed to create address: %v", err)
 	}
@@ -60,11 +60,11 @@ func PublicKeyToTestnetAddress(publicKeyHex string) (string, error) {
 	}
 
 	// Convert the public key to a Dogecoin testnet address
-	params := &chaincfg.TestNet3Params
+	params := chaincfg.TestNet3Params
 	params.PubKeyHashAddrID = 0x71 // Dogecoin testnet P2PKH prefix (113)
 
 	pubKeyHash := btcutil.Hash160(publicKey.SerializeCompressed())
-	addr, err := btcutil.NewAddressPubKeyHash(pubKeyHash, params)
+	addr, err := btcutil.NewAddressPubKeyHash(pubKeyHash, &params)
 	if err != nil {
 		return "", fmt.Errorf("failed to create address: %v", err)
 	}

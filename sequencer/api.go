@@ -9,6 +9,7 @@ import (
 
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
+	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
@@ -595,6 +596,19 @@ func startHTTPServer(port string) {
 				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 				return
 			}
+		} else if operation.KeyCurve == "bitcoin_ecdsa" {
+			transfers, _, err := bitcoin.GetBitcoinTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
 		} else if operation.KeyCurve == "sui_eddsa" {
 			transfers, err := sui.GetSuiTransfers(operation.ChainId, operation.Result)
 
@@ -620,8 +634,6 @@ func startHTTPServer(port string) {
 			switch chain.ChainType {
 			case "dogecoin":
 				transfers, err = dogecoin.GetDogeTransfers(operation.ChainId, operation.Result)
-			case "bitcoin":
-				transfers, _, err = GetBitcoinTransfers(operation.ChainId, operation.Result)
 			default:
 				http.Error(w, "Unsupported chain type", http.StatusInternalServerError)
 				return

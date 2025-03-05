@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
+	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
@@ -89,6 +89,7 @@ func ProcessIntent(intentId int64) {
 
 		// now process the operations of the intent
 		for i, operation := range intent.Operations {
+			log.Printf("Operation: %v\n", operation)
 			if operation.Status == OPERATION_STATUS_COMPLETED || operation.Status == OPERATION_STATUS_FAILED {
 				continue
 			}
@@ -125,45 +126,36 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)
 							break
 						}
 
-						signature, err := getSignature(intent, i)
-						if err != nil {
-							fmt.Printf("error getting signature: %+v\n", err)
-							break
-						}
+						var txnHash string
 
 						if chain.ChainType == "bitcoin" {
-							txnHash, err := sendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							signature, bitcoinPubkey, err := getSignatureEx(intent, i)
+							if err != nil {
+								fmt.Printf("error getting signature: %+v\n", err)
+								break
+							}
+							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinPubkey, signature)
 
 							if err != nil {
 								fmt.Println(err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
-							}
-
-							var lockMetadata LockMetadata
-							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
-
-							if lockMetadata.Lock {
-								err := LockIdentity(lockSchema.Id)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
-							} else {
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 							}
 						} else if chain.ChainType == "dogecoin" {
-							txnHash, err := dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Printf("error getting signature: %+v\n", err)
+								break
+							}
+							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 							if err != nil {
 								fmt.Println(err)
@@ -171,23 +163,14 @@ func ProcessIntent(intentId int64) {
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
-
-							var lockMetadata LockMetadata
-							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
-
-							if lockMetadata.Lock {
-								err := LockIdentity(lockSchema.Id)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
-							} else {
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
-							}
 						} else {
-							txnHash, err := sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Printf("error getting signature: %+v\n", err)
+								break
+							}
+
+							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 							// @TODO: For our infra errors, don't mark the intent and operation as failed
 							if err != nil {
@@ -196,21 +179,21 @@ func ProcessIntent(intentId int64) {
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
+						}
 
-							var lockMetadata LockMetadata
-							json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
+						var lockMetadata LockMetadata
+						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
-							if lockMetadata.Lock {
-								err := LockIdentity(lockSchema.Id)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
-							} else {
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+						if lockMetadata.Lock {
+							err := LockIdentity(lockSchema.Id)
+							if err != nil {
+								fmt.Println(err)
+								break
 							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+						} else {
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
 					} else if operation.KeyCurve == "sui_eddsa" {
 						signature, err := getSignature(intent, i)
@@ -537,7 +520,12 @@ func ProcessIntent(intentId int64) {
 						var txnHash string
 						switch chain.ChainType {
 						case "bitcoin":
-							txnHash, err = sendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							signature, bitcoinPubkey, err_ := getSignatureEx(intent, i)
+							if err_ != nil {
+								fmt.Printf("error getting signature: %+v\n", err_)
+								break
+							}
+							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinPubkey, signature)
 						default: // EVM chains
 							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						}
@@ -801,7 +789,8 @@ func ProcessIntent(intentId int64) {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "sui_eddsa" ||
-						depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "stellar_eddsa" || depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" {
+						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "secp256k1" || depositOperation.KeyCurve == "stellar_eddsa" ||
+						depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -833,7 +822,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "bitcoin" {
-							transfers, _, err = GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
+							transfers, _, err = bitcoin.GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1188,25 +1177,15 @@ func ProcessIntent(intentId int64) {
 
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 							break
-						} else if withdrawalChain.ChainType == "bitcoin" {
-							// handle bitcoin withdrawal
-							var solverData map[string]interface{}
-							if err := json.Unmarshal([]byte(burn.SolverOutput), &solverData); err != nil {
-								fmt.Println("failed to parse solver output:", err)
-								break
-							}
-
-							amount, ok := solverData["amount"].(string)
-							if !ok {
-								fmt.Println("amount not found in solver output")
-								break
-							}
-
-							dataToSign, err := withdrawBitcoinGetSignature(
+						} else {
+							// handle ERC20 token
+							dataToSign, tx, err := withdrawERC20GetSignature(
 								withdrawalChain.ChainUrl,
-								bridgeWallet.BitcoinMainnetPublicKey,
-								amount,
-								user.BitcoinMainnetPublicKey,
+								bridgeWallet.ECDSAPublicKey,
+								burn.SolverOutput,
+								user.ECDSAPublicKey,
+								operation.ChainId,
+								tokenToWithdraw,
 							)
 
 							if err != nil {
@@ -1223,10 +1202,11 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							result, err := withdrawBitcoinTxn(
+							result, err := withdrawEVMTxn(
 								withdrawalChain.ChainUrl,
-								dataToSign,
 								signature,
+								tx,
+								operation.ChainId,
 							)
 
 							if err != nil {
@@ -1237,89 +1217,57 @@ func ProcessIntent(intentId int64) {
 							}
 
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
-							break
-						} else {
-							if tokenToWithdraw == util.ZERO_ADDRESS {
-								// handle native token
-								dataToSign, tx, err := withdrawEVMNativeGetSignature(
-									withdrawalChain.ChainUrl,
-									bridgeWallet.ECDSAPublicKey,
-									burn.SolverOutput,
-									user.ECDSAPublicKey,
-									operation.ChainId,
-								)
-
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationSolverDataToSign(operation.ID, dataToSign)
-								intent.Operations[i].SolverDataToSign = dataToSign
-
-								signature, err := getSignature(intent, i)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								result, err := withdrawEVMTxn(
-									withdrawalChain.ChainUrl,
-									signature,
-									tx,
-									operation.ChainId,
-								)
-
-								if err != nil {
-									fmt.Println(err)
-									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
-							} else {
-								// handle ERC20 token
-								dataToSign, tx, err := withdrawERC20GetSignature(
-									withdrawalChain.ChainUrl,
-									bridgeWallet.ECDSAPublicKey,
-									burn.SolverOutput,
-									user.ECDSAPublicKey,
-									operation.ChainId,
-									tokenToWithdraw,
-								)
-
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								UpdateOperationSolverDataToSign(operation.ID, dataToSign)
-								intent.Operations[i].SolverDataToSign = dataToSign
-
-								signature, err := getSignature(intent, i)
-								if err != nil {
-									fmt.Println(err)
-									break
-								}
-
-								result, err := withdrawEVMTxn(
-									withdrawalChain.ChainUrl,
-									signature,
-									tx,
-									operation.ChainId,
-								)
-
-								if err != nil {
-									fmt.Println(err)
-									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-									break
-								}
-
-								UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
-							}
 						}
+						break
+					} else if withdrawalChain.KeyCurve == "bitcoin_ecdsa" {
+						bridgeWalletBitcoinAddress, err := readBitcoinAddress(bridgeWallet, withdrawalChain.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						userBitcoinAddress, err := readBitcoinAddress(user, withdrawalChain.ChainId)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						// handle bitcoin withdrawal
+						dataToSign, err := bitcoin.WithdrawBitcoinGetSignature(
+							withdrawalChain.ChainId,
+							bridgeWalletBitcoinAddress,
+							burn.SolverOutput,
+							userBitcoinAddress,
+						)
+
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						intent.Operations[i].SolverDataToSign = dataToSign
+
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Println(err)
+							break
+						}
+
+						result, err := bitcoin.WithdrawBitcoinTxn(
+							withdrawalChain.ChainId,
+							dataToSign,
+							signature,
+						)
+
+						if err != nil {
+							fmt.Println(err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							break
+						}
+
+						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						break
 					} else if withdrawalChain.KeyCurve == "eddsa" {
 						if tokenToWithdraw == util.ZERO_ADDRESS {
@@ -1857,7 +1805,7 @@ func ProcessIntent(intentId int64) {
 				// check for confirmations and update the status to completed
 				if operation.Type == OPERATION_TYPE_TRANSACTION {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -1865,7 +1813,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "bitcoin" {
-							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1966,7 +1914,7 @@ func ProcessIntent(intentId int64) {
 
 					switch chain.ChainType {
 					case "bitcoin":
-						confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+						confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 					case "solana":
 						confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 					case "aptos":
@@ -1998,14 +1946,14 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
 						if chain.ChainType == "bitcoin" {
-							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -2194,14 +2142,14 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					confirmed := false
-					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "secp256k1" {
+					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
 							break
 						}
 						if chain.ChainType == "bitcoin" {
-							confirmed, err = checkBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -2297,7 +2245,7 @@ func ProcessIntent(intentId int64) {
 						depositOperation := intent.Operations[i-4]
 						// check for confirmations
 						confirmed = false
-						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "secp256k1" {
+						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "bitcoin_ecdsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
@@ -2305,7 +2253,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							if chain.ChainType == "bitcoin" {
-								txnConfirmed, err := checkBitcoinTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := bitcoin.CheckBitcoinTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									fmt.Println(err)
 									break
@@ -2485,10 +2433,18 @@ type SignatureResponse struct {
 }
 
 func getSignature(intent *Intent, operationIndex int) (string, error) {
+	signature, _, err := getSignatureEx(intent, operationIndex)
+	if err != nil {
+		return "", err
+	}
+	return signature, nil
+}
+
+func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) {
 	// get wallet
 	wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// get the signer
@@ -2496,12 +2452,12 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	signer, err := GetSigner(signers[0])
 
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	intentBytes, err := json.Marshal(intent)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
@@ -2510,7 +2466,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 
 	if err != nil {
 		fmt.Printf("error creating request: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -2519,7 +2475,7 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 
 	if err != nil {
 		fmt.Printf("error sending request: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
 	defer resp.Body.Close()
@@ -2527,17 +2483,17 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("error reading response body: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
 	var signatureResponse SignatureResponse
 	err = json.Unmarshal(body, &signatureResponse)
 	if err != nil {
 		fmt.Printf("error unmarshalling response body: %+v\n", err)
-		return "", err
+		return "", "", err
 	}
 
-	return signatureResponse.Signature, nil
+	return signatureResponse.Signature, signatureResponse.Address, nil
 }
 
 func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) {
@@ -2583,25 +2539,6 @@ func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 	}
 
 	return true, nil
-}
-
-func checkBitcoinTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return false, err
-	}
-
-	txn, err := FetchTransaction(chain.ChainUrl, txnHash)
-	if err != nil {
-		return false, err
-	}
-
-	// Assuming a transaction is confirmed if it has at least 3 confirmations
-	if txn != nil && txn.Confirmations >= 3 {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
@@ -2700,114 +2637,29 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	return hash.String(), nil
 }
 
-func sendBitcoinTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return "", err
+// readBitcoinAddress returns the appropriate Bitcoin public key based on the chain configuration
+func readBitcoinAddress(wallet *WalletSchema, chainId string) (string, error) {
+	if wallet == nil {
+		return "", fmt.Errorf("wallet is nil")
 	}
 
-	// Decode the serialized transaction
-	serializedTx, err := hex.DecodeString(serializedTxn)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode serialized transaction: %v", err)
+	switch chainId {
+	case "1000": // Bitcoin mainnet
+		if wallet.BitcoinMainnetPublicKey == "" {
+			return "", fmt.Errorf("bitcoin mainnet public key not found in wallet")
+		}
+		return wallet.BitcoinMainnetPublicKey, nil
+	case "1001": // Bitcoin testnet
+		if wallet.BitcoinTestnetPublicKey == "" {
+			return "", fmt.Errorf("bitcoin testnet public key not found in wallet")
+		}
+		return wallet.BitcoinTestnetPublicKey, nil
+	case "1002": // Bitcoin regtest
+		if wallet.BitcoinRegtestPublicKey == "" {
+			return "", fmt.Errorf("bitcoin regtest public key not found in wallet")
+		}
+		return wallet.BitcoinRegtestPublicKey, nil
+	default:
+		return "", fmt.Errorf("unsupported bitcoin chain ID: %s", chainId)
 	}
-
-	// Create a new bitcoin transaction
-	var msgTx wire.MsgTx
-	err = msgTx.Deserialize(bytes.NewReader(serializedTx))
-	if err != nil {
-		return "", fmt.Errorf("failed to deserialize transaction: %v", err)
-	}
-
-	// Decode the signature
-	signature, err := hex.DecodeString(signatureHex)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode signature: %v", err)
-	}
-
-	// Create signature script
-	builder := txscript.NewScriptBuilder()
-	builder.AddData(signature)
-	builder.AddData([]byte(dataToSign))
-	signatureScript, err := builder.Script()
-	if err != nil {
-		return "", fmt.Errorf("failed to build signature script: %v", err)
-	}
-
-	// Apply signature script to all inputs
-	for i := range msgTx.TxIn {
-		msgTx.TxIn[i].SignatureScript = signatureScript
-	}
-
-	// Serialize the signed transaction
-	var signedTxBuffer bytes.Buffer
-	if err := msgTx.Serialize(&signedTxBuffer); err != nil {
-		return "", fmt.Errorf("failed to serialize signed transaction: %v", err)
-	}
-
-	// Convert to hex for broadcasting
-	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
-
-	// Prepare RPC request
-	rpcURL := chain.ChainUrl
-	rpcRequest := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "sendrawtransaction",
-		"params":  []interface{}{signedTxHex},
-	}
-
-	jsonData, err := json.Marshal(rpcRequest)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal RPC request: %v", err)
-	}
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", rpcURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("failed to create HTTP request: %v", err)
-	}
-
-	// Add headers
-	req.Header.Set("Content-Type", "application/json")
-	// if chain.ChainApiKey != "" {
-	// 	req.Header.Set("Authorization", "Bearer "+chain.ChainApiKey)
-	// }
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %v", err)
-	}
-
-	// Parse response
-	var rpcResponse struct {
-		Result string    `json:"result"`
-		Error  *RPCError `json:"error"`
-	}
-
-	if err := json.Unmarshal(body, &rpcResponse); err != nil {
-		return "", fmt.Errorf("failed to parse response: %v", err)
-	}
-
-	// Check for RPC error
-	if rpcResponse.Error != nil {
-		return "", fmt.Errorf("RPC error: %v", rpcResponse.Error.Message)
-	}
-
-	// Return the transaction hash from RPC response
-	return rpcResponse.Result, nil
-}
-
-type RPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
 }

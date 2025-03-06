@@ -221,7 +221,6 @@ func TestBroadcastMessage(t *testing.T) {
 			panic:       false,
 			fatal:       false,
 			mockPublish: true,
-			expected:    "",
 		},
 		{
 			name:        "Valid data but panic on publish (topic nil in unit test)",

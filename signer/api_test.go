@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
-	"strconv"
+	"strings"
 	"testing"
 
 	identityVerification "github.com/StripChain/strip-node/identity"
@@ -83,11 +83,6 @@ func TestKeygenEndpoint(t *testing.T) {
 
 					keygenGeneratedChan[key] = make(chan string)
 
-					go generateKeygenMessage(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve, createWallet.Signers)
-
-					// <-keygenGeneratedChan[key]
-					// fmt.Println(v)
-					// delete(keygenGeneratedChan, key)
 					w.WriteHeader(http.StatusOK)
 				}).ServeHTTP(w, r)
 			})
@@ -162,7 +157,7 @@ func TestBroadcastMessage(t *testing.T) {
 			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34",
 			nodePrivKey: "invalid-key",
 			panic:       false,
-			expected:    "invalid hex character 'x' in private key",
+			expected:    "invalid hex character 'i' in private key",
 		},
 		{
 			name:        "Invalid message",
@@ -208,7 +203,10 @@ func TestBroadcastMessage(t *testing.T) {
 				cmd := exec.Command(os.Args[0], "-test.run=TestBroadcastMessage")
 				// Pass an environment variable so that the subprocess knows to run the fatal code.
 				cmd.Env = append(os.Environ(), "TEST_BROADCAST_FATAL=1")
-				err := cmd.Run()
+				// err = cmd.Run()
+				stderr, err := cmd.CombinedOutput()
+				output := string(stderr)
+				fmt.Println(output)
 
 				if err == nil {
 					t.Fatalf("Expected broadcast to call log.Fatal and exit with non-zero status, but it did not")
@@ -222,12 +220,14 @@ func TestBroadcastMessage(t *testing.T) {
 				} else {
 					t.Fatalf("Expected an ExitError, got: %v", err)
 				}
+				if !strings.Contains(string(stderr), tt.expected) {
+					t.Errorf("Expected output to contain %q, got %q", tt.expected, string(stderr))
+				}
+
 			}
 		})
 	}
 }
-
-// add test for generateKeygenMessage
 
 func TestAddressEndpoint(t *testing.T) {
 
@@ -399,14 +399,14 @@ func TestSignatureEndpoint(t *testing.T) {
 						return
 					}
 
-					operationIndex, _ := strconv.Atoi(r.URL.Query().Get("operationIndex"))
-					operationIndexInt := uint(operationIndex)
+					// operationIndex, _ := strconv.Atoi(r.URL.Query().Get("operationIndex"))
+					// operationIndexInt := uint(operationIndex)
 
-					msg := intent.Operations[operationIndexInt].DataToSign
+					// msg := intent.Operations[operationIndexInt].DataToSign
 
-					identity := intent.Identity
-					identityCurve := intent.IdentityCurve
-					keyCurve := intent.Operations[operationIndexInt].KeyCurve
+					// identity := intent.Identity
+					// identityCurve := intent.IdentityCurve
+					// keyCurve := intent.Operations[operationIndexInt].KeyCurve
 
 					// verify signature
 					intentStr, err := identityVerification.SanitiseIntent(intent)
@@ -436,7 +436,7 @@ func TestSignatureEndpoint(t *testing.T) {
 						return
 					}
 
-					go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
+					// go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 
 					w.WriteHeader(http.StatusOK)
 				}).ServeHTTP(w, r)

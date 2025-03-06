@@ -101,6 +101,17 @@ func TestKeygenEndpoint(t *testing.T) {
 	}
 }
 
+func broadcastTest(message interface{}) {
+	_, err := json.Marshal(message)
+
+	if err != nil {
+		fmt.Println("### Marshal error")
+		fmt.Println(err)
+		panic(err)
+	}
+	broadcast(message.(Message))
+}
+
 func TestBroadcastMessage(t *testing.T) {
 
 	oldNodePublicKey := NodePublicKey
@@ -120,12 +131,19 @@ func TestBroadcastMessage(t *testing.T) {
 		Signers:       signers,
 	}
 
+	wrapped := struct {
+		Message
+		Extra interface{} `json:"extra"`
+	}{
+		Message: message,
+		Extra:   func() {}, // functions are not JSON marshallable
+	}
+
 	tests := []struct {
 		name        string
-		message     Message
+		message     interface{}
 		nodePubKey  string
 		nodePrivKey string
-		body        interface{}
 		signers     []string
 		panic       bool
 		expected    string
@@ -135,7 +153,6 @@ func TestBroadcastMessage(t *testing.T) {
 			message:     message,
 			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
 			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
-			body:        nil,
 			panic:       true,
 			expected:    "runtime error: invalid memory address or nil pointer dereference",
 		},
@@ -144,9 +161,24 @@ func TestBroadcastMessage(t *testing.T) {
 			message:     message,
 			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34",
 			nodePrivKey: "invalid-key",
-			body:        nil,
 			panic:       false,
 			expected:    "invalid hex character 'x' in private key",
+		},
+		{
+			name:        "Invalid message",
+			message:     "invalid-message",
+			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
+			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
+			panic:       true,
+			expected:    "interface conversion: interface {} is string, not signer.Message",
+		},
+		{
+			name:        "Invalid json message",
+			message:     wrapped,
+			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
+			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
+			panic:       true,
+			expected:    "json: unsupported type: func()",
 		},
 	}
 
@@ -166,10 +198,10 @@ func TestBroadcastMessage(t *testing.T) {
 						}
 					}
 				}()
-				broadcast(tt.message)
+				broadcastTest(tt.message)
 			} else {
 				if os.Getenv("TEST_BROADCAST_FATAL") == "1" {
-					broadcast(tt.message)
+					broadcastTest(tt.message)
 				}
 
 				// Otherwise, spawn a subprocess that will execute the fatal path.

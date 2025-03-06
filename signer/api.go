@@ -94,11 +94,6 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		// if reflect.DeepEqual(createWallet, CreateWallet{}) {
-		// 	http.Error(w, "Invalid wallet parameters", http.StatusBadRequest)
-		// 	return
-		// }
-
 		key := createWallet.Identity + "_" + createWallet.IdentityCurve + "_" + createWallet.KeyCurve
 
 		keygenGeneratedChan[key] = make(chan string)
@@ -397,11 +392,6 @@ func startHTTPServer(port string) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
-		// if reflect.DeepEqual(intent, sequencer.Intent{}) {
-		// 	http.Error(w, "Invalid intent object", http.StatusBadRequest)
-		// 	return
-		// }
 
 		operationIndex, _ := strconv.Atoi(r.URL.Query().Get("operationIndex"))
 		operationIndexInt := uint(operationIndex)

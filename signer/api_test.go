@@ -2,8 +2,10 @@ package signer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,14 +16,76 @@ import (
 
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/ethereum/go-ethereum/crypto"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
+
+type ITopic interface {
+	Publish(ctx context.Context, data []byte, opts ...pubsub.PubOpt) error
+}
+
+type Topic struct {
+	p     *pubsub.PubSub
+	topic string
+}
+
+func (t *Topic) Publish(ctx context.Context, data []byte, opts ...pubsub.PubOpt) error {
+	fmt.Println("### Publish fake called")
+	return nil
+}
+
+var topicMock *Topic
+
+func broadcastWithMockPublish(message Message) {
+
+	messageBytes, err := json.Marshal(message)
+
+	if err != nil {
+		fmt.Println("### Marshal error")
+		fmt.Println(err)
+		panic(err)
+	}
+
+	hash := crypto.Keccak256Hash(messageBytes)
+
+	cleanedPrivateKey := strings.Replace(NodePrivateKey, "0x", "", 1)
+	privateKey, err := crypto.HexToECDSA(cleanedPrivateKey)
+	if err != nil {
+		fmt.Println("### HexToECDSA error")
+		log.Fatal(err)
+	}
+
+	signature, err := crypto.Sign(hash.Bytes(), privateKey)
+	if err != nil {
+		fmt.Println("### Sign error")
+		log.Fatal(err)
+	}
+
+	message.Signature = signature
+
+	out, err := json.Marshal(message)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(out))
+	ctx := context.Background()
+	fmt.Println(ctx)
+	if err := topicMock.Publish(ctx, out); err != nil {
+		fmt.Println("### Publish error")
+		fmt.Println(err)
+		panic(err)
+	}
+}
 
 func TestKeygenEndpoint(t *testing.T) {
 
 	oldNodePublicKey := NodePublicKey
+	oldTopic := topic
 	defer func() { NodePublicKey = oldNodePublicKey }()
+	defer func() { topic = oldTopic }()
 
 	NodePublicKey = "0x04dae88f5367ea7f086f2a680f212034b73f4c26438b174bd093a71d9b78904eb3b20bc874ef4a04a2ac9531ce29cffacdacd347edbc25133dddf07fac07feedca"
+	topicMock = &Topic{}
 
 	type InvalidCreateWallet struct {
 		Data []byte `json:"data"`
@@ -96,7 +160,7 @@ func TestKeygenEndpoint(t *testing.T) {
 	}
 }
 
-func broadcastTest(message interface{}) {
+func broadcastTest(message interface{}, mockPublish bool) {
 	_, err := json.Marshal(message)
 
 	if err != nil {
@@ -104,7 +168,11 @@ func broadcastTest(message interface{}) {
 		fmt.Println(err)
 		panic(err)
 	}
-	broadcast(message.(Message))
+	if !mockPublish {
+		broadcast(message.(Message))
+	} else {
+		broadcastWithMockPublish(message.(Message))
+	}
 }
 
 func TestBroadcastMessage(t *testing.T) {
@@ -141,14 +209,28 @@ func TestBroadcastMessage(t *testing.T) {
 		nodePrivKey string
 		signers     []string
 		panic       bool
+		fatal       bool
+		mockPublish bool
 		expected    string
 	}{
+		{
+			name:        "Valid data and mock publish",
+			message:     message,
+			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
+			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
+			panic:       false,
+			fatal:       false,
+			mockPublish: true,
+			expected:    "",
+		},
 		{
 			name:        "Valid data but panic on publish (topic nil in unit test)",
 			message:     message,
 			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
 			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
 			panic:       true,
+			fatal:       false,
+			mockPublish: false,
 			expected:    "runtime error: invalid memory address or nil pointer dereference",
 		},
 		{
@@ -157,6 +239,8 @@ func TestBroadcastMessage(t *testing.T) {
 			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34",
 			nodePrivKey: "invalid-key",
 			panic:       false,
+			fatal:       true,
+			mockPublish: false,
 			expected:    "invalid hex character 'i' in private key",
 		},
 		{
@@ -165,6 +249,8 @@ func TestBroadcastMessage(t *testing.T) {
 			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
 			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
 			panic:       true,
+			fatal:       false,
+			mockPublish: false,
 			expected:    "interface conversion: interface {} is string, not signer.Message",
 		},
 		{
@@ -173,6 +259,8 @@ func TestBroadcastMessage(t *testing.T) {
 			nodePubKey:  "0x04934172634cf8f04e50697b53a6dae3708560c0620137f4fbc638d5d34bc38998915cec982f4f0f3644c68fac09a8190a07bd09491dbdf68eb3e52395aed51dbc",
 			nodePrivKey: "0xd4f4347d1d4db7064945267eb8bfbd0145d322ffac9320b5de854e2b54508296",
 			panic:       true,
+			fatal:       false,
+			mockPublish: false,
 			expected:    "json: unsupported type: func()",
 		},
 	}
@@ -181,6 +269,9 @@ func TestBroadcastMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			NodePrivateKey = tt.nodePrivKey
 			NodePublicKey = tt.nodePubKey
+			if tt.mockPublish {
+				broadcastTest(tt.message, true)
+			}
 			if tt.panic {
 				defer func() {
 					if r := recover(); r == nil {
@@ -193,10 +284,10 @@ func TestBroadcastMessage(t *testing.T) {
 						}
 					}
 				}()
-				broadcastTest(tt.message)
-			} else {
+				broadcastTest(tt.message, false)
+			} else if tt.fatal {
 				if os.Getenv("TEST_BROADCAST_FATAL") == "1" {
-					broadcastTest(tt.message)
+					broadcastTest(tt.message, false)
 				}
 
 				// Otherwise, spawn a subprocess that will execute the fatal path.

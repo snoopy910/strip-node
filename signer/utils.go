@@ -5,9 +5,6 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
-
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/insight-chain/inb-go/crypto/sha3"
@@ -33,28 +30,6 @@ func publicKeyToAddress(pubkey []byte) string {
 	buf = _hash.Sum(nil)
 	publicAddress := hexutil.Encode(buf[12:])
 	return publicAddress
-}
-
-func publicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
-	mainnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.MainNetParams)
-	if err != nil {
-		return "", "", ""
-	}
-	fmt.Println("mainnetPubkey: ", mainnetPubkey)
-
-	testnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.TestNet3Params)
-	if err != nil {
-		return mainnetPubkey.EncodeAddress(), "", ""
-	}
-	fmt.Println("testnetPubkey: ", testnetPubkey)
-
-	regtestPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.RegressionNetParams)
-	if err != nil {
-		return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), ""
-	}
-	fmt.Println("regtestPubkey: ", regtestPubkey)
-
-	return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), regtestPubkey.EncodeAddress()
 }
 
 func toHexInt(n *big.Int) string {

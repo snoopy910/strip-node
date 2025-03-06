@@ -172,6 +172,32 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
+	// create the wallet whose keycurve is bitcoin_ecdsa here
+	createWalletRequest = CreateWalletRequest{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		KeyCurve:      "bitcoin_ecdsa",
+		Signers:       signersPublicKeyList,
+	}
+
+	marshalled, err = json.Marshal(createWalletRequest)
+	if err != nil {
+		return err
+	}
+
+	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client = http.Client{Timeout: 3 * time.Minute}
+	_, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+
 	// create the wallet whose keycurve is algorand_eddsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
@@ -280,8 +306,8 @@ func createWallet(identity string, identityCurve string) error {
 
 	ecdsaAddress := getAddressResponse.Address
 
-	// get the address of the wallet whose keycurve is secp256k1 here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=secp256k1")
+	// get the address of the wallet whose keycurve is bitcoin_ecdsa here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=bitcoin_ecdsa")
 	if err != nil {
 		return err
 	}

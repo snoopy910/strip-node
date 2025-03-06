@@ -18,17 +18,17 @@ import (
 var topic *pubsub.Topic
 var topicNameFlag = "renode"
 
-func initDHT(ctx context.Context, h host.Host, bootnode []multiaddr.Multiaddr) *dht.IpfsDHT {
+func initDHT(ctx context.Context, h host.Host, bootnode []multiaddr.Multiaddr) (*dht.IpfsDHT, error) {
 	// Start a DHT, for use in peer discovery. We can't just make a new DHT
 	// client because we want each peer to maintain its own local copy of the
 	// DHT, so that the bootstrapping node of the DHT can go down without
 	// inhibiting future peer discovery.
 	kademliaDHT, err := dht.New(ctx, h)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to create DHT: %w", err)
 	}
 	if err = kademliaDHT.Bootstrap(ctx); err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to bootstrap DHT: %w", err)
 	}
 	var wg sync.WaitGroup
 	for _, peerAddr := range bootnode {
@@ -43,12 +43,15 @@ func initDHT(ctx context.Context, h host.Host, bootnode []multiaddr.Multiaddr) *
 	}
 	wg.Wait()
 
-	return kademliaDHT
+	return kademliaDHT, nil
 }
 
-func discoverPeers(h host.Host, bootnode []multiaddr.Multiaddr) {
+func discoverPeers(h host.Host, bootnode []multiaddr.Multiaddr) error {
 	ctx := context.Background()
-	kademliaDHT := initDHT(ctx, h, bootnode)
+	kademliaDHT, err := initDHT(ctx, h, bootnode)
+	if err != nil {
+		return fmt.Errorf("failed to initialize DHT: %w", err)
+	}
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
 	dutil.Advertise(ctx, routingDiscovery, topicNameFlag)
 
@@ -58,7 +61,7 @@ func discoverPeers(h host.Host, bootnode []multiaddr.Multiaddr) {
 		//fmt.Println("Searching for peers...")
 		peerChan, err := routingDiscovery.FindPeers(ctx, topicNameFlag)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("failed to find peers: %w", err)
 		}
 		for peer := range peerChan {
 			if peer.ID == h.ID() {
@@ -74,50 +77,53 @@ func discoverPeers(h host.Host, bootnode []multiaddr.Multiaddr) {
 		}
 	}
 	fmt.Println("Peer discovery complete")
+	return nil
 }
 
-func subscribe(h host.Host) {
+func subscribe(h host.Host) error {
 	ctx := context.Background()
 
 	ps, err := pubsub.NewGossipSub(ctx, h)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to create gossipsub: %w", err)
 	}
 
 	topic, err = ps.Join(topicNameFlag)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to join topic: %w", err)
 	}
 
 	sub, err := topic.Subscribe()
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to subscribe: %w", err)
 	}
 
 	handleMessageFromSub(ctx, sub)
+
+	return nil
 }
 
-func handleMessageFromSub(ctx context.Context, sub *pubsub.Subscription) {
+func handleMessageFromSub(ctx context.Context, sub *pubsub.Subscription) error {
 	for {
 		m, err := sub.Next(ctx)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("failed to get next message: %w", err)
 		}
 
 		go handleIncomingMessage(m.Message.Data)
 	}
 }
 
-func createHost(listenHost string, port int, bootnodeURL string) (host.Host, multiaddr.Multiaddr) {
+func createHost(listenHost string, port int, bootnodeURL string) (host.Host, multiaddr.Multiaddr, error) {
 	h, err := libp2p.New(libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/%s/tcp/%d", listenHost, port)))
 	if err != nil {
-		panic(err)
+		return nil, nil, fmt.Errorf("failed to create host: %w", err)
 	}
 
 	addr, err := multiaddr.NewMultiaddr(bootnodeURL)
 	if err != nil {
-		panic(err)
+		return nil, nil, fmt.Errorf("failed to create multiaddr: %w", err)
 	}
 
-	return h, addr
+	return h, addr, nil
 }

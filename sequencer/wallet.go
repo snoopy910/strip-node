@@ -31,7 +31,10 @@ func createWallet(identity string, identityCurve string) error {
 	// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
 	// If length of selected nodes is less than maximum nodes then use all nodes as signers.
 
-	signers := SignersList()
+	signers, err := SignersList()
+	if err != nil {
+		return fmt.Errorf("failed to get signers: %w", err)
+	}
 
 	if len(signers) > MaximumSigners {
 		// select random number of max signers

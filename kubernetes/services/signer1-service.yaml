@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: signer1
+  namespace: dev
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+    - port: 30304
+      targetPort: 30304
+      name: p2p
+  selector:
+    app: signer1

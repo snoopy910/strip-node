@@ -3,6 +3,7 @@ package dogecoin
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -76,4 +77,24 @@ func PublicKeyToTestnetAddress(publicKeyHex string) (string, error) {
 	}
 
 	return addrStr, nil
+}
+
+func getTatumApiKey(chainID string) (string, error) {
+	var key string
+	if chainID == "2000" {
+		key = "TATUM_API_KEY_MAINNET"
+		if val, ok := os.LookupEnv(key); ok {
+			return val, nil
+		}
+		// TODO: secure tatum mainnet api key
+		return "t-67cb0e957f1a5a5a2483e093-03079b3a500a4f39bf4d651b", nil
+	} else if chainID == "2001" {
+		key = "TATUM_API_KEY_TESTNET"
+		if val, ok := os.LookupEnv(key); ok {
+			return val, nil
+		}
+		// TODO: secure tatum testnet api key
+		return "t-67cb0e957f1a5a5a2483e093-eeb92712de9c4144a0edbcca", nil
+	}
+	return "", fmt.Errorf("[Error] Wrong chainID for tatum api key")
 }

@@ -1256,7 +1256,7 @@ func ProcessIntent(intentId int64) {
 
 						// Use the same Dogecoin address we used for signing
 						result, err := dogecoin.WithdrawDogeTxn(
-							withdrawalChain.ChainUrl,
+							withdrawalChain.ChainId,
 							txn,         // Use the serialized transaction instead of dataToSign
 							userAddress, // Use Dogecoin address instead of ECDSA key
 							signature,

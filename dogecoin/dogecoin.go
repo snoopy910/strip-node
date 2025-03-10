@@ -15,6 +15,7 @@ import (
 type DogeRPCClient struct {
 	endpoint string
 	client   *http.Client
+	apiKey   string
 }
 
 // RPCRequest represents a JSON-RPC request
@@ -74,10 +75,11 @@ type TxOut struct {
 }
 
 // NewDogeRPCClient creates a new Dogecoin RPC client
-func NewDogeRPCClient(endpoint string) *DogeRPCClient {
+func NewDogeRPCClient(endpoint string, apiKey string) *DogeRPCClient {
 	return &DogeRPCClient{
 		endpoint: endpoint,
 		client:   &http.Client{},
+		apiKey:   apiKey,
 	}
 }
 
@@ -88,7 +90,13 @@ func CheckDogeTransactionConfirmed(chainId string, txHash string) (bool, error) 
 		return false, err
 	}
 
-	client := NewDogeRPCClient(chain.ChainUrl)
+	apiKey, err := getTatumApiKey(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	client := NewDogeRPCClient(chain.ChainUrl, apiKey)
+
 	tx, err := client.GetTransaction(txHash)
 	if err != nil {
 		return false, fmt.Errorf("failed to get transaction: %v", err)
@@ -104,7 +112,13 @@ func SendDogeTransaction(serializedTx string, chainId string, keyCurve string, d
 		return "", err
 	}
 
-	client := NewDogeRPCClient(chain.ChainUrl)
+	apiKey, err := getTatumApiKey(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	client := NewDogeRPCClient(chain.ChainUrl, apiKey)
+
 	return client.SendRawTransaction(serializedTx)
 }
 
@@ -115,7 +129,13 @@ func GetDogeTransfers(chainId string, txHash string) ([]common.Transfer, error) 
 		return nil, err
 	}
 
-	client := NewDogeRPCClient(chain.ChainUrl)
+	apiKey, err := getTatumApiKey(chainId)
+	if err != nil {
+		return nil, err
+	}
+
+	client := NewDogeRPCClient(chain.ChainUrl, apiKey)
+
 	tx, err := client.GetTransaction(txHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transaction: %v", err)
@@ -142,10 +162,12 @@ func GetDogeTransfers(chainId string, txHash string) ([]common.Transfer, error) 
 	// Convert inputs to transfers
 	for addr, value := range inputMap {
 		transfers = append(transfers, common.Transfer{
-			From:   addr,
-			To:     "",
-			Amount: fmt.Sprintf("%d", int64(value*1e8)), // Convert to satoshis
-			Token:  DOGE_TOKEN_SYMBOL,
+			From:         addr,
+			To:           "",
+			Amount:       fmt.Sprintf("%d", int64(value*1e8)), // Convert to satoshis
+			Token:        DOGE_TOKEN_SYMBOL,
+			IsNative:     true,
+			ScaledAmount: fmt.Sprintf("%d", int64(value)),
 		})
 	}
 
@@ -153,10 +175,12 @@ func GetDogeTransfers(chainId string, txHash string) ([]common.Transfer, error) 
 	for _, output := range tx.Vout {
 		if len(output.ScriptPubKey.Addresses) > 0 {
 			transfers = append(transfers, common.Transfer{
-				From:   "",
-				To:     output.ScriptPubKey.Addresses[0],
-				Amount: fmt.Sprintf("%d", int64(output.Value*1e8)), // Convert to satoshis
-				Token:  DOGE_TOKEN_SYMBOL,
+				From:         "",
+				To:           output.ScriptPubKey.Addresses[0],
+				Amount:       fmt.Sprintf("%d", int64(output.Value*1e8)), // Convert to satoshis
+				Token:        DOGE_TOKEN_SYMBOL,
+				IsNative:     true,
+				ScaledAmount: fmt.Sprintf("%d", int64(output.Value)),
 			})
 		}
 	}
@@ -213,7 +237,9 @@ func (c *DogeRPCClient) call(method string, params []interface{}) (json.RawMessa
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
+	req.Header.Add("accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Add("x-api-key", c.apiKey)
 
 	resp, err := c.client.Do(req)
 	if err != nil {

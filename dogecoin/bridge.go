@@ -6,18 +6,18 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-
 )
 
 const (
-	DEFAULT_FEE_RATE     = 0.001 // DOGE per kB
+	DEFAULT_FEE_RATE      = 0.001 // DOGE per kB
 	DEFAULT_CONFIRMATIONS = 6
-	DOGE_DECIMALS        = 8
-	DOGE_TOKEN_SYMBOL    = "DOGE"
-	DOGE_ZERO_ADDRESS    = "0x0000000000000000000000000000000000000000"
+	DOGE_DECIMALS         = 8
+	DOGE_TOKEN_SYMBOL     = "DOGE"
+	DOGE_ZERO_ADDRESS     = "0x0000000000000000000000000000000000000000"
 )
 
 // WithdrawDogeNativeGetSignature returns transaction and dataToSign for
@@ -81,7 +81,7 @@ func WithdrawDogeNativeGetSignature(
 // WithdrawDogeTxn submits transaction to withdraw assets and returns
 // the txHash as the result
 func WithdrawDogeTxn(
-	rpcURL string,
+	chainId string,
 	transaction string,
 	publicKey string,
 	signatureHex string,
@@ -125,7 +125,18 @@ func WithdrawDogeTxn(
 	}
 
 	// Submit the transaction using RPC
-	client := NewDogeRPCClient(rpcURL)
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	apiKey, err := getTatumApiKey(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	client := NewDogeRPCClient(chain.ChainUrl, apiKey)
+
 	txHash, err := client.SendRawTransaction(signedTxBuf.String())
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)

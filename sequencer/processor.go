@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -27,6 +26,7 @@ import (
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/util"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/algorand/go-algorand-sdk/encoding/msgpack"
 	algorandTypes "github.com/algorand/go-algorand-sdk/types"
 	"github.com/btcsuite/btcd/txscript"
@@ -70,18 +70,18 @@ func ProcessIntent(intentId int64) {
 	for {
 		intent, err := GetIntent(intentId)
 		if err != nil {
-			log.Printf("error getting intent: %+v\n", err)
+			logger.Sugar().Errorw("error getting intent", "error", err)
 			return
 		}
 
 		intentBytes, err := json.Marshal(intent)
 		if err != nil {
-			log.Printf("error marshalling intent: %+v\n", err)
+			logger.Sugar().Errorw("error marshalling intent", "error", err)
 			return
 		}
 
 		if intent.Status != INTENT_STATUS_PROCESSING {
-			log.Println("intent processed")
+			logger.Sugar().Infow("intent processed", "intent", intent)
 			return
 		}
 
@@ -92,7 +92,6 @@ func ProcessIntent(intentId int64) {
 
 		// now process the operations of the intent
 		for i, operation := range intent.Operations {
-			log.Printf("Operation: %v\n", operation)
 			if operation.Status == OPERATION_STATUS_COMPLETED || operation.Status == OPERATION_STATUS_FAILED {
 				continue
 			}

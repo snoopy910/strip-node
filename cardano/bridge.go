@@ -3,9 +3,10 @@ package cardano
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
-	"github.com/blockfrost/blockfrost-go"
+	"github.com/echovl/cardano-go"
 )
 
 // WithdrawCardanoNativeGetSignature creates a transaction for withdrawing native ADA and returns the transaction and data to sign
@@ -21,35 +22,46 @@ func WithdrawCardanoNativeGetSignature(
 		return "", "", fmt.Errorf("failed to parse solver output: %v", err)
 	}
 
-	amount, ok := solverData["amount"].(string)
+	txBuilder := cardano.NewTxBuilder(&cardano.ProtocolParams{})
+	amountStr, ok := solverData["amount"].(string)
 	if !ok {
 		return "", "", fmt.Errorf("amount not found in solver output")
 	}
 
-	// Build transaction
-	tx := &blockfrost.TransactionUTXOs{
-		Inputs: []blockfrost.TransactionInput{
-			{
-				Address: bridgeAddress,
-				Amount:  []blockfrost.TxAmount{{Unit: "lovelace", Quantity: amount}},
-			},
-		},
-		Outputs: []blockfrost.TransactionOutput{
-			{
-				Address: userAddress,
-				Amount:  []blockfrost.TxAmount{{Unit: "lovelace", Quantity: amount}},
-			},
-		},
-	}
-
-	// Serialize transaction
-	txBytes, err := json.Marshal(tx)
+	amount, err := strconv.ParseUint(amountStr, 10, 64)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to marshal transaction: %v", err)
+		return "", "", fmt.Errorf("failed to parse amount: %v", err)
 	}
 
-	serializedTxn := string(txBytes)
-	dataToSign := strings.TrimPrefix(serializedTxn, "0x")
+	address, err := cardano.NewAddress(userAddress)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse address: %v", err)
+	}
+
+	inputTxHash := strings.ToLower(solverData["txHash"].(string))
+	txBuilder.AddInputs(&cardano.TxInput{
+		TxHash: cardano.Hash32(inputTxHash),
+		Amount: &cardano.Value{
+			Coin: cardano.Coin(amount),
+		},
+	})
+	txBuilder.AddOutputs(&cardano.TxOutput{
+		Address: address,
+		Amount: &cardano.Value{
+			Coin: cardano.Coin(amount),
+		},
+	})
+
+	tx, err := txBuilder.Build()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to build transaction: %v", err)
+	}
+	hash, err := tx.Hash()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to hash transaction: %v", err)
+	}
+	serializedTxn := tx.Hex()
+	dataToSign := hash.String()
 
 	return serializedTxn, dataToSign, nil
 }
@@ -60,7 +72,7 @@ func WithdrawCardanoTokenGetSignature(
 	bridgeAddress string,
 	solverOutput string,
 	userAddress string,
-	policyID string,
+	token string,
 ) (string, string, error) {
 	// Parse solver output
 	var solverData map[string]interface{}
@@ -68,41 +80,50 @@ func WithdrawCardanoTokenGetSignature(
 		return "", "", fmt.Errorf("failed to parse solver output: %v", err)
 	}
 
-	amount, ok := solverData["amount"].(string)
+	txBuilder := cardano.NewTxBuilder(&cardano.ProtocolParams{})
+	amountStr, ok := solverData["amount"].(string)
 	if !ok {
 		return "", "", fmt.Errorf("amount not found in solver output")
 	}
 
-	// Build transaction
-	tx := &blockfrost.TransactionUTXOs{
-		Inputs: []blockfrost.TransactionInput{
-			{
-				Address: bridgeAddress,
-				Amount: []blockfrost.TxAmount{
-					{Unit: policyID, Quantity: amount},
-					{Unit: "lovelace", Quantity: "2000000"}, // Min ADA requirement
-				},
-			},
-		},
-		Outputs: []blockfrost.TransactionOutput{
-			{
-				Address: userAddress,
-				Amount: []blockfrost.TxAmount{
-					{Unit: policyID, Quantity: amount},
-					{Unit: "lovelace", Quantity: "2000000"}, // Min ADA requirement
-				},
-			},
-		},
-	}
-
-	// Serialize transaction
-	txBytes, err := json.Marshal(tx)
+	amount, err := strconv.ParseUint(amountStr, 10, 64)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to marshal transaction: %v", err)
+		return "", "", fmt.Errorf("failed to parse amount: %v", err)
 	}
 
-	serializedTxn := string(txBytes)
-	dataToSign := strings.TrimPrefix(serializedTxn, "0x")
+	address, err := cardano.NewAddress(userAddress)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse address: %v", err)
+	}
+
+	inputTxHash := strings.ToLower(solverData["txHash"].(string))
+
+	// FIX: This is a temporary fillin and should be addressed
+	policyID := cardano.NewPolicyIDFromHash(cardano.Hash28(token))
+	assetName := cardano.NewAssetName(token)
+	txBuilder.AddInputs(&cardano.TxInput{
+		TxHash: cardano.Hash32(inputTxHash),
+		Amount: &cardano.Value{
+			MultiAsset: cardano.NewMultiAsset().Set(policyID, cardano.NewAssets().Set(assetName, cardano.BigNum(amount))),
+		},
+	})
+	txBuilder.AddOutputs(&cardano.TxOutput{
+		Address: address,
+		Amount: &cardano.Value{
+			MultiAsset: cardano.NewMultiAsset().Set(policyID, cardano.NewAssets().Set(assetName, cardano.BigNum(amount))),
+		},
+	})
+
+	tx, err := txBuilder.Build()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to build transaction: %v", err)
+	}
+	hash, err := tx.Hash()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to hash transaction: %v", err)
+	}
+	serializedTxn := tx.Hex()
+	dataToSign := hash.String()
 
 	return serializedTxn, dataToSign, nil
 }

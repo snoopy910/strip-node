@@ -8,8 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -17,6 +15,7 @@ import (
 	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
+	"github.com/StripChain/strip-node/util/logger"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	ecdsaSigning "github.com/bnb-chain/tss-lib/v2/ecdsa/signing"
@@ -35,7 +34,7 @@ import (
 func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
 	signersString, err := GetSignersForKeyShare(identity, identityCurve, keyCurve)
 	if err != nil {
-		fmt.Println("error from postgres:", err)
+		logger.Sugar().Errorw("error from postgres", "error", err)
 		return
 	}
 
@@ -83,39 +82,39 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 		panic(err1)
 	}
 
-	fmt.Println("processed signature generation message with status: ", ok)
+	logger.Sugar().Infof("processed signature generation message with status: %v", ok)
 }
 
 func generateSignature(identity string, identityCurve string, keyCurve string, hash []byte) {
 	keyShare, err := GetKeyShare(identity, identityCurve, keyCurve)
 
 	if err != nil {
-		fmt.Println("error from postgres:", err)
+		logger.Sugar().Errorw("error from postgres", "error", err)
 		return
 	}
 
 	if keyShare == "" {
-		fmt.Println("key share not found. stopping to sign")
+		logger.Sugar().Errorw("key share not found. stopping to sign")
 		return
 	}
 
 	if keyShare != "" {
-		fmt.Println("key share found. continuing to sign")
+		logger.Sugar().Infof("key share found. continuing to sign")
 	}
 
 	signersString, err := GetSignersForKeyShare(identity, identityCurve, keyCurve)
 	if err != nil {
-		fmt.Println("error from postgres:", err)
+		logger.Sugar().Errorw("error from postgres", "error", err)
 		return
 	}
 
 	if signersString == "" {
-		fmt.Println("signers not found. stopping to sign")
+		logger.Sugar().Errorw("signers not found. stopping to sign")
 		return
 	}
 
 	if signersString != "" {
-		fmt.Println("signers found. continuing to sign")
+		logger.Sugar().Infof("signers found. continuing to sign")
 	}
 
 	signers := []string{}
@@ -240,7 +239,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 			}
 
 			go broadcast(message)
-			fmt.Println("Message broadcasted")
+			logger.Sugar().Infof("Message broadcasted")
 
 		case save := <-saveChan:
 			completed = true
@@ -271,13 +270,13 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				uncompressedPubKeyStr := "04" + x + y
-				log.Println("Uncompressed public key:", uncompressedPubKeyStr)
+				logger.Sugar().Infof("Uncompressed public key: %s", uncompressedPubKeyStr)
 				compressedPubKeyStr, err := bitcoin.ConvertToCompressedPublicKey(uncompressedPubKeyStr)
 				if err != nil {
-					fmt.Println("Error converting to compressed public key:", err)
+					logger.Sugar().Errorw("error converting to compressed public key", "error", err)
 					return
 				}
-				log.Println("Compressed public key:", compressedPubKeyStr)
+				logger.Sugar().Infof("Compressed public key: %s", compressedPubKeyStr)
 
 				final := hex.EncodeToString(save.Signature)
 
@@ -311,7 +310,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 						address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
 					}
 					if err != nil {
-						fmt.Printf("Error generating Dogecoin address: %v\n", err)
+						logger.Sugar().Errorw("failed to generate Dogecoin address", "error", err)
 					}
 				}
 
@@ -406,7 +405,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				// Get the public key bytes
 				pkBytes := pk.Serialize()
 				if len(pkBytes) != 32 {
-					fmt.Println("Invalid public key length")
+					logger.Sugar().Errorw("invalid public key length")
 					return
 				}
 
@@ -416,7 +415,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				// Use Stellar SDK's strkey package to encode
 				address, err := strkey.Encode(versionByte, pkBytes)
 				if err != nil {
-					fmt.Println("error encoding Stellar address: ", err)
+					logger.Sugar().Errorw("error encoding Stellar address", "error", err)
 					return
 				}
 
@@ -533,7 +532,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					KeyCurve:      keyCurve,
 				}
 
-				fmt.Println("Address of the generated signature: ", publicKeyToAddress(pubkey))
+				logger.Sugar().Infof("Address of the generated signature: %s", publicKeyToAddress(pubkey))
 
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 

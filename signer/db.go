@@ -1,8 +1,7 @@
 package signer
 
 import (
-	"fmt"
-
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
 )
@@ -47,7 +46,7 @@ func InitialiseDB(host string, database string, username string, password string
 }
 
 func AddKeyShare(identity string, identityCurve string, keyCurve string, key string) error {
-	fmt.Println("Adding key share to postgres", identity+"_"+identityCurve+"_"+keyCurve)
+	logger.Sugar().Infof("Adding key share to postgres %s_%s_%s", identity, identityCurve, keyCurve)
 	kvStore := &KVStore{
 		Key:   identity + "_" + identityCurve + "_" + keyCurve,
 		Value: key,
@@ -73,7 +72,7 @@ func GetKeyShare(identity string, identityCurve string, keyCurve string) (string
 }
 
 func AddSignersForKeyShare(identity string, identityCurve string, keyCurve string, signers string) error {
-	fmt.Println("Adding signers to postgres", identity+"_"+identityCurve+"_"+keyCurve)
+	logger.Sugar().Infof("Adding signers to postgres %s_%s_%s", identity, identityCurve, keyCurve)
 	kvStore := &KVStore{
 		Key:   identity + "_" + identityCurve + "_" + keyCurve + "_" + "signers",
 		Value: signers,

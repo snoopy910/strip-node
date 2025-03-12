@@ -79,11 +79,11 @@ func WithdrawAptosNativeGetSignature(
 				Name:    "coin",
 			},
 			// Call the transfer function
-			Function:      "transfer",
+			Function: "transfer",
 			// Specify we're transferring AptosCoin
 			TypeArguments: []aptosModels.TypeTag{aptosCoinTypeTag},
 			// Arguments: recipient address and amount
-			Arguments:     []interface{}{accountTo, amount},
+			Arguments: []interface{}{accountTo, amount},
 		}).
 		SetExpirationTimestampSecs(uint64(time.Now().Add(10 * time.Minute).Unix())).
 		SetGasUnitPrice(DEFAULT_GAS_UNIT_PRICE).
@@ -226,7 +226,7 @@ func WithdrawAptosTxn(
 	// This reconstructs the RawTransaction with sender, payload, gas parameters, etc.
 	err = lcs.Unmarshal(decodedTransactionData, rawTxn)
 	if err != nil {
-		fmt.Println("error unmarshalling raw transaction: ", err)
+		return "", fmt.Errorf("failed to unmarshall raw transaction: %v", err)
 	}
 
 	// Assign the deserialized raw transaction to our transaction wrapper
@@ -261,8 +261,6 @@ func WithdrawAptosTxn(
 	if err != nil {
 		return "", fmt.Errorf("error submitting transaction: %v", err)
 	}
-
-	fmt.Println("Submitted aptos transaction with hash:", response.Hash)
 
 	// Return the transaction hash which can be used to track the transaction status
 	return response.Hash, nil

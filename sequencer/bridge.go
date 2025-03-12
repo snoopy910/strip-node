@@ -12,6 +12,7 @@ import (
 
 	"github.com/StripChain/strip-node/bridge"
 	tssCommon "github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -40,20 +41,20 @@ func initialiseBridge() {
 
 	_createWallet := false
 
-	fmt.Println("Creating bridge wallet", identity, identityCurve)
+	logger.Sugar().Infow("Creating bridge wallet", "identity", identity, "identityCurve", identityCurve)
 
 	_, err := GetWallet(identity, identityCurve)
 	if err != nil {
 		if err.Error() == "pg: no rows in result set" {
 			_createWallet = true
 		} else {
-			fmt.Println("Panic")
+			logger.Sugar().Errorw("failed to get wallet", "error", err)
 			panic(err)
 		}
 	}
 
 	if !_createWallet {
-		fmt.Println("wallet already exists")
+		logger.Sugar().Info("wallet already exists")
 		return
 	}
 
@@ -62,14 +63,14 @@ func initialiseBridge() {
 		panic(err)
 	}
 
-	fmt.Println("Bridge wallet created")
+	logger.Sugar().Info("Bridge wallet created")
 
 	wallet, err := GetWallet(identity, identityCurve)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Bridge authority is: ", wallet.ECDSAPublicKey)
+	logger.Sugar().Infow("Bridge authority is: ", "authority", wallet.ECDSAPublicKey)
 
 	client, err := ethclient.Dial(RPC_URL)
 	if err != nil {
@@ -120,7 +121,7 @@ func initialiseBridge() {
 	if err != nil {
 		log.Fatalf("failed to estimate gas: %v", err)
 	}
-	fmt.Println("gas estimate ", gas)
+	logger.Sugar().Infof("gas estimate %d", gas)
 
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Nonce = big.NewInt(int64(nonce))
@@ -146,7 +147,7 @@ func initialiseBridge() {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Bridge authority set")
+	logger.Sugar().Info("Bridge authority set")
 }
 
 func mintBridge(amount string, account string, token string, signature string) (string, error) {
@@ -222,7 +223,7 @@ func mintBridge(amount string, account string, token string, signature string) (
 	if err != nil {
 		return "", fmt.Errorf("failed to estimate gas: %v", err)
 	}
-	fmt.Println("gas estimate ", gas)
+	logger.Sugar().Infof("gas estimate %d", gas)
 
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Value = big.NewInt(0) // in wei
@@ -345,7 +346,7 @@ func swapBridge(
 	if err != nil {
 		return "", fmt.Errorf("failed to estimate gas: %v", err)
 	}
-	fmt.Println("gas estimate ", gas)
+	logger.Sugar().Infof("gas estimate %d", gas)
 
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Value = big.NewInt(0) // in wei
@@ -453,7 +454,7 @@ func burnTokens(
 	if err != nil {
 		return "", fmt.Errorf("failed to estimate gas: %v", err)
 	}
-	fmt.Println("gas estimate ", gas)
+	logger.Sugar().Infof("gas estimate %d", gas)
 
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Value = big.NewInt(0) // in wei
@@ -547,7 +548,7 @@ func withdrawEVMTxn(
 		return "", err
 	}
 
-	fmt.Printf("Signed transaction: 0x%x\n", signedTxBytes)
+	logger.Sugar().Infof("Signed transaction: 0x%x", signedTxBytes)
 
 	err = client.SendTransaction(context.Background(), signedTx)
 	if err != nil {

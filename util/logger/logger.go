@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -16,7 +17,14 @@ var (
 // Init initializes the logger. It only executes once.
 func Init() error {
 	once.Do(func() {
-		logger, initError := zap.NewProduction()
+		config := zap.NewProductionConfig()
+		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
+		logger, initError := config.Build(
+			zap.AddStacktrace(zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+				return lvl >= zap.ErrorLevel
+			})),
+		)
 		if initError == nil {
 			sugar = logger.Sugar()
 		}

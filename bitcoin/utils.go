@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcutil"
@@ -117,7 +118,7 @@ func HashToSign(serializedTxn string) (string, error) {
 		log.Fatal("Error creating signature hash: ", err)
 	}
 	dataToSign2 := msgTx.TxHash().String()
-	log.Println("dataToSign", dataToSign2)
+	logger.Sugar().Infof("dataToSign: %s", dataToSign2)
 
 	// Convert the dataToSign (SIGHASH) to hex for further use in the signing process
 	dataToSignHex := hex.EncodeToString(dataToSign)
@@ -125,24 +126,24 @@ func HashToSign(serializedTxn string) (string, error) {
 }
 
 func PublicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
-	log.Println("pubkey", pubkey) // NOTE: don't remove this log
+	logger.Sugar().Infof("Bitcoin pubkey: %x", pubkey) // NOTE: don't remove this log
 	mainnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.MainNetParams)
 	if err != nil {
 		return "", "", ""
 	}
-	fmt.Println("mainnetPubkey: ", mainnetPubkey)
+	logger.Sugar().Infof("Bitcoin mainnet address: %s", mainnetPubkey)
 
 	testnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.TestNet3Params)
 	if err != nil {
 		return mainnetPubkey.EncodeAddress(), "", ""
 	}
-	fmt.Println("testnetPubkey: ", testnetPubkey)
+	logger.Sugar().Infof("Bitcoin testnet address: %s", testnetPubkey)
 
 	regtestPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.RegressionNetParams)
 	if err != nil {
 		return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), ""
 	}
-	fmt.Println("regtestPubkey: ", regtestPubkey)
+	logger.Sugar().Infof("Bitcoin regtest address: %s", regtestPubkey)
 
 	return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), regtestPubkey.EncodeAddress()
 }

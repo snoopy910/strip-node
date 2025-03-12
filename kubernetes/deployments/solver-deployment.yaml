@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solver
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solver
+  template:
+    metadata:
+      labels:
+        app: solver
+    spec:
+      initContainers:
+        - name: wait-for-sequencer
+          image: busybox
+          command: ['sh', '-c', 'until nslookup sequencer.dev.svc.cluster.local; do echo waiting for sequencer; sleep 2; done;']
+      containers:
+        - name: solver
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          ports:
+            - containerPort: 8083
+          command:
+            - /bin/sh
+            - -c
+            - >
+              /app/strip-node
+              --httpPort 8083
+              --isTestSolver true 

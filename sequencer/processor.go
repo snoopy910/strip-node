@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/ERC20"
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bitcoin"
@@ -55,6 +56,12 @@ type SwapMetadata struct {
 
 type BurnMetadata struct {
 	Token string `json:"token"`
+}
+
+// BurnSyntheticMetadata defines the metadata required for the BURN_SYNTHETIC operation
+type BurnSyntheticMetadata struct {
+	Token  string `json:"token"`
+	Amount string `json:"amount"`
 }
 
 type WithdrawMetadata struct {
@@ -1051,6 +1058,13 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_BURN {
 					bridgeSwap := intent.Operations[i-1]
 
+					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != OPERATION_TYPE_WITHDRAW {
+						fmt.Println("BURN operation must be followed by a WITHDRAW operation")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
 					if i == 0 || !(bridgeSwap.Type == OPERATION_TYPE_SWAP) {
 						logger.Sugar().Errorw("Invalid operation type for swap")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -1111,10 +1125,118 @@ func ProcessIntent(intentId int64) {
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 					break
+				} else if operation.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+					// This operation allows direct burning of ERC20 tokens from the wallet
+					// without requiring a prior swap operation
+					burnSyntheticMetadata := BurnSyntheticMetadata{}
+
+					// Verify that this operation is followed by a withdraw operation
+					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != OPERATION_TYPE_WITHDRAW {
+						fmt.Println("BURN_SYNTHETIC operation must be followed by a WITHDRAW operation")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					err := json.Unmarshal([]byte(operation.SolverMetadata), &burnSyntheticMetadata)
+					if err != nil {
+						fmt.Println("Error unmarshalling burn synthetic metadata:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					wallet, err := GetWallet(intent.Identity, "ecdsa")
+					if err != nil {
+						fmt.Println("Error getting wallet:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Verify the user has sufficient token balance
+					balance, err := ERC20.GetBalance(RPC_URL, burnSyntheticMetadata.Token, wallet.ECDSAPublicKey)
+					if err != nil {
+						fmt.Println("Error getting token balance:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					balanceBig, ok := new(big.Int).SetString(balance, 10)
+					if !ok {
+						fmt.Println("Error parsing balance")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					amountBig, ok := new(big.Int).SetString(burnSyntheticMetadata.Amount, 10)
+					if !ok {
+						fmt.Println("Error parsing amount")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					if balanceBig.Cmp(amountBig) < 0 {
+						fmt.Println("Insufficient token balance")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Generate data to sign for burning tokens
+					dataToSign, err := bridge.BridgeBurnDataToSign(
+						RPC_URL,
+						BridgeContractAddress,
+						wallet.ECDSAPublicKey,
+						burnSyntheticMetadata.Amount,
+						burnSyntheticMetadata.Token,
+					)
+
+					if err != nil {
+						fmt.Println("Error generating burn data to sign:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Update operation with data to sign and wait for signature
+					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					intent.Operations[i].SolverDataToSign = dataToSign
+
+					signature, err := getSignature(intent, i)
+					if err != nil {
+						fmt.Println("Error getting signature:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					fmt.Println("Burning synthetic tokens", wallet.ECDSAPublicKey, burnSyntheticMetadata.Amount, burnSyntheticMetadata.Token, signature)
+
+					// Execute the burn transaction
+					result, err := burnTokens(
+						wallet.ECDSAPublicKey,
+						burnSyntheticMetadata.Amount,
+						burnSyntheticMetadata.Token,
+						signature,
+					)
+
+					if err != nil {
+						fmt.Println("Error burning tokens:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					burn := intent.Operations[i-1]
 
-					if i == 0 || !(burn.Type == OPERATION_TYPE_BURN) {
+					if i == 0 || !(burn.Type == OPERATION_TYPE_BURN || burn.Type == OPERATION_TYPE_BURN_SYNTHETIC) {
 						logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -1122,11 +1244,22 @@ func ProcessIntent(intentId int64) {
 					}
 
 					var withdrawMetadata WithdrawMetadata
-					var burnMetadata BurnMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
-					json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
 
-					tokenToWithdraw := withdrawMetadata.Token
+					// Handle different burn operation types
+					var tokenToWithdraw string
+					var burnTokenAddress string
+					if burn.Type == OPERATION_TYPE_BURN {
+						var burnMetadata BurnMetadata
+						json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+						tokenToWithdraw = withdrawMetadata.Token
+						burnTokenAddress = burnMetadata.Token
+					} else if burn.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+						var burnSyntheticMetadata BurnSyntheticMetadata
+						json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+						tokenToWithdraw = withdrawMetadata.Token
+						burnTokenAddress = burnSyntheticMetadata.Token
+					}
 
 					// verify these fields
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, operation.ChainId, tokenToWithdraw)
@@ -1144,8 +1277,8 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if destAddress != burnMetadata.Token {
-						logger.Sugar().Errorw("Token mismatch", "destAddress", destAddress, "token", burnMetadata.Token)
+					if destAddress != burnTokenAddress {
+						logger.Sugar().Errorw("Token mismatch", "destAddress", destAddress, "token", burnTokenAddress)
 
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -2003,6 +2136,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
+
 						if chain.ChainType == "sui" {
 							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -2157,7 +2291,6 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -2286,6 +2419,38 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						logger.Sugar().Errorw("error getting burn output", "error", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					UpdateOperationSolverOutput(operation.ID, swapOutput)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
+
+					break
+				} else if operation.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if !confirmed {
+						break
+					}
+
+					swapOutput, err := bridge.GetBurnOutput(
+						RPC_URL,
+						operation.Result,
+					)
+
+					if err != nil {
+						fmt.Println(err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break

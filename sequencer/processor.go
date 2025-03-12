@@ -150,12 +150,13 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						} else if chain.ChainType == "dogecoin" {
-							signature, err := getSignature(intent, i)
+							signature, dogecoinPubKey, err := getSignatureEx(intent, i)
 							if err != nil {
 								fmt.Printf("error getting signature: %+v\n", err)
 								break
 							}
-							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, dogecoinPubKey, signature)
+							fmt.Println(txnHash)
 
 							if err != nil {
 								fmt.Println(err)
@@ -529,7 +530,14 @@ func ProcessIntent(intentId int64) {
 							}
 							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinPubkey, signature)
 						case "dogecoin":
-							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							signature, dogecoinPubkey, err_ := getSignatureEx(intent, i)
+							fmt.Println("Signature:", signature)
+							fmt.Println("Dogecoin Public key:", dogecoinPubkey)
+							if err_ != nil {
+								fmt.Printf("error getting signature: %+v\n", err_)
+								break
+							}
+							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, dogecoinPubkey, signature)
 						default: // EVM chains
 							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						}

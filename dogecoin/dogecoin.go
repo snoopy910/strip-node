@@ -2,6 +2,7 @@ package dogecoin
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/btcsuite/btcd/txscript"
 )
 
 // DogeRPCClient represents a Dogecoin RPC client
@@ -106,7 +108,8 @@ func CheckDogeTransactionConfirmed(chainId string, txHash string) (bool, error) 
 }
 
 // SendDogeTransaction sends a signed Dogecoin transaction
-func SendDogeTransaction(serializedTx string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
+func SendDogeTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, pubKey string, signatureHex string) (string, error) {
+	fmt.Println("Params to send dogecoin tx: ", serializedTxn, chainId, keyCurve, dataToSign, pubKey, signatureHex)
 	chain, err := common.GetChain(chainId)
 	if err != nil {
 		return "", err
@@ -119,7 +122,47 @@ func SendDogeTransaction(serializedTx string, chainId string, keyCurve string, d
 
 	client := NewDogeRPCClient(chain.ChainUrl, apiKey)
 
-	return client.SendRawTransaction(serializedTx)
+	pubKeyBytes, err := hex.DecodeString(pubKey)
+	if err != nil {
+		return "", fmt.Errorf("error decoding public key: %v", err)
+	}
+
+	// Step 1: Parse the transaction first
+	msgTx, err := parseSerializedTransaction(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("error parsing transaction: %v", err)
+	}
+
+	// Step 2: Create DER signature
+	derSignatureHex, err := derEncode(signatureHex)
+	if err != nil {
+		return "", fmt.Errorf("error encoding signature: %v", err)
+	}
+	derSignature, err := hex.DecodeString(derSignatureHex)
+	if err != nil {
+		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+
+	// Step 3: Add signature to the transaction
+	sigScript, err := txscript.NewScriptBuilder().
+		AddData(derSignature).
+		AddData(pubKeyBytes).
+		Script()
+	if err != nil {
+		return "", fmt.Errorf("error creating signature script: %v", err)
+	}
+	// Set the signature script for the input
+	msgTx.TxIn[0].SignatureScript = sigScript
+
+	// Step 4: Serialize the transaction
+	var signedTxBuffer bytes.Buffer
+	if err := msgTx.Serialize(&signedTxBuffer); err != nil {
+		return "", fmt.Errorf("error serializing signed transaction: %v", err)
+	}
+	signedTxHex := hex.EncodeToString(signedTxBuffer.Bytes())
+	fmt.Println("signed serialized txn:", signedTxHex)
+
+	return client.SendRawTransaction(signedTxHex)
 }
 
 // GetDogeTransfers gets transfers from a Dogecoin transaction
@@ -214,6 +257,7 @@ func (c *DogeRPCClient) SendRawTransaction(txHex string) (string, error) {
 	if err := json.Unmarshal(response, &txHash); err != nil {
 		return "", fmt.Errorf("failed to unmarshal transaction hash: %v", err)
 	}
+	fmt.Println("Dogecoin tx sent", txHash)
 
 	return txHash, nil
 }

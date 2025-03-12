@@ -11,11 +11,9 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/bitcoin"
-	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
@@ -173,6 +171,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		// msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
+		fmt.Println("Message to create dogecoin signature: ", msg)
 		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
@@ -299,30 +298,36 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y
-
-				// Get chain information from metadata
-				var address string
-				var metadata map[string]interface{}
-				// Get chain information
-				if chainId, ok := metadata["chainId"].(string); ok {
-					// Use Dogecoin address format
-					if strings.HasSuffix(chainId, "1") { // Testnet
-						address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
-					} else { // Mainnet
-						address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
-					}
-					if err != nil {
-						fmt.Printf("Error generating Dogecoin address: %v\n", err)
-					}
+				compressedPubKeyStr, err := bitcoin.ConvertToCompressedPublicKey(publicKeyStr)
+				if err != nil {
+					fmt.Println("Error converting to compressed public key:", err)
+					return
 				}
 
-				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
+				// // Get chain information from metadata
+				// var address string
+
+				// // Use Dogecoin address format
+				// if strings.HasSuffix(identity, "1") { // Testnet
+				// 	address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
+				// 	fmt.Println("Testnet address: ", address)
+				// } else { // Mainnet
+				// 	address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
+				// }
+				// if err != nil {
+				// 	fmt.Printf("Error generating Dogecoin address: %v\n", err)
+				// }
+
+				// final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
+				final := hex.EncodeToString(save.Signature)
+				fmt.Println("Final message: ", final)
 
 				message := Message{
-					Type:          MESSAGE_TYPE_SIGNATURE,
-					Hash:          hash,
-					Message:       []byte(final),
-					Address:       address,
+					Type:    MESSAGE_TYPE_SIGNATURE,
+					Hash:    hash,
+					Message: []byte(final),
+					// Address:       address,
+					Address:       compressedPubKeyStr,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

@@ -540,7 +540,8 @@ func startHTTPServer(port string) {
 			signatureResponse.Address = sig.Address
 			log.Println("signatureResponse", signatureResponse)
 		} else if keyCurve == DOGECOIN_CURVE {
-			signatureResponse.Signature = hex.EncodeToString(sig.Message)
+			// signatureResponse.Signature = hex.EncodeToString(sig.Message)
+			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == SUI_EDDSA_CURVE {
 			// For Sui, we return the signature in base64 format

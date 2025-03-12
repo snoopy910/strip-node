@@ -304,29 +304,13 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					return
 				}
 
-				// // Get chain information from metadata
-				// var address string
-
-				// // Use Dogecoin address format
-				// if strings.HasSuffix(identity, "1") { // Testnet
-				// 	address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
-				// 	fmt.Println("Testnet address: ", address)
-				// } else { // Mainnet
-				// 	address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
-				// }
-				// if err != nil {
-				// 	fmt.Printf("Error generating Dogecoin address: %v\n", err)
-				// }
-
-				// final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
 				final := hex.EncodeToString(save.Signature)
 				fmt.Println("Final message: ", final)
 
 				message := Message{
-					Type:    MESSAGE_TYPE_SIGNATURE,
-					Hash:    hash,
-					Message: []byte(final),
-					// Address:       address,
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       []byte(final),
 					Address:       compressedPubKeyStr,
 					Identity:      identity,
 					IdentityCurve: identityCurve,

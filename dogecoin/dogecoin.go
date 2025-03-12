@@ -152,7 +152,9 @@ func SendDogeTransaction(serializedTxn string, chainId string, keyCurve string, 
 		return "", fmt.Errorf("error creating signature script: %v", err)
 	}
 	// Set the signature script for the input
-	msgTx.TxIn[0].SignatureScript = sigScript
+	for i := range msgTx.TxIn {
+		msgTx.TxIn[i].SignatureScript = sigScript
+	}
 
 	// Step 4: Serialize the transaction
 	var signedTxBuffer bytes.Buffer
@@ -313,11 +315,12 @@ func ValidateDogeAddress(address string) bool {
 	// Dogecoin address patterns
 	// D: Standard address (mainnet)
 	// A: Multi-signature address (mainnet)
-	// 9: Testnet address
+	// n: Testnet address
 	patterns := []string{
 		"^[D][a-km-zA-HJ-NP-Z1-9]{33}$", // Standard mainnet
 		"^[A][a-km-zA-HJ-NP-Z1-9]{33}$", // Multisig mainnet
-		"^[9][a-km-zA-HJ-NP-Z1-9]{33}$", // Testnet
+		"^[9][a-km-zA-HJ-NP-Z1-9]{33}$", // Multisig mainnet
+		"^[n][a-km-zA-HJ-NP-Z1-9]{33}$", // Testnet
 	}
 
 	for _, pattern := range patterns {

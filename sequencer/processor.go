@@ -1232,8 +1232,15 @@ func ProcessIntent(intentId int64) {
 
 						// Get appropriate Dogecoin addresses based on network
 						var userAddress, bridgeAddress string
-						userAddress = user.DogecoinMainnetPublicKey
-						bridgeAddress = bridgeWallet.DogecoinMainnetPublicKey
+						if withdrawalChain.ChainId == "2000" {
+							userAddress = user.DogecoinMainnetPublicKey
+							bridgeAddress = bridgeWallet.DogecoinMainnetPublicKey
+						} else if withdrawalChain.ChainId == "2001" {
+							userAddress = user.DogecoinTestnetPublicKey
+							bridgeAddress = bridgeWallet.DogecoinTestnetPublicKey
+						} else {
+							fmt.Println("Invalid dogecoin chainID")
+						}
 
 						// Validate that we have the Dogecoin addresses
 						if userAddress == "" || bridgeAddress == "" {

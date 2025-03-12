@@ -1,0 +1,11 @@
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: SecurityGroupRule
+metadata:
+  name: allow-pod-to-pod
+spec:
+  type: ingress
+  fromPort: 0
+  toPort: 65535
+  protocol: tcp
+  sourceSecurityGroupId: sg-0170de87d3ef2f484
+  securityGroupId: sg-0170de87d3ef2f484

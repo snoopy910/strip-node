@@ -43,7 +43,8 @@ var (
 	STELLAR_CURVE     = "stellar_eddsa" // Stellar uses Ed25519 with StrKey encoding
 	ALGORAND_CURVE    = "algorand_eddsa"
 	// Note: Hedera uses ECDSA_CURVE since it's compatible with EVM
-	RIPPLE_CURVE = "ripple_eddsa" // Ripple supports Ed25519 https://xrpl.org/docs/concepts/accounts/cryptographic-keys#signing-algorithms
+	RIPPLE_CURVE  = "ripple_eddsa" // Ripple supports Ed25519 https://xrpl.org/docs/concepts/accounts/cryptographic-keys#signing-algorithms
+	CARDANO_CURVE = "cardano_eddsa"
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -328,6 +329,25 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
+		} else if keyCurve == CARDANO_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			// Get the public key
+			pk := edwards.PublicKey{
+				Curve: rawKeyEddsa.EDDSAPub.Curve(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+			getAddressResponse := GetAddressResponse{
+				Address: publicKeyStr,
+			}
+			err = json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
 		} else {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
@@ -504,10 +524,10 @@ func startHTTPServer(port string) {
 				return
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
-		} else if keyCurve == RIPPLE_CURVE {
+		} else if keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 			msgBytes, err := hex.DecodeString(msg)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("error decoding Ripple message: %v", err), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("error decoding %s message: %v", keyCurve, err), http.StatusInternalServerError)
 				return
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
@@ -518,7 +538,7 @@ func startHTTPServer(port string) {
 
 		// Create a channel using the message as the key. The key format varies by chain:
 		// - Solana: base58 encoded string (from client)
-		// - Bitcoin/Aptos/Ripple: hex encoded string
+		// - Bitcoin/Aptos/Ripple/Cardano: hex encoded string
 		// - Algorand: base64 encoded string (from client)
 		// - Stellar: base32 encoded string (from client)
 		// - Ethereum: raw bytes as string
@@ -548,7 +568,7 @@ func startHTTPServer(port string) {
 			signatureResponse.Signature = string(sig.Message) // Already base64 encoded in generateSignature
 			signatureResponse.Address = sig.Address
 			fmt.Println("generated Sui signature for address:", sig.Message)
-		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE {
+		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address

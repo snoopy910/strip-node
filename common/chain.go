@@ -179,6 +179,20 @@ var Chains = []Chain{
 		KeyCurve:    "eddsa",
 		TokenSymbol: "XRP",
 	},
+	{
+		ChainId:     "1005", // Made up id for cardano mainnet
+		ChainType:   "cardano",
+		ChainUrl:    "https://cardano-mainnet.blockfrost.io/api/v0",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "ADA",
+	},
+	{
+		ChainId:     "1006", // Made up id for cardano testnet
+		ChainType:   "cardano",
+		ChainUrl:    "https://cardano-preprod.blockfrost.io/api/v0",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "ADA",
+	},
 }
 
 func GetChain(chainId string) (Chain, error) {

@@ -31,7 +31,10 @@ func createWallet(identity string, identityCurve string) error {
 	// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
 	// If length of selected nodes is less than maximum nodes then use all nodes as signers.
 
-	signers := SignersList()
+	signers, err := SignersList()
+	if err != nil {
+		return fmt.Errorf("failed to get signers: %w", err)
+	}
 
 	if len(signers) > MaximumSigners {
 		// select random number of max signers
@@ -418,7 +421,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	stellarAddress := getAddressResponse.Address
 
-	// create the wallet whose keycurve is stellar_eddsa here
+	// create the wallet whose keycurve is ripple_eddsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
@@ -463,6 +466,53 @@ func createWallet(identity string, identityCurve string) error {
 
 	rippleAddress := getAddressResponse.Address
 
+	// create the wallet whose keycurve is cardano_eddsa here
+	createWalletRequest = CreateWalletRequest{
+		Identity:      identity,
+		IdentityCurve: identityCurve,
+		KeyCurve:      "cardano_eddsa",
+		Signers:       signersPublicKeyList,
+	}
+
+	marshalled, err = json.Marshal(createWalletRequest)
+	if err != nil {
+		return err
+	}
+
+	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client = http.Client{Timeout: 3 * time.Minute}
+	_, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	// get the address of the wallet whose keycurve is cardano_eddsa here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=cardano_eddsa")
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	var getCardanoAddressesResponse GetAddressResponse
+
+	err = json.Unmarshal(body, &getCardanoAddressesResponse)
+	if err != nil {
+		return err
+	}
+
+	cardanoAddress := getCardanoAddressesResponse.Address
+
 	// add created wallet to the store
 	wallet := WalletSchema{
 		Identity:                 identity,
@@ -480,6 +530,7 @@ func createWallet(identity string, identityCurve string) error {
 		StellarPublicKey:         stellarAddress,
 		AlgorandEDDSAPublicKey:   algorandEddsaAddress,
 		RippleEDDSAPublicKey:     rippleAddress,
+		CardanoPublicKey:         cardanoAddress,
 	}
 
 	_, err = AddWallet(&wallet)

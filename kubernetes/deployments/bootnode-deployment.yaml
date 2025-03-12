@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bootnode
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bootnode
+  template:
+    metadata:
+      labels:
+        app: bootnode
+    spec:
+      containers:
+        - name: bootnode
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          ports:
+            - containerPort: 30303
+          command:
+            - /bin/sh
+            - -c
+            - >
+              /app/strip-node
+              --port 30303
+              --keyPath /app/static-bootnode
+              --isBootstrap true 

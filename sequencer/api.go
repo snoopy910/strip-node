@@ -10,6 +10,7 @@ import (
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bitcoin"
+	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
@@ -65,6 +66,7 @@ const (
 	OPERATION_TYPE_BRIDGE_DEPOSIT = "bridgeDeposit"
 	OPERATION_TYPE_SWAP           = "swap"
 	OPERATION_TYPE_BURN           = "burn"
+	OPERATION_TYPE_BURN_SYNTHETIC = "burn_synthetic"
 	OPERATION_TYPE_WITHDRAW       = "withdraw"
 	OPERATION_TYPE_SEND_TO_BRIDGE = "sendToBridge"
 )
@@ -234,8 +236,6 @@ func startHTTPServer(port string) {
 			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
 	})
 
 	// GetBridgeAddress endpoint - Retrieves the bridge contract wallet address
@@ -677,6 +677,18 @@ func startHTTPServer(port string) {
 			}
 		} else if operation.KeyCurve == "ripple_eddsa" {
 			transfers, err := ripple.GetRippleTransfers(operation.ChainId, operation.Result)
+
+			if err != nil {
+				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+				return
+			}
+			err = json.NewEncoder(w).Encode(transfers)
+			if err != nil {
+				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+				return
+			}
+		} else if operation.KeyCurve == "cardano_eddsa" {
+			transfers, err := cardano.GetCardanoTransfers(operation.ChainId, operation.Result)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

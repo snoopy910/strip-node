@@ -15,10 +15,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/ERC20"
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/bridge"
+	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
@@ -30,6 +32,7 @@ import (
 	algorandTypes "github.com/algorand/go-algorand-sdk/types"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	cardanolib "github.com/echovl/cardano-go"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -38,6 +41,7 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/mr-tron/base58"
+	"github.com/rubblelabs/ripple/data"
 	"github.com/stellar/go/xdr"
 )
 
@@ -52,6 +56,12 @@ type SwapMetadata struct {
 
 type BurnMetadata struct {
 	Token string `json:"token"`
+}
+
+// BurnSyntheticMetadata defines the metadata required for the BURN_SYNTHETIC operation
+type BurnSyntheticMetadata struct {
+	Token  string `json:"token"`
+	Amount string `json:"amount"`
 }
 
 type WithdrawMetadata struct {
@@ -225,7 +235,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chId := operation.ChainId
 						if chId == "" {
 							chId = operation.GenesisHash
@@ -308,6 +318,22 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = ripple.SendRippleTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.RippleEDDSAPublicKey, signature)
 							if err != nil {
 								fmt.Printf("error sending Ripple transaction: %+v", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								fmt.Printf("error getting public key: %v", err)
+								break
+							}
+
+							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.CardanoPublicKey, signature)
+							if err != nil {
+								fmt.Printf("error sending Cardano transaction: %+v", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -562,7 +588,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Printf("error getting chain: %+v\n", err)
@@ -639,6 +665,35 @@ func ProcessIntent(intentId int64) {
 								fmt.Printf("Unknown transaction type: %s\n", txn.Type)
 								break
 							}
+						case "ripple":
+							// For Ripple, the destination is in the transaction payload
+							// Decode the serialized transaction
+							txBytes, err := hex.DecodeString(strings.TrimPrefix(operation.SerializedTxn, "0x"))
+							if err != nil {
+								fmt.Printf("error decoding transaction: %v", err)
+								break
+							}
+
+							// Parse the transaction
+							var tx data.Payment
+							err = json.Unmarshal(txBytes, &tx)
+							if err != nil {
+								fmt.Printf("error unmarshalling transaction: %v", err)
+								break
+							}
+							destAddress = tx.Destination.String()
+						case "cardano":
+							var tx cardanolib.Tx
+							txBytes, err := hex.DecodeString(operation.SerializedTxn)
+							if err != nil {
+								fmt.Printf("error decoding Cardano transaction: %v\n", err)
+								break
+							}
+							if err := json.Unmarshal(txBytes, &tx); err != nil {
+								fmt.Printf("error parsing Cardano transaction: %v\n", err)
+								break
+							}
+							destAddress = tx.Body.Outputs[0].Address.String()
 						}
 
 						// Verify the extracted destination matches the bridge wallet
@@ -656,6 +711,10 @@ func ProcessIntent(intentId int64) {
 							// add algorand case
 							case "algorand":
 								validDestination = strings.EqualFold(destAddress, bridgeWallet.AlgorandEDDSAPublicKey)
+							case "ripple":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.RippleEDDSAPublicKey)
+							case "cardano":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.CardanoPublicKey)
 							}
 						}
 
@@ -802,7 +861,7 @@ func ProcessIntent(intentId int64) {
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "sui_eddsa" ||
 						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "dogecoin_ecdsa" || depositOperation.KeyCurve == "stellar_eddsa" ||
-						depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" {
+						depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" || depositOperation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -864,6 +923,14 @@ func ProcessIntent(intentId int64) {
 
 						if chain.ChainType == "ripple" {
 							transfers, err = ripple.GetRippleTransfers(depositOperation.ChainId, depositOperation.Result)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							transfers, err = cardano.GetCardanoTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								fmt.Println(err)
 								break
@@ -1005,6 +1072,13 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_BURN {
 					bridgeSwap := intent.Operations[i-1]
 
+					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != OPERATION_TYPE_WITHDRAW {
+						fmt.Println("BURN operation must be followed by a WITHDRAW operation")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
 					if i == 0 || !(bridgeSwap.Type == OPERATION_TYPE_SWAP) {
 						fmt.Println("Invalid operation type for swap")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
@@ -1065,10 +1139,118 @@ func ProcessIntent(intentId int64) {
 
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 					break
+				} else if operation.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+					// This operation allows direct burning of ERC20 tokens from the wallet
+					// without requiring a prior swap operation
+					burnSyntheticMetadata := BurnSyntheticMetadata{}
+
+					// Verify that this operation is followed by a withdraw operation
+					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != OPERATION_TYPE_WITHDRAW {
+						fmt.Println("BURN_SYNTHETIC operation must be followed by a WITHDRAW operation")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					err := json.Unmarshal([]byte(operation.SolverMetadata), &burnSyntheticMetadata)
+					if err != nil {
+						fmt.Println("Error unmarshalling burn synthetic metadata:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					wallet, err := GetWallet(intent.Identity, "ecdsa")
+					if err != nil {
+						fmt.Println("Error getting wallet:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Verify the user has sufficient token balance
+					balance, err := ERC20.GetBalance(RPC_URL, burnSyntheticMetadata.Token, wallet.ECDSAPublicKey)
+					if err != nil {
+						fmt.Println("Error getting token balance:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					balanceBig, ok := new(big.Int).SetString(balance, 10)
+					if !ok {
+						fmt.Println("Error parsing balance")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					amountBig, ok := new(big.Int).SetString(burnSyntheticMetadata.Amount, 10)
+					if !ok {
+						fmt.Println("Error parsing amount")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					if balanceBig.Cmp(amountBig) < 0 {
+						fmt.Println("Insufficient token balance")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Generate data to sign for burning tokens
+					dataToSign, err := bridge.BridgeBurnDataToSign(
+						RPC_URL,
+						BridgeContractAddress,
+						wallet.ECDSAPublicKey,
+						burnSyntheticMetadata.Amount,
+						burnSyntheticMetadata.Token,
+					)
+
+					if err != nil {
+						fmt.Println("Error generating burn data to sign:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Update operation with data to sign and wait for signature
+					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					intent.Operations[i].SolverDataToSign = dataToSign
+
+					signature, err := getSignature(intent, i)
+					if err != nil {
+						fmt.Println("Error getting signature:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					fmt.Println("Burning synthetic tokens", wallet.ECDSAPublicKey, burnSyntheticMetadata.Amount, burnSyntheticMetadata.Token, signature)
+
+					// Execute the burn transaction
+					result, err := burnTokens(
+						wallet.ECDSAPublicKey,
+						burnSyntheticMetadata.Amount,
+						burnSyntheticMetadata.Token,
+						signature,
+					)
+
+					if err != nil {
+						fmt.Println("Error burning tokens:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					burn := intent.Operations[i-1]
 
-					if i == 0 || !(burn.Type == OPERATION_TYPE_BURN) {
+					if i == 0 || !(burn.Type == OPERATION_TYPE_BURN || burn.Type == OPERATION_TYPE_BURN_SYNTHETIC) {
 						fmt.Println("Invalid operation type for withdraw after burn")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -1076,11 +1258,22 @@ func ProcessIntent(intentId int64) {
 					}
 
 					var withdrawMetadata WithdrawMetadata
-					var burnMetadata BurnMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
-					json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
 
-					tokenToWithdraw := withdrawMetadata.Token
+					// Handle different burn operation types
+					var tokenToWithdraw string
+					var burnTokenAddress string
+					if burn.Type == OPERATION_TYPE_BURN {
+						var burnMetadata BurnMetadata
+						json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+						tokenToWithdraw = withdrawMetadata.Token
+						burnTokenAddress = burnMetadata.Token
+					} else if burn.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+						var burnSyntheticMetadata BurnSyntheticMetadata
+						json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+						tokenToWithdraw = withdrawMetadata.Token
+						burnTokenAddress = burnSyntheticMetadata.Token
+					}
 
 					// verify these fields
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, operation.ChainId, tokenToWithdraw)
@@ -1098,8 +1291,8 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if destAddress != burnMetadata.Token {
-						fmt.Println("Token mismatch", destAddress, burnMetadata.Token)
+					if destAddress != burnTokenAddress {
+						fmt.Println("Token mismatch", destAddress, burnTokenAddress)
 
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -1812,6 +2005,89 @@ func ProcessIntent(intentId int64) {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
 						}
 						break
+					} else if withdrawalChain.KeyCurve == "cardano_eddsa" {
+						bridgeWalletAddress := bridgeWallet.CardanoPublicKey
+						userAddress := user.CardanoPublicKey
+						if tokenToWithdraw == util.ZERO_ADDRESS {
+							// handle native token
+							transaction, dataToSign, err := cardano.WithdrawCardanoNativeGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWalletAddress,
+								burn.SolverOutput,
+								userAddress,
+							)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := cardano.SendCardanoTransaction(
+								transaction,
+								withdrawalChain.ChainId,
+								withdrawalChain.KeyCurve,
+								userAddress,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						} else {
+
+							transaction, dataToSign, err := cardano.WithdrawCardanoTokenGetSignature(
+								withdrawalChain.ChainUrl,
+								bridgeWalletAddress,
+								burn.SolverOutput,
+								userAddress,
+								tokenToWithdraw,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							intent.Operations[i].SolverDataToSign = dataToSign
+
+							signature, err := getSignature(intent, i)
+							if err != nil {
+								fmt.Println(err)
+								break
+							}
+
+							result, err := cardano.SendCardanoTransaction(
+								transaction,
+								withdrawalChain.ChainId,
+								withdrawalChain.KeyCurve,
+								userAddress,
+								signature,
+							)
+
+							if err != nil {
+								fmt.Println(err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+
+							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						}
+						break
 					}
 				}
 
@@ -1848,11 +2124,14 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
+
 					} else if operation.KeyCurve == "eddsa" ||
 						operation.KeyCurve == "aptos_eddsa" ||
 						operation.KeyCurve == "stellar_eddsa" ||
 						operation.KeyCurve == "algorand_eddsa" ||
-						operation.KeyCurve == "sui_eddsa" || operation.KeyCurve == "ripple_eddsa" {
+						operation.KeyCurve == "sui_eddsa" ||
+						operation.KeyCurve == "ripple_eddsa" ||
+						operation.KeyCurve == "cardano_eddsa" {
 						chId := operation.ChainId
 						if chId == "" {
 							chId = operation.GenesisHash
@@ -1878,6 +2157,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
+
 						if chain.ChainType == "sui" {
 							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -1904,6 +2184,14 @@ func ProcessIntent(intentId int64) {
 							confirmed, err = ripple.CheckRippleTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Printf("error checking Ripple transaction: %v", err)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Cardano transaction: %v", err)
 								break
 							}
 						}
@@ -1994,7 +2282,9 @@ func ProcessIntent(intentId int64) {
 						operation.KeyCurve == "aptos_eddsa" ||
 						operation.KeyCurve == "stellar_eddsa" ||
 						operation.KeyCurve == "sui_eddsa" ||
-						operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" {
+						operation.KeyCurve == "algorand_eddsa" ||
+						operation.KeyCurve == "ripple_eddsa" ||
+						operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -2024,7 +2314,6 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						}
-
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -2045,6 +2334,14 @@ func ProcessIntent(intentId int64) {
 							confirmed, err = ripple.CheckRippleTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								fmt.Printf("error checking Ripple transaction: %+v\n", err)
+								break
+							}
+						}
+
+						if chain.ChainType == "cardano" {
+							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Cardano transaction: %+v\n", err)
 								break
 							}
 						}
@@ -2159,6 +2456,38 @@ func ProcessIntent(intentId int64) {
 					}
 
 					break
+				} else if operation.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+					if err != nil {
+						fmt.Println(err)
+						break
+					}
+
+					if !confirmed {
+						break
+					}
+
+					swapOutput, err := bridge.GetBurnOutput(
+						RPC_URL,
+						operation.Result,
+					)
+
+					if err != nil {
+						fmt.Println(err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					UpdateOperationSolverOutput(operation.ID, swapOutput)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+					}
+
+					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
@@ -2190,7 +2519,9 @@ func ProcessIntent(intentId int64) {
 						operation.KeyCurve == "aptos_eddsa" ||
 						operation.KeyCurve == "stellar_eddsa" ||
 						operation.KeyCurve == "algorand_eddsa" ||
-						operation.KeyCurve == "sui_eddsa" || operation.KeyCurve == "ripple_eddsa" {
+						operation.KeyCurve == "sui_eddsa" ||
+						operation.KeyCurve == "ripple_eddsa" ||
+						operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							fmt.Println(err)
@@ -2244,6 +2575,13 @@ func ProcessIntent(intentId int64) {
 							}
 						}
 
+						if chain.ChainType == "cardano" {
+							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
+							if err != nil {
+								fmt.Printf("error checking Cardano transaction: %+v\n", err)
+								break
+							}
+						}
 					}
 
 					if !confirmed {
@@ -2321,7 +2659,9 @@ func ProcessIntent(intentId int64) {
 							depositOperation.KeyCurve == "aptos_eddsa" ||
 							depositOperation.KeyCurve == "stellar_eddsa" ||
 							depositOperation.KeyCurve == "algorand_eddsa" ||
-							depositOperation.KeyCurve == "sui_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" {
+							depositOperation.KeyCurve == "sui_eddsa" ||
+							depositOperation.KeyCurve == "ripple_eddsa" ||
+							depositOperation.KeyCurve == "cardano_eddsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
 								fmt.Println(err)
@@ -2379,7 +2719,7 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "stellar" {
 								txnConfirmed, err := stellar.CheckStellarTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Printf("error checking Stellar transaction: %+v\n", err)
+									fmt.Printf("error checking Stellar transaction: %v", err)
 									break
 								}
 								if txnConfirmed {
@@ -2412,7 +2752,7 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "ripple" {
 								txnConfirmed, err := ripple.CheckRippleTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Printf("error checking Ripple transaction: %+v\n", err)
+									fmt.Printf("error checking Ripple transaction: %v", err)
 									break
 								}
 
@@ -2423,6 +2763,24 @@ func ProcessIntent(intentId int64) {
 										fmt.Println(err)
 										break
 									}
+								}
+							}
+
+							if chain.ChainType == "cardano" {
+								txnConfirmed, err := cardano.CheckCardanoTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								if err != nil {
+									fmt.Printf("error checking Cardano transaction: %+v\n", err)
+									break
+								}
+
+								if txnConfirmed {
+									confirmed = true
+									err := UnlockIdentity(lockSchema.Id)
+									if err != nil {
+										fmt.Println(err)
+										break
+									}
+
 								}
 							}
 						}
@@ -2523,7 +2881,7 @@ func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) 
 
 	client, err := ethclient.Dial(chain.ChainUrl)
 	if err != nil {
-		log.Fatal(err)
+		return false, fmt.Errorf("failed to dial EVM client: %v", err)
 	}
 
 	_, isPending, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))

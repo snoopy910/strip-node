@@ -76,10 +76,10 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 		panic(err)
 	}
 
-	ok, err := party.Update(pMsg)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	ok, err1 := party.Update(pMsg)
+	if err1 != nil {
+		panic(err1)
+	}
 
 	fmt.Println("processed signature generation message with status: ", ok)
 }
@@ -186,7 +186,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
-	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE {
+	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := new(big.Int).SetBytes(hash)
 
@@ -247,7 +247,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 			if keyCurve == EDDSA_CURVE {
 				pk := edwards.PublicKey{
-					Curve: tss.Edwards(),
+					Curve: rawKeyEcdsa.ECDSAPub.Curve(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
 					Y:     rawKeyEddsa.EDDSAPub.Y(),
 				}
@@ -467,6 +467,28 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       save.Signature,
 					Address:       ripple.PublicKeyToAddress(rawKeyEddsa),
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				go broadcast(message)
+			} else if keyCurve == CARDANO_CURVE {
+
+				pk := edwards.PublicKey{
+					Curve: rawKeyEddsa.EDDSAPub.Curve(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
+
+				publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       publicKeyStr,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

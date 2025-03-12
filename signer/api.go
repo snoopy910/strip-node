@@ -19,15 +19,16 @@ import (
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stellar/go/strkey"
 
+	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/solver"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/coming-chat/go-sui/v2/lib"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
 )
 
@@ -38,12 +39,14 @@ var (
 	ECDSA_CURVE       = "ecdsa"
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
+	BITCOIN_CURVE     = "bitcoin_ecdsa"
 	SECP256K1_CURVE   = "secp256k1"
 	SUI_EDDSA_CURVE   = "sui_eddsa"     // Sui uses Ed25519 for native transactions
 	STELLAR_CURVE     = "stellar_eddsa" // Stellar uses Ed25519 with StrKey encoding
 	ALGORAND_CURVE    = "algorand_eddsa"
 	// Note: Hedera uses ECDSA_CURVE since it's compatible with EVM
-	RIPPLE_CURVE = "ripple_eddsa" // Ripple supports Ed25519 https://xrpl.org/docs/concepts/accounts/cryptographic-keys#signing-algorithms
+	RIPPLE_CURVE  = "ripple_eddsa" // Ripple supports Ed25519 https://xrpl.org/docs/concepts/accounts/cryptographic-keys#signing-algorithms
+	CARDANO_CURVE = "cardano_eddsa"
 )
 
 func generateKeygenMessage(identity string, identityCurve string, keyCurve string, signers []string) {
@@ -146,7 +149,7 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
-		} else if keyCurve == SECP256K1_CURVE {
+		} else if keyCurve == BITCOIN_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
 			x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
@@ -154,73 +157,44 @@ func startHTTPServer(port string) {
 
 			publicKeyStr := "04" + x + y
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+			mainnetAddress, testnetAddress, regtestAddress := bitcoin.PublicKeyToBitcoinAddresses(publicKeyBytes)
 
-			// Get chain information from chainId parameter
-			chainId := r.URL.Query().Get("chainId")
-			chain, err := common.GetChain(chainId)
+			getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
+				MainnetAddress: mainnetAddress,
+				TestnetAddress: testnetAddress,
+				RegtestAddress: regtestAddress,
+			}
+			err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
 			if err != nil {
-				// Default to Bitcoin if chain not found
-				mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
-				getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
-					MainnetAddress: mainnetAddress,
-					TestnetAddress: testnetAddress,
-					RegtestAddress: regtestAddress,
-				}
-				err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-				}
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
+		} else if keyCurve == SECP256K1_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+
+			x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
+			y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
+
+			publicKeyStr := "04" + x + y
+
+			mainnetAddress, err := dogecoin.PublicKeyToAddress(publicKeyStr)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error generating Dogecoin mainnet address: %v", err), http.StatusInternalServerError)
 				return
 			}
 
-			// Handle different chain types
-			switch chain.ChainType {
-			case "dogecoin":
-				mainnetAddress, err := dogecoin.PublicKeyToAddress(publicKeyStr)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("error generating Dogecoin mainnet address: %v", err), http.StatusInternalServerError)
-					return
-				}
+			testnetAddress, err := dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error generating Dogecoin testnet address: %v", err), http.StatusInternalServerError)
+				return
+			}
 
-				testnetAddress, err := dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("error generating Dogecoin testnet address: %v", err), http.StatusInternalServerError)
-					return
-				}
-
-				getDogecoinAddressesResponse := GetDogecoinAddressesResponse{
-					MainnetAddress: mainnetAddress,
-					TestnetAddress: testnetAddress,
-				}
-				err = json.NewEncoder(w).Encode(getDogecoinAddressesResponse)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-				}
-
-			case "bitcoin":
-				mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
-				getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
-					MainnetAddress: mainnetAddress,
-					TestnetAddress: testnetAddress,
-					RegtestAddress: regtestAddress,
-				}
-				err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-				}
-
-			default:
-				// Default to Bitcoin addresses for unknown chains
-				mainnetAddress, testnetAddress, regtestAddress := publicKeyToBitcoinAddresses(publicKeyBytes)
-				getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
-					MainnetAddress: mainnetAddress,
-					TestnetAddress: testnetAddress,
-					RegtestAddress: regtestAddress,
-				}
-				err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-				}
+			getDogecoinAddressesResponse := GetDogecoinAddressesResponse{
+				MainnetAddress: mainnetAddress,
+				TestnetAddress: testnetAddress,
+			}
+			err = json.NewEncoder(w).Encode(getDogecoinAddressesResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
 		} else if keyCurve == SUI_EDDSA_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
@@ -357,6 +331,25 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
+		} else if keyCurve == CARDANO_CURVE {
+			json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+
+			// Get the public key
+			pk := edwards.PublicKey{
+				Curve: rawKeyEddsa.EDDSAPub.Curve(),
+				X:     rawKeyEddsa.EDDSAPub.X(),
+				Y:     rawKeyEddsa.EDDSAPub.Y(),
+			}
+
+			publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+			getAddressResponse := GetAddressResponse{
+				Address: publicKeyStr,
+			}
+			err = json.NewEncoder(w).Encode(getAddressResponse)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			}
 		} else {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
@@ -436,6 +429,9 @@ func startHTTPServer(port string) {
 		identityCurve := intent.IdentityCurve
 		keyCurve := intent.Operations[operationIndexInt].KeyCurve
 
+		log.Println("keyCurve", keyCurve)
+		log.Println("msg", msg)
+
 		// verify signature
 		intentStr, err := identityVerification.SanitiseIntent(intent)
 		if err != nil {
@@ -476,6 +472,8 @@ func startHTTPServer(port string) {
 			} else {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 			}
+		} else if keyCurve == BITCOIN_CURVE {
+			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == SECP256K1_CURVE {
 			msgHash := crypto.Keccak256([]byte(msg))
 			// Get chain information from the operation
@@ -490,7 +488,7 @@ func startHTTPServer(port string) {
 			}
 
 			// For UTXO-based chains, include chain information in metadata
-			if chain.ChainType == "bitcoin" || chain.ChainType == "dogecoin" {
+			if chain.ChainType == "dogecoin" {
 				metadata := map[string]interface{}{
 					"chainId": chainId,
 					"msg":     hex.EncodeToString(msgHash),
@@ -527,10 +525,10 @@ func startHTTPServer(port string) {
 				return
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
-		} else if keyCurve == RIPPLE_CURVE {
+		} else if keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 			msgBytes, err := hex.DecodeString(msg)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("error decoding Ripple message: %v", err), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("error decoding %s message: %v", keyCurve, err), http.StatusInternalServerError)
 				return
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
@@ -541,7 +539,7 @@ func startHTTPServer(port string) {
 
 		// Create a channel using the message as the key. The key format varies by chain:
 		// - Solana: base58 encoded string (from client)
-		// - Bitcoin/Aptos/Ripple: hex encoded string
+		// - Bitcoin/Aptos/Ripple/Cardano: hex encoded string
 		// - Algorand: base64 encoded string (from client)
 		// - Stellar: base32 encoded string (from client)
 		// - Ethereum: raw bytes as string
@@ -553,11 +551,15 @@ func startHTTPServer(port string) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		signatureResponse := SignatureReponse{}
+		signatureResponse := SignatureResponse{}
 
 		if keyCurve == ECDSA_CURVE {
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
+		} else if keyCurve == BITCOIN_CURVE {
+			signatureResponse.Signature = string(sig.Message)
+			signatureResponse.Address = sig.Address
+			log.Println("signatureResponse", signatureResponse)
 		} else if keyCurve == SECP256K1_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			signatureResponse.Address = sig.Address
@@ -566,7 +568,7 @@ func startHTTPServer(port string) {
 			signatureResponse.Signature = string(sig.Message) // Already base64 encoded in generateSignature
 			signatureResponse.Address = sig.Address
 			fmt.Println("generated Sui signature for address:", sig.Message)
-		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE {
+		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address
@@ -605,7 +607,7 @@ func startHTTPServer(port string) {
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
 }
 
-type SignatureReponse struct {
+type SignatureResponse struct {
 	Signature string `json:"signature"`
 	Address   string `json:"address"`
 }

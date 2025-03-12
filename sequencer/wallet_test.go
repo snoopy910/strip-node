@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // MockDB for testing
@@ -77,8 +79,8 @@ func setupTestEnvironment(t *testing.T) (*httptest.Server, func()) {
 	mockDB := &mockDB{wallets: make(map[string]WalletSchema)}
 
 	// Set up mock functions
-	SignersList = func() []Signer {
-		return mockSigners
+	SignersList = func() ([]Signer, error) {
+		return mockSigners, nil
 	}
 	AddWallet = mockDB.AddWallet
 
@@ -101,6 +103,9 @@ func TestCreateWallet(t *testing.T) {
 	// Set up test environment once for all test cases
 	mockServer, cleanup := setupTestEnvironment(t)
 	defer cleanup()
+
+	signers, err := SignersList()
+	require.NoError(t, err)
 
 	// Test cases
 	tests := []struct {
@@ -140,7 +145,7 @@ func TestCreateWallet(t *testing.T) {
 
 			if !tt.wantErr {
 				// Verify the wallet was created with correct values
-				mockDB := SignersList()[0]
+				mockDB := signers[0]
 				if mockDB.URL != mockServer.URL {
 					t.Errorf("Expected server URL %s, got %s", mockServer.URL, mockDB.URL)
 				}
@@ -167,7 +172,9 @@ func TestCreateWalletWithMaximumSigners(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	signers := SignersList()
+	signers, err := SignersList()
+	require.NoError(t, err)
+
 	if len(signers) > MaximumSigners {
 		t.Errorf("Expected maximum %d signers, got %d", MaximumSigners, len(signers))
 	}
@@ -188,11 +195,11 @@ func TestCreateWalletServerErrors(t *testing.T) {
 
 	// Override SignersList to return error server
 	originalSignersList := SignersList
-	SignersList = func() []Signer {
+	SignersList = func() ([]Signer, error) {
 		return []Signer{
 			{URL: errorServer.URL, PublicKey: "errorKey1"},
 			{URL: errorServer.URL, PublicKey: "errorKey2"},
-		}
+		}, nil
 	}
 	defer func() { SignersList = originalSignersList }()
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"log"
 	"math/big"
 
 	"github.com/StripChain/strip-node/util"
@@ -51,24 +50,24 @@ func AddToken(rpcURL string, bridgeContractAddress string, privKey string, chain
 
 	privateKey, err := crypto.HexToECDSA(privKey)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to convert private key to ECDSA: %v", err)
 	}
 
 	publicKey := privateKey.Public()
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
 	if !ok {
-		log.Fatal("error casting public key to ECDSA")
+		return fmt.Errorf("error casting public key to ECDSA")
 	}
 
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to get pending nonce: %v", err)
 	}
 
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to suggest gas price: %v", err)
 	}
 
 	auth := bind.NewKeyedTransactor(privateKey)
@@ -80,12 +79,12 @@ func AddToken(rpcURL string, bridgeContractAddress string, privKey string, chain
 
 	tx, err := instance.AddToken(auth, chainId, srcToken, common.HexToAddress(peggedToken))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to add token: %v", err)
 	}
 
 	_, err = bind.WaitMined(context.Background(), client, tx)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to wait for transaction to be mined: %v", err)
 	}
 
 	fmt.Println("Token added successfully")

@@ -12,6 +12,8 @@ type Chain struct {
 	ChainUrl    string
 	KeyCurve    string
 	TokenSymbol string
+	RpcUsername string
+	RpcPassword string
 }
 
 var Chains = []Chain{
@@ -102,9 +104,11 @@ var Chains = []Chain{
 	{
 		ChainId:     "1002",
 		ChainType:   "bitcoin",
-		ChainUrl:    "http://127.0.0.1:18443",
+		ChainUrl:    "http://172.17.0.1:18443", // Local Bitcoin Core RPC, calling from docker process
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
+		RpcUsername: "your_rpc_user",
+		RpcPassword: "your_rpc_password",
 	},
 	{
 		ChainId:     "3001",
@@ -174,6 +178,20 @@ var Chains = []Chain{
 		ChainUrl:    "wss://s.altnet.rippletest.net:51233",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "XRP",
+	},
+	{
+		ChainId:     "1005", // Made up id for cardano mainnet
+		ChainType:   "cardano",
+		ChainUrl:    "https://cardano-mainnet.blockfrost.io/api/v0",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "ADA",
+	},
+	{
+		ChainId:     "1006", // Made up id for cardano testnet
+		ChainType:   "cardano",
+		ChainUrl:    "https://cardano-preprod.blockfrost.io/api/v0",
+		KeyCurve:    "eddsa",
+		TokenSymbol: "ADA",
 	},
 }
 

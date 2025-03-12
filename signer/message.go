@@ -118,6 +118,15 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
+		case BITCOIN_CURVE:
+			// Bitcoin: Client sends string -> hash -> process -> encode to hex
+			// Channel key must match the hex encoded hash
+			if val, ok := messageChan[string(msg.Hash)]; ok {
+				val <- msg
+				go func() {
+					sendMsg <- true
+				}()
+			}
 		case SECP256K1_CURVE:
 			// Bitcoin: Client sends string -> hash -> process -> encode to hex
 			// Channel key must match the hex encoded hash
@@ -127,7 +136,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case APTOS_EDDSA_CURVE:
+		case APTOS_EDDSA_CURVE, CARDANO_CURVE:
 			// Aptos: Client sends string -> process -> encode to hex
 			// Channel key must match the hex encoded format
 			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {

@@ -48,7 +48,14 @@ func Start(
 
 	go startHTTPServer(httpPort)
 
-	h, addr := createHost(listenHost, port, bootnodeURL)
+	h, addr, err := createHost(listenHost, port, bootnodeURL)
+	if err != nil {
+		panic(err)
+	}
+
 	go discoverPeers(h, []multiaddr.Multiaddr{addr})
-	subscribe(h)
+	err = subscribe(h)
+	if err != nil {
+		panic(err)
+	}
 }

@@ -9,11 +9,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 	"time"
 
-	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
@@ -77,10 +78,10 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 		panic(err)
 	}
 
-	ok, err := party.Update(pMsg)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	ok, err1 := party.Update(pMsg)
+	if err1 != nil {
+		panic(err1)
+	}
 
 	fmt.Println("processed signature generation message with status: ", ok)
 }
@@ -146,6 +147,16 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 		go localParty.Start()
 
+	} else if keyCurve == BITCOIN_CURVE {
+		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
+		// msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
+		msg, _ := new(big.Int).SetString(string(hash), 16)
+		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
+		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+
+		go localParty.Start()
+
 	} else if keyCurve == SUI_EDDSA_CURVE {
 		// Sui uses Ed25519 for transaction signing
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
@@ -175,7 +186,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
-	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE {
+	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := new(big.Int).SetBytes(hash)
 
@@ -236,7 +247,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 			if keyCurve == EDDSA_CURVE {
 				pk := edwards.PublicKey{
-					Curve: tss.Edwards(),
+					Curve: rawKeyEcdsa.ECDSAPub.Curve(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
 					Y:     rawKeyEddsa.EDDSAPub.Y(),
 				}
@@ -256,49 +267,51 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 				go broadcast(message)
+			} else if keyCurve == BITCOIN_CURVE {
+				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
+				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
+				uncompressedPubKeyStr := "04" + x + y
+				log.Println("Uncompressed public key:", uncompressedPubKeyStr)
+				compressedPubKeyStr, err := bitcoin.ConvertToCompressedPublicKey(uncompressedPubKeyStr)
+				if err != nil {
+					fmt.Println("Error converting to compressed public key:", err)
+					return
+				}
+				log.Println("Compressed public key:", compressedPubKeyStr)
+
+				final := hex.EncodeToString(save.Signature)
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       []byte(final),
+					Address:       compressedPubKeyStr, // we pass the public key in string format, hex string with length 130 starts with 04
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+
+				go broadcast(message)
 			} else if keyCurve == SECP256K1_CURVE {
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y
-				publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
 
 				// Get chain information from metadata
 				var address string
 				var metadata map[string]interface{}
-				if err := json.Unmarshal(hash, &metadata); err != nil {
-					fmt.Println("Error parsing metadata:", err)
-					// Default to Bitcoin address format if metadata is invalid
-					address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
-				} else {
-					// Get chain information
-					if chainId, ok := metadata["chainId"].(string); ok {
-						chain, err := common.GetChain(chainId)
-						if err != nil {
-							fmt.Printf("Error getting chain info: %v\n", err)
-							address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
-						} else {
-							switch chain.ChainType {
-							case "dogecoin":
-								// Use Dogecoin address format
-								if strings.HasSuffix(chainId, "1") { // Testnet
-									address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
-								} else { // Mainnet
-									address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
-								}
-								if err != nil {
-									fmt.Printf("Error generating Dogecoin address: %v\n", err)
-									address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
-								}
-							case "bitcoin":
-								address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
-							default:
-								// Default to Bitcoin address format for unknown chains
-								address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
-							}
-						}
-					} else {
-						// Default to Bitcoin if no chainId in metadata
-						address, _, _ = publicKeyToBitcoinAddresses(publicKeyBytes)
+				// Get chain information
+				if chainId, ok := metadata["chainId"].(string); ok {
+					// Use Dogecoin address format
+					if strings.HasSuffix(chainId, "1") { // Testnet
+						address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
+					} else { // Mainnet
+						address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
+					}
+					if err != nil {
+						fmt.Printf("Error generating Dogecoin address: %v\n", err)
 					}
 				}
 
@@ -464,6 +477,28 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Hash:          hash,
 					Message:       save.Signature,
 					Address:       ripple.PublicKeyToAddress(rawKeyEddsa),
+					Identity:      identity,
+					IdentityCurve: identityCurve,
+					KeyCurve:      keyCurve,
+				}
+
+				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				go broadcast(message)
+			} else if keyCurve == CARDANO_CURVE {
+
+				pk := edwards.PublicKey{
+					Curve: rawKeyEddsa.EDDSAPub.Curve(),
+					X:     rawKeyEddsa.EDDSAPub.X(),
+					Y:     rawKeyEddsa.EDDSAPub.Y(),
+				}
+
+				publicKeyStr := hex.EncodeToString(pk.Serialize())
+
+				message := Message{
+					Type:          MESSAGE_TYPE_SIGNATURE,
+					Hash:          hash,
+					Message:       save.Signature,
+					Address:       publicKeyStr,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

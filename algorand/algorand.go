@@ -176,7 +176,6 @@ func CheckAlgorandTransactionConfirmed(genesisHash string, txnHash string) (bool
 func (client *Clients) CheckAlgorandTransactionConfirmed(genesisHash string, txnHash string) (bool, error) {
 	// First try using native Algod API (Priority 1)
 	// Get pending transaction information
-	fmt.Println("Checking Algorand transaction confirmed", txnHash)
 	pendingTxn, _, err := client.algodClient.PendingTransactionInformation(txnHash).Do(context.Background())
 	if err == nil {
 		// If confirmed round is non-zero, transaction is confirmed
@@ -247,6 +246,5 @@ func (client *Clients) SendAlgorandTransaction(serializedTxn string, genesisHash
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
-	fmt.Println("Algorand txid: ", txid)
 	return txid, nil
 }

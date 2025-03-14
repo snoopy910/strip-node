@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/algorand/go-algorand-sdk/encoding/msgpack"
 	"github.com/algorand/go-algorand-sdk/types"
 )
@@ -48,7 +49,7 @@ func CheckFlags(message string) (bool, string, error) {
 // VerifyDirectSignature verifies a direct ed25519 signature for Algorand
 func VerifyDirectSignature(identity string, message string, signature []byte) (bool, error) {
 	// Decode the public key from the Algorand address (base32 encoded with checksum)
-	fmt.Println("Verify Direct Signature algorand: ", identity)
+	logger.Sugar().Infow("Verify Direct Signature algorand", "identity", identity)
 	address, err := types.DecodeAddress(identity)
 	if err != nil {
 		return false, fmt.Errorf("invalid Algorand address: %v", err)
@@ -60,7 +61,7 @@ func VerifyDirectSignature(identity string, message string, signature []byte) (b
 	copy(pubKey, pubKeyBytes)
 
 	// Convert message to bytes
-	fmt.Println("verify message: ", message)
+	logger.Sugar().Infow("verify message", "message", message)
 	var msgBytes []byte
 	var js map[string]interface{}
 	// Unmarshal the string into the map. If no error, it's valid JSON.
@@ -71,22 +72,22 @@ func VerifyDirectSignature(identity string, message string, signature []byte) (b
 		msgBytes = append(prefix, messageBytes...)
 	} else {
 		msgBytes, err = base64.StdEncoding.DecodeString(message)
-		fmt.Println("verify message algorand bytes: ", message)
+		logger.Sugar().Infow("verify message algorand bytes", "message", message)
 		if err != nil {
 			return false, fmt.Errorf("invalid Algorand message encoding: %v", err)
 		}
 	}
 	// Verify the signature
-	fmt.Println("verify signature: ", signature)
+	logger.Sugar().Infow("verify signature", "signature", signature)
 	verified := ed25519.Verify(pubKey, msgBytes, signature)
-	fmt.Println("verified signature algorand: ", verified)
+	logger.Sugar().Infow("verified signature algorand", "verified", verified)
 	return verified, nil
 }
 
 // VerifyDummyTransaction verifies an Algorand signature using the dummy transaction approach
 func VerifyDummyTransaction(identity string, message string, signature []byte) (bool, error) {
 	// Try to decode as a SignedTxn (dummy transaction)
-	fmt.Println("Verify Dummy Transaction algorand: ", identity)
+	logger.Sugar().Infow("Verify Dummy Transaction algorand", "identity", identity)
 	var stx types.SignedTxn
 	err := msgpack.Decode(signature, &stx)
 	if err != nil {
@@ -117,7 +118,7 @@ func VerifyDummyTransaction(identity string, message string, signature []byte) (
 		return false, fmt.Errorf("algorand signature verification failed")
 	}
 
-	fmt.Println("verified Algorand dummy transaction signature successfully")
+	logger.Sugar().Infow("verified Algorand dummy transaction signature successfully")
 	return true, nil
 }
 

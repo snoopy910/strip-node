@@ -57,7 +57,7 @@ func GetAptosTransfers(chainId string, txHash string) ([]common.Transfer, error)
 		// Fetch token metadata (symbol, decimals) from the contract
 		metadata, err := getMetadata(chain, address)
 		if err != nil {
-			fmt.Println("Error fetching token metadata, ", err)
+			return nil, fmt.Errorf("failed to fetch token metadata: %v", err)
 		}
 
 		// Get transfer amount (3rd argument in the payload)
@@ -66,7 +66,7 @@ func GetAptosTransfers(chainId string, txHash string) ([]common.Transfer, error)
 		// Format amount according to token decimals
 		formattedAmount, err := getFormattedAmount(amount, metadata.Decimal)
 		if err != nil {
-			fmt.Println("Error formatting amount, %w", err)
+			return nil, fmt.Errorf("failed to format amount: %v", err)
 		}
 
 		// Create transfer record with token details
@@ -88,7 +88,7 @@ func GetAptosTransfers(chainId string, txHash string) ([]common.Transfer, error)
 		// APT has 8 decimal places
 		formattedAmount, err := getFormattedAmount(amount, 8)
 		if err != nil {
-			fmt.Println("Error formatting amount, ", err)
+			return nil, fmt.Errorf("failed to format amount: %v", err)
 		}
 
 		// Create transfer record for native APT
@@ -116,7 +116,7 @@ func GetAptosTransfers(chainId string, txHash string) ([]common.Transfer, error)
 				amount := tx.Payload.Arguments[1].(string)
 				formattedAmount, err := getFormattedAmount(amount, 8)
 				if err != nil {
-					fmt.Println("Error formatting amount, ", err)
+					return nil, fmt.Errorf("failed to format amount: %v", err)
 				}
 
 				transfers = append(transfers, common.Transfer{
@@ -137,7 +137,7 @@ func GetAptosTransfers(chainId string, txHash string) ([]common.Transfer, error)
 				// Fetch token metadata
 				metadata, err := getMetadata(chain, tokenAddress)
 				if err != nil {
-					fmt.Println("Error fetching token metadata, ", err)
+					return nil, fmt.Errorf("failed to fetch token metadata: %v", err)
 				}
 
 				amount := tx.Payload.Arguments[1].(string)
@@ -145,7 +145,7 @@ func GetAptosTransfers(chainId string, txHash string) ([]common.Transfer, error)
 				// Format amount according to token decimals
 				formattedAmount, err := getFormattedAmount(amount, metadata.Decimal)
 				if err != nil {
-					fmt.Println("Error formatting amount, %w", err)
+					return nil, fmt.Errorf("failed to format amount: %v", err)
 				}
 
 				// Create transfer record for the token
@@ -197,7 +197,7 @@ func SendAptosTransaction(serializedTxn string, chainId string, keyCurve string,
 	// This reconstructs the RawTransaction with sender, payload, gas parameters, etc.
 	err = lcs.Unmarshal(decodedTransactionData, rawTxn)
 	if err != nil {
-		fmt.Println("error unmarshalling raw transaction: ", err)
+		return "", fmt.Errorf("failed to unmarshall raw transaction: %v", err)
 	}
 
 	// Assign the deserialized raw transaction to our transaction wrapper
@@ -230,8 +230,6 @@ func SendAptosTransaction(serializedTxn string, chainId string, keyCurve string,
 	if err != nil {
 		return "", fmt.Errorf("error submitting transaction: %v", err)
 	}
-
-	fmt.Println("Submitted aptos transaction with hash:", response.Hash)
 
 	// Return the transaction hash which can be used to track the transaction status
 	return response.Hash, nil

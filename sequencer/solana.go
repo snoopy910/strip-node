@@ -256,7 +256,5 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 		}
 	}
 
-	fmt.Println(transfers)
-
 	return transfers, nil
 }

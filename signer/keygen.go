@@ -5,12 +5,12 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
+	"github.com/StripChain/strip-node/util/logger"
 	ecdsaKeygen "github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -57,47 +57,47 @@ func updateKeygen(identity string, identityCurve string, keyCurve string, from i
 	// 	panic(err)
 	// }
 
-	fmt.Println("processed keygen message with status: ", ok)
+	logger.Sugar().Infof("processed keygen message with status: %v", ok)
 }
 
 func generateKeygen(identity string, identityCurve string, keyCurve string, signers []string) {
-	fmt.Println(signers)
-	fmt.Println(NodePublicKey)
+	logger.Sugar().Infof("signers: %v", signers)
+	logger.Sugar().Infof("NodePublicKey: %s", NodePublicKey)
 
 	Index := SliceIndexOfString(signers, NodePublicKey)
 
 	if Index == -1 {
-		fmt.Println("signer is not in consortium for keygen generation")
+		logger.Sugar().Errorw("signer is not in consortium for keygen generation")
 		return
 	}
 
 	TotalSigners := len(signers)
 
 	if TotalSigners > MaximumSigners {
-		fmt.Println("too many signers for keygen generation")
+		logger.Sugar().Errorw("too many signers for keygen generation")
 		return
 	}
 
 	if TotalSigners == 0 {
-		fmt.Println("not enough signers for keygen generation")
+		logger.Sugar().Errorw("not enough signers for keygen generation")
 		return
 	}
 
 	keyShare, err := GetKeyShare(identity, identityCurve, keyCurve)
 
-	fmt.Println("key share from postgres: ", keyShare, err)
+	logger.Sugar().Infof("key share from postgres: %s, error: %v", keyShare, err)
 
 	if err != nil {
-		fmt.Println("error from postgres:", err)
+		logger.Sugar().Errorw("error from postgres", "error", err)
 		return
 	}
 
 	if keyShare == "" {
-		fmt.Println("key share not found. continuing to generate key share")
+		logger.Sugar().Infof("key share not found. continuing to generate key share")
 	}
 
 	if keyShare != "" {
-		fmt.Println("key share found. stopping to generate key share")
+		logger.Sugar().Infof("key share found. stopping to generate key share")
 		return
 	}
 
@@ -216,7 +216,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			go broadcast(message)
 
 		case save := <-saveChanEddsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			pk := edwards.PublicKey{
 				Curve: save.EDDSAPub.Curve(),
@@ -226,11 +226,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			publicKeyStr := base58.Encode(pk.Serialize())
 
-			fmt.Println("new TSS Address is: ", publicKeyStr)
+			logger.Sugar().Infof("new TSS Address is: %s", publicKeyStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -238,7 +238,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -250,9 +250,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanStellarEddsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			pk := edwards.PublicKey{
 				Curve: save.EDDSAPub.Curve(),
@@ -264,7 +264,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			pkBytes := pk.Serialize()
 
 			if len(pkBytes) != 32 {
-				fmt.Println("Invalid public key length")
+				logger.Sugar().Errorw("Invalid public key length")
 				return
 			}
 
@@ -274,14 +274,14 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			// Use Stellar SDK's strkey package to encode
 			publicKeyStr, err := strkey.Encode(versionByte, pkBytes)
 			if err != nil {
-				fmt.Println("error encoding Stellar address: ", err)
+				logger.Sugar().Errorw("error encoding Stellar address", "error", err)
 				return
 			}
-			fmt.Println("new TSS Address (Stellar) is: ", publicKeyStr)
+			logger.Sugar().Infof("new TSS Address (Stellar) is: %s", publicKeyStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -289,7 +289,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -301,9 +301,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanBitcoinEcdsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			x := toHexInt(save.ECDSAPub.X())
 			y := toHexInt(save.ECDSAPub.Y())
@@ -311,11 +311,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
 			bitcoinAddressStr, _, _ := bitcoin.PublicKeyToBitcoinAddresses(publicKeyBytes)
 
-			fmt.Println("new TSS Address (BTC) is: ", bitcoinAddressStr)
+			logger.Sugar().Infof("new TSS Address (BTC) is: %s", bitcoinAddressStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -323,7 +323,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -335,23 +335,23 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanSecp256k1:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			x := toHexInt(save.ECDSAPub.X())
 			y := toHexInt(save.ECDSAPub.Y())
 			publicKeyStr := "04" + x + y
 			dogecoinAddressStr, err := dogecoin.PublicKeyToAddress(publicKeyStr)
 			if err != nil {
-				fmt.Println("Error generating Dogecoin address:", err)
+				logger.Sugar().Errorw("Error generating Dogecoin address", "error", err)
 			}
 
-			fmt.Println("new TSS Address (DOGE) is: ", dogecoinAddressStr)
+			logger.Sugar().Infof("new TSS Address (DOGE) is: %s", dogecoinAddressStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -359,7 +359,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -371,9 +371,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanAptosEddsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			pk := edwards.PublicKey{
 				Curve: save.EDDSAPub.Curve(),
@@ -383,11 +383,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			publicKeyStr := hex.EncodeToString(pk.Serialize())
 
-			fmt.Println("new TSS Address is: ", publicKeyStr)
+			logger.Sugar().Infof("new TSS Address is: %s", publicKeyStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -395,7 +395,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -407,17 +407,17 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanRippleEddsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			publicKeyStr := ripple.PublicKeyToAddress(save)
 
-			fmt.Println("new TSS Address (Ripple) is: ", publicKeyStr)
+			logger.Sugar().Infof("new TSS Address (Ripple) is: %s", publicKeyStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -425,7 +425,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -437,9 +437,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanCardanoEddsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 			// Get the public key
 			pk := edwards.PublicKey{
 				Curve: save.EDDSAPub.Curve(),
@@ -449,10 +449,10 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			publicKeyStr := hex.EncodeToString(pk.Serialize())
 
-			fmt.Println("new TSS Address (Cardano) is: ", publicKeyStr)
+			logger.Sugar().Infof("new TSS Address (Cardano) is: %s", publicKeyStr)
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -460,7 +460,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -471,9 +471,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
 				val <- "generated keygen"
 			}
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanSuiEddsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			pk := edwards.PublicKey{
 				Curve: save.EDDSAPub.Curve(),
@@ -488,11 +488,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			hasher := blake2b.Sum256(pkBytes)
 			suiAddress := "0x" + hex.EncodeToString(hasher[:])
 
-			fmt.Println("new Sui TSS Address is: ", suiAddress)
+			logger.Sugar().Infof("new Sui TSS Address is: %s", suiAddress)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -500,7 +500,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -512,9 +512,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", suiAddress)
+			logger.Sugar().Infof("completed saving of new keygen %s", suiAddress)
 		case save := <-saveChanEcdsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			x := toHexInt(save.ECDSAPub.X())
 			y := toHexInt(save.ECDSAPub.Y())
@@ -522,11 +522,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
 			newTssAddressStr := publicKeyToAddress(publicKeyBytes)
 
-			fmt.Println("new TSS Address is: ", newTssAddressStr)
+			logger.Sugar().Infof("new TSS Address is: %s", newTssAddressStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -534,7 +534,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -546,9 +546,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		case save := <-saveChanAlgorandEddsa:
-			fmt.Println("saving key")
+			logger.Sugar().Infof("saving key")
 
 			// For Algorand, we use the EdDSA key
 			pk := edwards.PublicKey{
@@ -571,11 +571,11 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			// Encode in base32 without padding
 			publicKeyStr := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(addressBytes)
 
-			fmt.Println("new TSS Address (Algorand) is: ", publicKeyStr)
+			logger.Sugar().Infof("new TSS Address (Algorand) is: %s", publicKeyStr)
 
 			out, err := json.Marshal(save)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling save", "error", err)
 			}
 
 			_json := string(out)
@@ -583,7 +583,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 			signersOut, err := json.Marshal(signers)
 			if err != nil {
-				fmt.Println(err)
+				logger.Sugar().Errorw("error marshalling signers", "error", err)
 			}
 
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
@@ -595,7 +595,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 
-			fmt.Println("completed saving of new keygen ", publicKeyStr)
+			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
 		}
 	}
 }

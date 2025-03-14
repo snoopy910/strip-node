@@ -8,18 +8,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/ERC20"
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/aptos"
 	"github.com/StripChain/strip-node/bitcoin"
 	"github.com/StripChain/strip-node/bridge"
-	"github.com/StripChain/strip-node/ERC20"
 	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
@@ -28,6 +27,7 @@ import (
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/util"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/algorand/go-algorand-sdk/encoding/msgpack"
 	algorandTypes "github.com/algorand/go-algorand-sdk/types"
 	"github.com/btcsuite/btcd/txscript"
@@ -77,18 +77,18 @@ func ProcessIntent(intentId int64) {
 	for {
 		intent, err := GetIntent(intentId)
 		if err != nil {
-			log.Printf("error getting intent: %+v\n", err)
+			logger.Sugar().Errorw("error getting intent", "error", err)
 			return
 		}
 
 		intentBytes, err := json.Marshal(intent)
 		if err != nil {
-			log.Printf("error marshalling intent: %+v\n", err)
+			logger.Sugar().Errorw("error marshalling intent", "error", err)
 			return
 		}
 
 		if intent.Status != INTENT_STATUS_PROCESSING {
-			log.Println("intent processed")
+			logger.Sugar().Infow("intent processed", "intent", intent)
 			return
 		}
 
@@ -99,7 +99,6 @@ func ProcessIntent(intentId int64) {
 
 		// now process the operations of the intent
 		for i, operation := range intent.Operations {
-			log.Printf("Operation: %v\n", operation)
 			if operation.Status == OPERATION_STATUS_COMPLETED || operation.Status == OPERATION_STATUS_FAILED {
 				continue
 			}
@@ -114,18 +113,18 @@ func ProcessIntent(intentId int64) {
 							_, err := AddLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Printf("error adding lock: %+v\n", err)
+								logger.Sugar().Errorw("error adding lock", "error", err)
 								break
 							}
 
 							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Printf("error getting lock after adding: %+v\n", err)
+								logger.Sugar().Errorw("error getting lock after adding", "error", err)
 								break
 							}
 						} else {
-							fmt.Printf("error getting lock: %+v\n", err)
+							logger.Sugar().Errorw("error getting lock", "error", err)
 							break
 						}
 					}
@@ -139,7 +138,7 @@ func ProcessIntent(intentId int64) {
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Printf("error getting chain: %+v\n", err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
@@ -148,13 +147,13 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "bitcoin" {
 							signature, bitcoinPubkey, err := getSignatureEx(intent, i)
 							if err != nil {
-								fmt.Printf("error getting signature: %+v\n", err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinPubkey, signature)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error sending bitcoin transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -162,13 +161,13 @@ func ProcessIntent(intentId int64) {
 						} else if chain.ChainType == "dogecoin" {
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Printf("error getting signature: %+v\n", err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error sending dogecoin transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -176,7 +175,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Printf("error getting signature: %+v\n", err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -184,7 +183,7 @@ func ProcessIntent(intentId int64) {
 
 							// @TODO: For our infra errors, don't mark the intent and operation as failed
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error sending evm transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -197,7 +196,7 @@ func ProcessIntent(intentId int64) {
 						if lockMetadata.Lock {
 							err := LockIdentity(lockSchema.Id)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 
@@ -208,13 +207,13 @@ func ProcessIntent(intentId int64) {
 					} else if operation.KeyCurve == "sui_eddsa" {
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting signature", "error", err)
 							break
 						}
 
 						txnHash, err := sui.SendSuiTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error sending sui transaction", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -226,7 +225,7 @@ func ProcessIntent(intentId int64) {
 						if lockMetadata.Lock {
 							err := LockIdentity(lockSchema.Id)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 
@@ -241,7 +240,7 @@ func ProcessIntent(intentId int64) {
 						}
 						chain, err := common.GetChain(chId)
 						if err != nil {
-							fmt.Printf("error getting chain: %+v\n", err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -250,7 +249,7 @@ func ProcessIntent(intentId int64) {
 						signature, err := getSignature(intent, i)
 
 						if err != nil {
-							fmt.Printf("error getting signature: %+v\n", err)
+							logger.Sugar().Errorw("error getting signature", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -261,7 +260,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "solana" {
 							txnHash, err = sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error sending solana transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -272,13 +271,12 @@ func ProcessIntent(intentId int64) {
 							// Convert public key
 							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
-								fmt.Printf("error getting public key: %v", err)
+								logger.Sugar().Errorw("error getting public key", "error", err)
 								break
 							}
 							txnHash, err = aptos.SendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.AptosEDDSAPublicKey, signature)
-							fmt.Println(txnHash)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error sending aptos transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -288,7 +286,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "algorand" {
 							txnHash, err = algorand.SendAlgorandTransaction(operation.SerializedTxn, operation.GenesisHash, signature)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error sending algorand transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -299,7 +297,7 @@ func ProcessIntent(intentId int64) {
 							// Send Stellar transaction
 							txnHash, err = stellar.SendStellarTxn(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
-								fmt.Printf("error sending Stellar transaction: %v", err)
+								logger.Sugar().Errorw("error sending Stellar transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -310,13 +308,13 @@ func ProcessIntent(intentId int64) {
 							// Convert public key
 							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
-								fmt.Printf("error getting public key: %v", err)
+								logger.Sugar().Errorw("error getting public key", "error", err)
 								break
 							}
 
 							txnHash, err = ripple.SendRippleTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.RippleEDDSAPublicKey, signature)
 							if err != nil {
-								fmt.Printf("error sending Ripple transaction: %+v", err)
+								logger.Sugar().Errorw("error sending Ripple transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -326,13 +324,13 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "cardano" {
 							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
-								fmt.Printf("error getting public key: %v", err)
+								logger.Sugar().Errorw("error getting public key", "error", err)
 								break
 							}
 
 							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.CardanoPublicKey, signature)
 							if err != nil {
-								fmt.Printf("error sending Cardano transaction: %+v", err)
+								logger.Sugar().Errorw("error sending Cardano transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -345,7 +343,7 @@ func ProcessIntent(intentId int64) {
 						if lockMetadata.Lock {
 							err := LockIdentity(lockSchema.Id)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 
@@ -362,18 +360,18 @@ func ProcessIntent(intentId int64) {
 							_, err := AddLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error adding lock", "error", err)
 								break
 							}
 
 							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting lock after adding", "error", err)
 								break
 							}
 						} else {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting lock", "error", err)
 							break
 						}
 					}
@@ -388,7 +386,7 @@ func ProcessIntent(intentId int64) {
 					dataToSign, err := solver.Construct(operation.Solver, &intentBytes, i)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error constructing solver data to sign", "error", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -399,7 +397,7 @@ func ProcessIntent(intentId int64) {
 					// then get the data signed
 					signature, err := getSignature(intent, i)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting signature", "error", err)
 						break
 					}
 
@@ -411,7 +409,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error solving", "error", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -423,7 +421,7 @@ func ProcessIntent(intentId int64) {
 					if lockMetadata.Lock {
 						err := LockIdentity(lockSchema.Id)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error locking identity", "error", err)
 							break
 						}
 
@@ -435,7 +433,7 @@ func ProcessIntent(intentId int64) {
 					// Get bridge wallet for the chain
 					bridgeWallet, err := GetWallet(BridgeContractAddress, operation.KeyCurve)
 					if err != nil {
-						fmt.Println("Failed to get bridge wallet:", err)
+						logger.Sugar().Errorw("Failed to get bridge wallet", "error", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -447,16 +445,16 @@ func ProcessIntent(intentId int64) {
 						if err.Error() == "pg: no rows in result set" {
 							_, err := AddLock(intent.Identity, intent.IdentityCurve)
 							if err != nil {
-								fmt.Printf("error adding lock: %+v\n", err)
+								logger.Sugar().Errorw("error adding lock", "error", err)
 								break
 							}
 							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
 							if err != nil {
-								fmt.Printf("error getting lock after adding: %+v\n", err)
+								logger.Sugar().Errorw("error getting lock after adding", "error", err)
 								break
 							}
 						} else {
-							fmt.Printf("error getting lock: %+v\n", err)
+							logger.Sugar().Errorw("error getting lock", "error", err)
 							break
 						}
 					}
@@ -470,7 +468,7 @@ func ProcessIntent(intentId int64) {
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Printf("error getting chain: %+v\n", err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
@@ -481,13 +479,13 @@ func ProcessIntent(intentId int64) {
 							var tx wire.MsgTx
 							txBytes, err := hex.DecodeString(operation.SerializedTxn)
 							if err != nil {
-								fmt.Printf("error decoding bitcoin transaction: %+v\n", err)
+								logger.Sugar().Errorw("error decoding bitcoin transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 							if err := tx.Deserialize(bytes.NewReader(txBytes)); err != nil {
-								fmt.Printf("error deserializing bitcoin transaction: %+v\n", err)
+								logger.Sugar().Errorw("error deserializing bitcoin transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -496,7 +494,7 @@ func ProcessIntent(intentId int64) {
 							if len(tx.TxOut) > 0 {
 								_, addrs, _, err := txscript.ExtractPkScriptAddrs(tx.TxOut[0].PkScript, nil)
 								if err != nil || len(addrs) == 0 {
-									fmt.Printf("error extracting bitcoin address: %+v\n", err)
+									logger.Sugar().Errorw("error extracting bitcoin address", "error", err)
 									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 									break
@@ -507,14 +505,14 @@ func ProcessIntent(intentId int64) {
 							// For EVM chains, decode the transaction to get the 'to' address
 							txBytes, err := hex.DecodeString(operation.SerializedTxn)
 							if err != nil {
-								fmt.Printf("error decoding EVM transaction: %+v\n", err)
+								logger.Sugar().Errorw("error decoding EVM transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
 							tx := new(types.Transaction)
 							if err := rlp.DecodeBytes(txBytes, tx); err != nil {
-								fmt.Printf("error deserializing EVM transaction: %+v\n", err)
+								logger.Sugar().Errorw("error deserializing EVM transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -531,7 +529,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if !strings.EqualFold(destAddress, expectedAddress) {
-							fmt.Printf("Invalid bridge destination address. Expected %s, got %s\n", expectedAddress, destAddress)
+							logger.Sugar().Errorw("Invalid bridge destination address", "expected", expectedAddress, "got", destAddress)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -539,7 +537,7 @@ func ProcessIntent(intentId int64) {
 
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Printf("error getting signature: %+v\n", err)
+							logger.Sugar().Errorw("error getting signature", "error", err)
 							break
 						}
 
@@ -548,7 +546,7 @@ func ProcessIntent(intentId int64) {
 						case "bitcoin":
 							signature, bitcoinPubkey, err_ := getSignatureEx(intent, i)
 							if err_ != nil {
-								fmt.Printf("error getting signature: %+v\n", err_)
+								logger.Sugar().Errorw("error getting signature", "error", err_)
 								break
 							}
 							txnHash, err = bitcoin.SendBitcoinTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, bitcoinPubkey, signature)
@@ -557,7 +555,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error sending transaction", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -569,7 +567,7 @@ func ProcessIntent(intentId int64) {
 						if lockMetadata.Lock {
 							err := LockIdentity(lockSchema.Id)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
@@ -579,7 +577,7 @@ func ProcessIntent(intentId int64) {
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Printf("error getting chain: %+v\n", err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
@@ -593,12 +591,12 @@ func ProcessIntent(intentId int64) {
 							// Decode base58 transaction and extract destination
 							decodedTxn, err := base58.Decode(operation.SerializedTxn)
 							if err != nil {
-								fmt.Printf("error decoding Solana transaction: %v\n", err)
+								logger.Sugar().Errorw("error decoding Solana transaction", "error", err)
 								break
 							}
 							tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
 							if err != nil || len(tx.Message.Instructions) == 0 {
-								fmt.Printf("error deserializing Solana transaction: %v\n", err)
+								logger.Sugar().Errorw("error deserializing Solana transaction", "error", err)
 								break
 							}
 							// Get the first instruction's destination account index
@@ -612,7 +610,7 @@ func ProcessIntent(intentId int64) {
 								Args     []string `json:"arguments"`
 							}
 							if err := json.Unmarshal([]byte(operation.SerializedTxn), &aptosPayload); err != nil {
-								fmt.Printf("error parsing Aptos transaction: %v\n", err)
+								logger.Sugar().Errorw("error parsing Aptos transaction", "error", err)
 								break
 							}
 							if len(aptosPayload.Args) > 0 {
@@ -623,7 +621,7 @@ func ProcessIntent(intentId int64) {
 							var txEnv xdr.TransactionEnvelope
 							err := xdr.SafeUnmarshalBase64(operation.SerializedTxn, &txEnv)
 							if err != nil {
-								fmt.Printf("error parsing Stellar transaction: %v\n", err)
+								logger.Sugar().Errorw("error parsing Stellar transaction", "error", err)
 								break
 							}
 
@@ -636,13 +634,13 @@ func ProcessIntent(intentId int64) {
 						case "algorand":
 							txnBytes, err := base64.StdEncoding.DecodeString(operation.SerializedTxn)
 							if err != nil {
-								fmt.Printf("failed to decode serialized transaction: %v", err)
+								logger.Sugar().Errorw("failed to decode serialized transaction", "error", err)
 								break
 							}
 							var txn algorandTypes.Transaction
 							err = msgpack.Decode(txnBytes, &txn)
 							if err != nil {
-								fmt.Printf("failed to deserialize transaction: %v", err)
+								logger.Sugar().Errorw("failed to deserialize transaction", "error", err)
 								break
 							}
 							if txn.Type == algorandTypes.PaymentTx {
@@ -650,7 +648,7 @@ func ProcessIntent(intentId int64) {
 							} else if txn.Type == algorandTypes.AssetTransferTx {
 								destAddress = txn.AssetTransferTxnFields.AssetReceiver.String()
 							} else {
-								fmt.Printf("Unknown transaction type: %s\n", txn.Type)
+								logger.Sugar().Errorw("Unknown transaction type", "type", txn.Type)
 								break
 							}
 						case "ripple":
@@ -658,7 +656,7 @@ func ProcessIntent(intentId int64) {
 							// Decode the serialized transaction
 							txBytes, err := hex.DecodeString(strings.TrimPrefix(operation.SerializedTxn, "0x"))
 							if err != nil {
-								fmt.Printf("error decoding transaction: %v", err)
+								logger.Sugar().Errorw("error decoding transaction", "error", err)
 								break
 							}
 
@@ -666,7 +664,7 @@ func ProcessIntent(intentId int64) {
 							var tx data.Payment
 							err = json.Unmarshal(txBytes, &tx)
 							if err != nil {
-								fmt.Printf("error unmarshalling transaction: %v", err)
+								logger.Sugar().Errorw("error unmarshalling transaction", "error", err)
 								break
 							}
 							destAddress = tx.Destination.String()
@@ -674,11 +672,11 @@ func ProcessIntent(intentId int64) {
 							var tx cardanolib.Tx
 							txBytes, err := hex.DecodeString(operation.SerializedTxn)
 							if err != nil {
-								fmt.Printf("error decoding Cardano transaction: %v\n", err)
+								logger.Sugar().Errorw("error decoding Cardano transaction", "error", err)
 								break
 							}
 							if err := json.Unmarshal(txBytes, &tx); err != nil {
-								fmt.Printf("error parsing Cardano transaction: %v\n", err)
+								logger.Sugar().Errorw("error parsing Cardano transaction", "error", err)
 								break
 							}
 							destAddress = tx.Body.Outputs[0].Address.String()
@@ -686,7 +684,7 @@ func ProcessIntent(intentId int64) {
 
 						// Verify the extracted destination matches the bridge wallet
 						if destAddress == "" {
-							fmt.Printf("Failed to extract destination address from %s transaction\n", chain.ChainType)
+							logger.Sugar().Errorw("Failed to extract destination address from %s transaction", chain.ChainType)
 							validDestination = false
 						} else {
 							switch chain.ChainType {
@@ -707,7 +705,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if !validDestination {
-							fmt.Println("Invalid bridge destination address for", chain.ChainType)
+							logger.Sugar().Errorw("Invalid bridge destination address for", "chain", chain.ChainType)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -715,7 +713,7 @@ func ProcessIntent(intentId int64) {
 
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Printf("error getting signature: %+v\n", err)
+							logger.Sugar().Errorw("error getting signature", "error", err)
 							break
 						}
 
@@ -732,7 +730,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error sending transaction", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -744,7 +742,7 @@ func ProcessIntent(intentId int64) {
 						if lockMetadata.Lock {
 							err := LockIdentity(lockSchema.Id)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
@@ -757,7 +755,7 @@ func ProcessIntent(intentId int64) {
 					depositOperation := intent.Operations[i-1]
 
 					if i == 0 || !(depositOperation.Type == OPERATION_TYPE_SEND_TO_BRIDGE) {
-						fmt.Println("Invalid operation type for bridge deposit")
+						logger.Sugar().Errorw("Invalid operation type for bridge deposit")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -767,12 +765,12 @@ func ProcessIntent(intentId int64) {
 						// find token transfer events and check if first transfer is a valid token
 						transfers, err := GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting transfers", "error", err)
 							break
 						}
 
 						if len(transfers) == 0 {
-							fmt.Println("No transfers found", depositOperation.Result, intent.Identity)
+							logger.Sugar().Errorw("No transfers found", "result", depositOperation.Result, "identity", intent.Identity)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -786,12 +784,12 @@ func ProcessIntent(intentId int64) {
 						exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, depositOperation.ChainId, srcAddress)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error checking token existence", "error", err)
 							break
 						}
 
 						if !exists {
-							fmt.Println("Token does not exist", srcAddress, depositOperation.ChainId)
+							logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "chainId", depositOperation.ChainId)
 
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -800,13 +798,13 @@ func ProcessIntent(intentId int64) {
 
 						wallet, err := GetWallet(intent.Identity, "ecdsa")
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting wallet", "error", err)
 							break
 						}
 
 						dataToSign, err := bridge.BridgeDepositDataToSign(RPC_URL, BridgeContractAddress, amount, wallet.ECDSAPublicKey, destAddress)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting data to sign", "error", err)
 							break
 						}
 
@@ -815,17 +813,17 @@ func ProcessIntent(intentId int64) {
 
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting signature", "error", err)
 							break
 						}
 
-						fmt.Println("Minting bridge", amount, wallet.ECDSAPublicKey, destAddress, signature)
+						logger.Sugar().Infof("Minting bridge %s %s %s %s", amount, wallet.ECDSAPublicKey, destAddress, signature)
 
 						result, err := mintBridge(
 							amount, wallet.ECDSAPublicKey, destAddress, signature)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error minting bridge", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -839,7 +837,7 @@ func ProcessIntent(intentId int64) {
 						mintOutputBytes, err := json.Marshal(mintOutput)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error marshalling mint output", "error", err)
 							break
 						}
 
@@ -852,7 +850,7 @@ func ProcessIntent(intentId int64) {
 						depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" || depositOperation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
@@ -861,13 +859,13 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "solana" {
 							transfers, err = GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting solana transfers", "error", err)
 								break
 							}
 						} else if chain.ChainType == "dogecoin" {
 							transfers, err = dogecoin.GetDogeTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting dogecoin transfers", "error", err)
 								break
 							}
 						}
@@ -875,7 +873,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "aptos" {
 							transfers, err = aptos.GetAptosTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting aptos transfers", "error", err)
 								break
 							}
 						}
@@ -883,13 +881,13 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "bitcoin" {
 							transfers, _, err = bitcoin.GetBitcoinTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting bitcoin transfers", "error", err)
 								break
 							}
 						} else if chain.ChainType == "sui" {
 							transfers, err = sui.GetSuiTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting sui transfers", "error", err)
 								break
 							}
 						}
@@ -897,14 +895,14 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "algorand" {
 							transfers, err = algorand.GetAlgorandTransfers(depositOperation.GenesisHash, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting algorand transfers", "error", err)
 								break
 							}
 						}
 						if chain.ChainType == "stellar" {
 							transfers, err = stellar.GetStellarTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting stellar transfers", "error", err)
 								break
 							}
 						}
@@ -912,7 +910,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "ripple" {
 							transfers, err = ripple.GetRippleTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting ripple transfers", "error", err)
 								break
 							}
 						}
@@ -920,13 +918,13 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "cardano" {
 							transfers, err = cardano.GetCardanoTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting cardano transfers", "error", err)
 								break
 							}
 						}
 
 						if len(transfers) == 0 {
-							fmt.Println("No transfers found", depositOperation.Result, intent.Identity)
+							logger.Sugar().Errorw("No transfers found", "result", depositOperation.Result, "identity", intent.Identity)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -940,12 +938,12 @@ func ProcessIntent(intentId int64) {
 						exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, depositOperation.ChainId, srcAddress)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error checking token existence", "error", err)
 							break
 						}
 
 						if !exists {
-							fmt.Println("Token does not exist", srcAddress, depositOperation.ChainId)
+							logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "chainId", depositOperation.ChainId)
 
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -954,13 +952,13 @@ func ProcessIntent(intentId int64) {
 
 						wallet, err := GetWallet(intent.Identity, "ecdsa")
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting wallet", "error", err)
 							break
 						}
 
 						dataToSign, err := bridge.BridgeDepositDataToSign(RPC_URL, BridgeContractAddress, amount, wallet.ECDSAPublicKey, destAddress)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting data to sign", "error", err)
 							break
 						}
 
@@ -969,7 +967,7 @@ func ProcessIntent(intentId int64) {
 
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting signature", "error", err)
 							break
 						}
 
@@ -977,7 +975,7 @@ func ProcessIntent(intentId int64) {
 							amount, wallet.ECDSAPublicKey, destAddress, signature)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error minting bridge", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -990,7 +988,7 @@ func ProcessIntent(intentId int64) {
 					bridgeDeposit := intent.Operations[i-1]
 
 					if i == 0 || !(bridgeDeposit.Type == OPERATION_TYPE_BRIDGE_DEPOSIT) {
-						fmt.Println("Invalid operation type for swap")
+						logger.Sugar().Errorw("Invalid operation type for swap")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -1008,7 +1006,7 @@ func ProcessIntent(intentId int64) {
 
 					wallet, err := GetWallet(intent.Identity, "ecdsa")
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting wallet", "error", err)
 						break
 					}
 
@@ -1023,7 +1021,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting data to sign", "error", err)
 						break
 					}
 
@@ -1032,11 +1030,11 @@ func ProcessIntent(intentId int64) {
 
 					signature, err := getSignature(intent, i)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting signature", "error", err)
 						break
 					}
 
-					fmt.Println("Swapping bridge", wallet.ECDSAPublicKey, tokenIn, tokenOut, amountIn, deadline, signature)
+					logger.Sugar().Infow("Swapping bridge", "wallet", wallet.ECDSAPublicKey, "tokenIn", tokenIn, "tokenOut", tokenOut, "amountIn", amountIn, "deadline", deadline, "signature", signature)
 
 					result, err := swapBridge(
 						wallet.ECDSAPublicKey,
@@ -1048,7 +1046,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error swapping bridge", "error", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -1068,13 +1066,13 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if i == 0 || !(bridgeSwap.Type == OPERATION_TYPE_SWAP) {
-						fmt.Println("Invalid operation type for swap")
+						logger.Sugar().Errorw("Invalid operation type for swap")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
 
-					fmt.Println("Burning tokens", bridgeSwap)
+					logger.Sugar().Infow("Burning tokens", "bridgeSwap", bridgeSwap)
 
 					burnAmount := bridgeSwap.SolverOutput
 					burnMetadata := BurnMetadata{}
@@ -1083,7 +1081,7 @@ func ProcessIntent(intentId int64) {
 
 					wallet, err := GetWallet(intent.Identity, "ecdsa")
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting wallet", "error", err)
 						break
 					}
 
@@ -1096,7 +1094,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting data to sign", "error", err)
 						break
 					}
 
@@ -1105,11 +1103,11 @@ func ProcessIntent(intentId int64) {
 
 					signature, err := getSignature(intent, i)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting signature", "error", err)
 						break
 					}
 
-					fmt.Println("Burn tokens", wallet.ECDSAPublicKey, burnAmount, burnMetadata.Token, signature)
+					logger.Sugar().Infow("Burn tokens", "wallet", wallet.ECDSAPublicKey, "burnAmount", burnAmount, "token", burnMetadata.Token, "signature", signature)
 
 					result, err := burnTokens(
 						wallet.ECDSAPublicKey,
@@ -1119,7 +1117,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error burning tokens", "error", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -1239,7 +1237,7 @@ func ProcessIntent(intentId int64) {
 					burn := intent.Operations[i-1]
 
 					if i == 0 || !(burn.Type == OPERATION_TYPE_BURN || burn.Type == OPERATION_TYPE_BURN_SYNTHETIC) {
-						fmt.Println("Invalid operation type for withdraw after burn")
+						logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -1267,12 +1265,12 @@ func ProcessIntent(intentId int64) {
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, operation.ChainId, tokenToWithdraw)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error checking token existence", "error", err)
 						break
 					}
 
 					if !exists {
-						fmt.Println("Token does not exist", tokenToWithdraw, operation.ChainId)
+						logger.Sugar().Errorw("Token does not exist", "token", tokenToWithdraw, "chainId", operation.ChainId)
 
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -1280,7 +1278,7 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if destAddress != burnTokenAddress {
-						fmt.Println("Token mismatch", destAddress, burnTokenAddress)
+						logger.Sugar().Errorw("Token mismatch", "destAddress", destAddress, "token", burnTokenAddress)
 
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -1290,19 +1288,19 @@ func ProcessIntent(intentId int64) {
 					withdrawalChain, err := common.GetChain(operation.ChainId)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting chain", "error", err)
 						break
 					}
 
 					bridgeWallet, err := GetWallet(BridgeContractAddress, "ecdsa")
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting bridge wallet", "error", err)
 						break
 					}
 
 					user, err := GetWallet(intent.Identity, intent.IdentityCurve)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting user wallet", "error", err)
 						break
 					}
 
@@ -1311,13 +1309,13 @@ func ProcessIntent(intentId int64) {
 							// handle dogecoin withdrawal
 							var solverData map[string]interface{}
 							if err := json.Unmarshal([]byte(burn.SolverOutput), &solverData); err != nil {
-								fmt.Println("failed to parse solver output:", err)
+								logger.Sugar().Errorw("failed to parse solver output", "error", err)
 								break
 							}
 
 							amount, ok := solverData["amount"].(string)
 							if !ok {
-								fmt.Println("amount not found in solver output")
+								logger.Sugar().Errorw("amount not found in solver output")
 								break
 							}
 
@@ -1328,7 +1326,7 @@ func ProcessIntent(intentId int64) {
 
 							// Validate that we have the Dogecoin addresses
 							if userAddress == "" || bridgeAddress == "" {
-								fmt.Println("Dogecoin addresses not found in wallet")
+								logger.Sugar().Errorw("Dogecoin addresses not found in wallet")
 								break
 							}
 
@@ -1340,7 +1338,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1349,7 +1347,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1362,7 +1360,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing dogecoin", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1382,7 +1380,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1391,7 +1389,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1403,7 +1401,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing ERC20", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1415,13 +1413,13 @@ func ProcessIntent(intentId int64) {
 					} else if withdrawalChain.KeyCurve == "bitcoin_ecdsa" {
 						bridgeWalletBitcoinAddress, err := readBitcoinAddress(bridgeWallet, withdrawalChain.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error reading bitcoin address", "error", err)
 							break
 						}
 
 						userBitcoinAddress, err := readBitcoinAddress(user, withdrawalChain.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error reading bitcoin address", "error", err)
 							break
 						}
 
@@ -1434,7 +1432,7 @@ func ProcessIntent(intentId int64) {
 						)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting data to sign", "error", err)
 							break
 						}
 
@@ -1443,7 +1441,7 @@ func ProcessIntent(intentId int64) {
 
 						signature, err := getSignature(intent, i)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting signature", "error", err)
 							break
 						}
 
@@ -1454,7 +1452,7 @@ func ProcessIntent(intentId int64) {
 						)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error withdrawing bitcoin", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -1473,7 +1471,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1482,7 +1480,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1493,7 +1491,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing solana native", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1511,7 +1509,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1520,7 +1518,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1531,7 +1529,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing solana SPL", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1543,14 +1541,14 @@ func ProcessIntent(intentId int64) {
 					} else if withdrawalChain.KeyCurve == "stellar_eddsa" {
 						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
-							fmt.Printf("error getting wallet: %+v\n", err)
+							logger.Sugar().Errorw("error getting wallet", "error", err)
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
 						}
 
 						if wallet.StellarPublicKey == "" {
-							fmt.Printf("error: no Stellar public key found in wallet")
+							logger.Sugar().Errorw("error: no Stellar public key found in wallet")
 							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 							break
@@ -1568,7 +1566,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Printf("error withdrawing native XLM: %+v\n", err)
+								logger.Sugar().Errorw("error withdrawing native XLM", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1579,7 +1577,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Printf("error getting signature: %+v\n", err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1592,7 +1590,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Printf("error withdrawing Stellar: %+v\n", err)
+								logger.Sugar().Errorw("error withdrawing Stellar", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1603,14 +1601,12 @@ func ProcessIntent(intentId int64) {
 							// Handle non-native Stellar asset transfer
 							assetParts := strings.Split(tokenToWithdraw, ":")
 							if len(assetParts) != 2 {
-								fmt.Printf("invalid asset format: %s", tokenToWithdraw)
+								logger.Sugar().Errorw("invalid asset format", "asset", tokenToWithdraw)
 								break
 							}
 
 							assetCode := assetParts[0]
 							assetIssuer := assetParts[1]
-							fmt.Printf("assetCode: %+v\n", assetCode)
-							fmt.Printf("assetIssuer: %+v\n", assetIssuer)
 
 							txn, dataToSign, err := stellar.WithdrawStellarAssetGetSignature(
 								client,
@@ -1622,7 +1618,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Printf("error withdrawing Stellar asset: %+v\n", err)
+								logger.Sugar().Errorw("error withdrawing Stellar asset", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1633,7 +1629,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Printf("error getting signature: %+v\n", err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1646,7 +1642,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Printf("error withdrawing Stellar: %+v\n", err)
+								logger.Sugar().Errorw("error withdrawing Stellar", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1658,7 +1654,7 @@ func ProcessIntent(intentId int64) {
 					} else if withdrawalChain.KeyCurve == "aptos_eddsa" {
 						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
-							fmt.Printf("error getting public key: %v", err)
+							logger.Sugar().Errorw("error getting public key", "error", err)
 							break
 						}
 						if tokenToWithdraw == util.ZERO_ADDRESS {
@@ -1670,7 +1666,7 @@ func ProcessIntent(intentId int64) {
 								user.AptosEDDSAPublicKey,
 							)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1679,7 +1675,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1691,7 +1687,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing aptos", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1708,7 +1704,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1717,7 +1713,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1729,7 +1725,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing aptos", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1741,7 +1737,7 @@ func ProcessIntent(intentId int64) {
 					} else if withdrawalChain.KeyCurve == "sui_eddsa" {
 						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
-							fmt.Printf("error getting public key: %v", err)
+							logger.Sugar().Errorw("error getting public key", "error", err)
 							break
 						}
 
@@ -1755,7 +1751,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1764,7 +1760,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1776,7 +1772,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing sui", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1794,7 +1790,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1803,7 +1799,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1815,7 +1811,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing sui", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1835,7 +1831,7 @@ func ProcessIntent(intentId int64) {
 								user.AlgorandEDDSAPublicKey,
 							)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1846,7 +1842,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1857,7 +1853,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing algorand", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1875,7 +1871,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1884,7 +1880,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1897,7 +1893,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing algorand", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1917,7 +1913,7 @@ func ProcessIntent(intentId int64) {
 								user.RippleEDDSAPublicKey,
 							)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1926,7 +1922,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1939,7 +1935,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing ripple", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -1957,7 +1953,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -1966,7 +1962,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -1979,7 +1975,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing ripple", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -2000,7 +1996,7 @@ func ProcessIntent(intentId int64) {
 								userAddress,
 							)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -2009,7 +2005,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -2022,7 +2018,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing cardano", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -2040,7 +2036,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting data to sign", "error", err)
 								break
 							}
 
@@ -2049,7 +2045,7 @@ func ProcessIntent(intentId int64) {
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting signature", "error", err)
 								break
 							}
 
@@ -2062,7 +2058,7 @@ func ProcessIntent(intentId int64) {
 							)
 
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error withdrawing cardano", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -2084,26 +2080,26 @@ func ProcessIntent(intentId int64) {
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking bitcoin transaction", "error", err)
 								break
 							}
 						} else if chain.ChainType == "dogecoin" {
 							confirmed, err = dogecoin.CheckDogeTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking dogecoin transaction", "error", err)
 								break
 							}
 						} else {
 							confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking evm transaction", "error", err)
 								break
 							}
 						}
@@ -2121,14 +2117,14 @@ func ProcessIntent(intentId int64) {
 						}
 						chain, err := common.GetChain(chId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
 						if chain.ChainType == "solana" {
 							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking solana transaction", "error", err)
 								break
 							}
 						}
@@ -2136,7 +2132,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking aptos transaction", "error", err)
 								break
 							}
 						}
@@ -2144,21 +2140,21 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "sui" {
 							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking sui transaction", "error", err)
 								break
 							}
 						}
 						if chain.ChainType == "algorand" {
 							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking algorand transaction", "error", err)
 								break
 							}
 						}
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Stellar transaction: %v", err)
+								logger.Sugar().Errorw("error checking Stellar transaction", "error", err)
 								break
 							}
 						}
@@ -2166,7 +2162,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "ripple" {
 							confirmed, err = ripple.CheckRippleTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Ripple transaction: %v", err)
+								logger.Sugar().Errorw("error checking Ripple transaction", "error", err)
 								break
 							}
 						}
@@ -2174,7 +2170,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "cardano" {
 							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Cardano transaction: %v", err)
+								logger.Sugar().Errorw("error checking Cardano transaction", "error", err)
 								break
 							}
 						}
@@ -2196,7 +2192,7 @@ func ProcessIntent(intentId int64) {
 					confirmed := false
 					chain, err := common.GetChain(operation.ChainId)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting chain", "error", err)
 						break
 					}
 
@@ -2216,7 +2212,7 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if err != nil {
-						fmt.Printf("error checking %s transaction: %+v\n", chain.ChainType, err)
+						logger.Sugar().Errorw("error checking transaction", "chain", chain.ChainType, "error", err)
 						break
 					}
 
@@ -2237,25 +2233,25 @@ func ProcessIntent(intentId int64) {
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking bitcoin transaction", "error", err)
 								break
 							}
 						} else if chain.ChainType == "dogecoin" {
 							confirmed, err = dogecoin.CheckDogeTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking dogecoin transaction", "error", err)
 								break
 							}
 						} else {
 							confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking evm transaction", "error", err)
 								break
 							}
 						}
@@ -2268,14 +2264,14 @@ func ProcessIntent(intentId int64) {
 						operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
 						if chain.ChainType == "solana" {
 							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking solana transaction", "error", err)
 								break
 							}
 						}
@@ -2283,7 +2279,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking aptos transaction", "error", err)
 								break
 							}
 						}
@@ -2291,14 +2287,14 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "sui" {
 							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking sui transaction", "error", err)
 								break
 							}
 						}
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Stellar transaction: %+v\n", err)
+								logger.Sugar().Errorw("error checking Stellar transaction", "error", err)
 								break
 							}
 						}
@@ -2306,7 +2302,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "algorand" {
 							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking algorand transaction", "error", err)
 								break
 							}
 						}
@@ -2314,7 +2310,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "ripple" {
 							confirmed, err = ripple.CheckRippleTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Ripple transaction: %+v\n", err)
+								logger.Sugar().Errorw("error checking Ripple transaction", "error", err)
 								break
 							}
 						}
@@ -2322,7 +2318,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "cardano" {
 							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Cardano transaction: %+v\n", err)
+								logger.Sugar().Errorw("error checking Cardano transaction", "error", err)
 								break
 							}
 						}
@@ -2346,7 +2342,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error checking solver status", "error", err)
 						break
 					}
 
@@ -2354,7 +2350,7 @@ func ProcessIntent(intentId int64) {
 						output, err := solver.GetOutput(operation.Solver, &intentBytes, i)
 
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting solver output", "error", err)
 							break
 						}
 
@@ -2376,7 +2372,7 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_SWAP {
 					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error checking evm transaction", "error", err)
 						break
 					}
 
@@ -2390,7 +2386,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting swap output", "error", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -2408,7 +2404,7 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == OPERATION_TYPE_BURN {
 					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error checking evm transaction", "error", err)
 						break
 					}
 
@@ -2422,7 +2418,7 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting burn output", "error", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -2474,25 +2470,25 @@ func ProcessIntent(intentId int64) {
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking bitcoin transaction", "error", err)
 								break
 							}
 						} else if chain.ChainType == "dogecoin" {
 							confirmed, err = dogecoin.CheckDogeTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking dogecoin transaction", "error", err)
 								break
 							}
 						} else {
 							confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking evm transaction", "error", err)
 								break
 							}
 						}
@@ -2505,14 +2501,14 @@ func ProcessIntent(intentId int64) {
 						operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error getting chain", "error", err)
 							break
 						}
 
 						if chain.ChainType == "solana" {
 							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking solana transaction", "error", err)
 								break
 							}
 						}
@@ -2520,7 +2516,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "aptos" {
 							confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking aptos transaction", "error", err)
 								break
 							}
 						}
@@ -2528,14 +2524,14 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "sui" {
 							confirmed, err = sui.CheckSuiTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error checking sui transaction", "error", err)
 								break
 							}
 						}
 						if chain.ChainType == "algorand" {
 							confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Algorand transaction: %+v\n", err)
+								logger.Sugar().Errorw("error checking Algorand transaction", "error", err)
 								break
 							}
 						}
@@ -2543,7 +2539,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "stellar" {
 							confirmed, err = stellar.CheckStellarTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Stellar transaction: %+v\n", err)
+								logger.Sugar().Errorw("error checking Stellar transaction", "error", err)
 								break
 							}
 						}
@@ -2551,7 +2547,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "ripple" {
 							confirmed, err = ripple.CheckRippleTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Ripple transaction: %+v\n", err)
+								logger.Sugar().Errorw("error checking Ripple transaction", "error", err)
 								break
 							}
 						}
@@ -2559,7 +2555,7 @@ func ProcessIntent(intentId int64) {
 						if chain.ChainType == "cardano" {
 							confirmed, err = cardano.CheckCardanoTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
-								fmt.Printf("error checking Cardano transaction: %+v\n", err)
+								logger.Sugar().Errorw("error checking Cardano transaction", "error", err)
 								break
 							}
 						}
@@ -2575,7 +2571,7 @@ func ProcessIntent(intentId int64) {
 
 					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error getting lock", "error", err)
 						break
 					}
 
@@ -2586,14 +2582,14 @@ func ProcessIntent(intentId int64) {
 						if depositOperation.KeyCurve == "ecdsa" || depositOperation.KeyCurve == "bitcoin_ecdsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting chain", "error", err)
 								break
 							}
 
 							if chain.ChainType == "bitcoin" {
 								txnConfirmed, err := bitcoin.CheckBitcoinTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									logger.Sugar().Errorw("error checking bitcoin transaction", "error", err)
 									break
 								}
 
@@ -2601,14 +2597,14 @@ func ProcessIntent(intentId int64) {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
 							} else if chain.ChainType == "dogecoin" {
 								txnConfirmed, err := dogecoin.CheckDogeTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									logger.Sugar().Errorw("error checking dogecoin transaction", "error", err)
 									break
 								}
 
@@ -2616,14 +2612,14 @@ func ProcessIntent(intentId int64) {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
 							} else {
 								txnConfirmed, err := checkEVMTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									logger.Sugar().Errorw("error checking evm transaction", "error", err)
 									break
 								}
 
@@ -2631,7 +2627,7 @@ func ProcessIntent(intentId int64) {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
@@ -2645,14 +2641,14 @@ func ProcessIntent(intentId int64) {
 							depositOperation.KeyCurve == "cardano_eddsa" {
 							chain, err := common.GetChain(depositOperation.ChainId)
 							if err != nil {
-								fmt.Println(err)
+								logger.Sugar().Errorw("error getting chain", "error", err)
 								break
 							}
 
 							if chain.ChainType == "solana" {
 								txnConfirmed, err := checkSolanaTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									logger.Sugar().Errorw("error checking solana transaction", "error", err)
 									break
 								}
 
@@ -2660,7 +2656,7 @@ func ProcessIntent(intentId int64) {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
@@ -2669,14 +2665,14 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "aptos" {
 								txnConfirmed, err := aptos.CheckAptosTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									logger.Sugar().Errorw("error checking aptos transaction", "error", err)
 									break
 								}
 								if txnConfirmed {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
@@ -2685,14 +2681,14 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "algorand" {
 								txnConfirmed, err := algorand.CheckAlgorandTransactionConfirmed(depositOperation.GenesisHash, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									logger.Sugar().Errorw("error checking algorand transaction", "error", err)
 									break
 								}
 								if txnConfirmed {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
@@ -2700,14 +2696,14 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "stellar" {
 								txnConfirmed, err := stellar.CheckStellarTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Printf("error checking Stellar transaction: %v", err)
+									logger.Sugar().Errorw("error checking Stellar transaction", "error", err)
 									break
 								}
 								if txnConfirmed {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
@@ -2716,7 +2712,7 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "sui" {
 								txnConfirmed, err := sui.CheckSuiTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Println(err)
+									logger.Sugar().Errorw("error checking sui transaction", "error", err)
 									break
 								}
 
@@ -2724,7 +2720,7 @@ func ProcessIntent(intentId int64) {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
@@ -2733,7 +2729,7 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "ripple" {
 								txnConfirmed, err := ripple.CheckRippleTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Printf("error checking Ripple transaction: %v", err)
+									logger.Sugar().Errorw("error checking Ripple transaction", "error", err)
 									break
 								}
 
@@ -2741,7 +2737,7 @@ func ProcessIntent(intentId int64) {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
@@ -2750,7 +2746,7 @@ func ProcessIntent(intentId int64) {
 							if chain.ChainType == "cardano" {
 								txnConfirmed, err := cardano.CheckCardanoTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
-									fmt.Printf("error checking Cardano transaction: %+v\n", err)
+									logger.Sugar().Errorw("error checking Cardano transaction", "error", err)
 									break
 								}
 
@@ -2758,7 +2754,7 @@ func ProcessIntent(intentId int64) {
 									confirmed = true
 									err := UnlockIdentity(lockSchema.Id)
 									if err != nil {
-										fmt.Println(err)
+										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 
@@ -2802,7 +2798,7 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 	// get wallet
 	wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("error getting wallet: %v", err)
 	}
 
 	// get the signer
@@ -2810,12 +2806,12 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 	signer, err := GetSigner(signers[0])
 
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("error getting signer: %v", err)
 	}
 
 	intentBytes, err := json.Marshal(intent)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("error marshalling intent: %v", err)
 	}
 
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
@@ -2823,8 +2819,7 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
 
 	if err != nil {
-		fmt.Printf("error creating request: %+v\n", err)
-		return "", "", err
+		return "", "", fmt.Errorf("error creating request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -2832,23 +2827,20 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Printf("error sending request: %+v\n", err)
-		return "", "", err
+		return "", "", fmt.Errorf("error sending request: %v", err)
 	}
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("error reading response body: %+v\n", err)
-		return "", "", err
+		return "", "", fmt.Errorf("error reading response body: %v", err)
 	}
 
 	var signatureResponse SignatureResponse
 	err = json.Unmarshal(body, &signatureResponse)
 	if err != nil {
-		fmt.Printf("error unmarshalling response body: %+v\n", err)
-		return "", "", err
+		return "", "", fmt.Errorf("error unmarshalling response body: %v", err)
 	}
 
 	return signatureResponse.Signature, signatureResponse.Address, nil
@@ -2954,15 +2946,14 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	// Solana transactions are serialized using a custom binary format and base58-encoded
 	decodedTransactionData, err := base58.Decode(serializedTxn)
 	if err != nil {
-		fmt.Println("Error decoding transaction data:", err)
-		return "", err
+		return "", fmt.Errorf("failed to decode transaction data: %v", err)
 	}
 
 	// Deserialize the binary data into a Solana transaction
 	// This reconstructs the transaction object with all its instructions
 	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to deserialize transaction data: %v", err)
 	}
 
 	// Decode the base58-encoded signature and convert it to Solana's signature format
@@ -2978,17 +2969,14 @@ func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string
 	// This checks signatures against the transaction data and account permissions
 	err = _tx.VerifySignatures()
 	if err != nil {
-		fmt.Println("error during verification")
-		fmt.Println(err)
-		return "", err
+		return "", fmt.Errorf("failed to verify signatures: %v", err)
 	}
 
 	// Submit the transaction to the Solana network
 	// The returned hash can be used to track the transaction status
 	hash, err := c.SendTransaction(context.Background(), _tx)
 	if err != nil {
-		fmt.Println("error during sending transaction")
-		return "", err
+		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
 
 	// Return the transaction hash as a string

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tssCommon "github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -68,7 +69,7 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 	if err != nil {
 		log.Fatalf("failed to estimate gas: %v", err)
 	}
-	fmt.Println("gas estimate ", gas)
+	logger.Sugar().Infof("gas estimate %d", gas)
 
 	auth := bind.NewKeyedTransactor(privateKey)
 	auth.Nonce = big.NewInt(int64(nonce))

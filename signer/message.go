@@ -5,12 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"strings"
 
 	"github.com/StripChain/strip-node/common"
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -86,7 +86,7 @@ func handleIncomingMessage(message []byte) {
 
 	signerExists, err := instance.Signers(&bind.CallOpts{}, common.PublicKeyStrToBytes32(compressedPubKeyStr))
 	if err != nil {
-		fmt.Println("message from not registered signer: ", compressedPubKeyStr)
+		logger.Sugar().Errorw("message from not registered signer", "error", err)
 		log.Fatal(err)
 	}
 
@@ -194,7 +194,7 @@ func handleIncomingMessage(message []byte) {
 
 		val := <-sendMsg
 		if val {
-			fmt.Println("message sent: ", val)
+			logger.Sugar().Infof("message sent: %v", val)
 		}
 	}
 }
@@ -230,7 +230,7 @@ func broadcast(message Message) {
 	ctx := context.Background()
 
 	if err := topic.Publish(ctx, out); err != nil {
-		fmt.Println("### Publish error")
+		logger.Sugar().Errorw("failed to publish message", "error", err)
 		panic(err)
 	}
 }

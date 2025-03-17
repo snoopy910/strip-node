@@ -15,6 +15,7 @@ import (
 	signer "github.com/StripChain/strip-node/signer"
 	"github.com/StripChain/strip-node/solver"
 	solversregistry "github.com/StripChain/strip-node/solversRegistry"
+	"github.com/StripChain/strip-node/util/logger"
 )
 
 func main() {
@@ -71,6 +72,11 @@ func main() {
 	path := flag.String("keyPath", LookupEnvOrString("KEY_PATH", defaultPath+"/keys"), "path to store keygen")
 
 	flag.Parse()
+
+	if err := logger.Init(); err != nil {
+		log.Fatal("Failed to initialize logger:", err)
+	}
+	defer logger.Sync()
 
 	if *isDeployIntentOperatorsRegistry {
 		intentoperatorsregistry.DeployIntentOperatorsRegistryContract(*rpcURL, *privateKey)

@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/xdr"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/util/logger"
 )
 
 const (
@@ -129,7 +130,7 @@ func GetStellarTransfers(chainId string, txnHash string) ([]common.Transfer, err
 				op.Asset.Issuer,
 			))
 		default:
-			fmt.Printf("unknown operation type: %T\n", op)
+			logger.Sugar().Errorw("unknown operation type", "type", op)
 		}
 	}
 	return transfers, nil

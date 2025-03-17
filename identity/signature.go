@@ -15,6 +15,7 @@ import (
 
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -86,7 +87,7 @@ func VerifySignature(
 		sigPublicKeyECDSA, err := crypto.SigToPub(hash.Bytes(), decodedMessage)
 		if sigPublicKeyECDSA == nil {
 			fmt.Println("[VERIFY ECDSA] Failed to recover public key from signature")
-			err = errors.New("Could not get a public get from the message signature")
+			err = errors.New("could not get a public get from the message signature")
 		}
 		if err != nil {
 			fmt.Printf("[VERIFY ECDSA] Error recovering public key: %v\n", err)
@@ -446,7 +447,7 @@ func VerifySignature(
 		fmt.Printf("[VERIFY STELLAR] Verification failed: %v\n", err)
 		return false, nil
 	} else {
-		fmt.Printf("unsupported curve: %s", identityCurve)
+		logger.Sugar().Errorf("unsupported curve: %s", identityCurve)
 		return false, fmt.Errorf("unsupported curve: %s", identityCurve)
 	}
 }

@@ -107,7 +107,6 @@ func SendSuiTransaction(
 		return "", fmt.Errorf("transaction failed: %v", resp.Effects.Data.V1.Status.Error)
 	}
 
-	fmt.Println("txHash for sui: ", resp.Digest.String())
 	return resp.Digest.String(), nil
 }
 
@@ -174,7 +173,7 @@ func GetSuiTransfers(chainId string, txHash string) ([]common.Transfer, error) {
 	to = resp.BalanceChanges[1].Owner.AddressOwner.String()
 	amount, err = getFormattedAmount(resp.BalanceChanges[1].Amount, coinMetadata.Decimals)
 	if err != nil {
-		fmt.Println("Error formatting amount, ", err)
+		return nil, fmt.Errorf("failed to format amount: %v", err)
 	}
 	token = coinMetadata.Symbol
 	isNative = false

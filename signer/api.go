@@ -18,6 +18,8 @@ import (
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/StripChain/strip-node/util/logger"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stellar/go/strkey"
 
 	"github.com/StripChain/strip-node/bitcoin"
@@ -473,30 +475,6 @@ func startHTTPServer(port string) {
 		} else if keyCurve == BITCOIN_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == DOGECOIN_CURVE {
-			// msgHash := crypto.Keccak256([]byte(msg))
-			// // Get chain information from the operation
-			// chainId := intent.Operations[operationIndexInt].ChainId
-
-			// // For UTXO-based chains (Bitcoin, Dogecoin), include chain information in metadata
-			// chain, err := common.GetChain(chainId)
-			// if err != nil {
-			// 	fmt.Printf("Error getting chain info: %v\n", err)
-			// 	go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
-			// 	return
-			// }
-
-			// // For UTXO-based chains, include chain information in metadata
-			// if chain.ChainType == "dogecoin" {
-			// 	metadata := map[string]interface{}{
-			// 		"chainId": chainId,
-			// 		"msg":     hex.EncodeToString(msgHash),
-			// 	}
-			// 	metadataBytes, _ := json.Marshal(metadata)
-			// 	go generateSignatureMessage(identity, identityCurve, keyCurve, metadataBytes)
-			// } else {
-			// 	// For other chains, just pass the hash
-			// 	go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
-			// }
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == SUI_EDDSA_CURVE {
 			// For Sui, we need to format the message according to Sui's standards
@@ -504,7 +482,6 @@ func startHTTPServer(port string) {
 			// suiMsg := []byte("Sui Message:" + msg)
 			// go generateSignatureMessage(identity, identityCurve, keyCurve, suiMsg)
 			msgBytes, _ := lib.NewBase64Data(msg)
-			fmt.Println("msgBytes: ", msgBytes)
 			go generateSignatureMessage(identity, identityCurve, keyCurve, *msgBytes)
 		} else if keyCurve == APTOS_EDDSA_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
@@ -558,19 +535,20 @@ func startHTTPServer(port string) {
 		} else if keyCurve == BITCOIN_CURVE {
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
-			log.Println("signatureResponse", signatureResponse)
+			logger.Sugar().Infof("signatureResponse: %v", signatureResponse)
 		} else if keyCurve == DOGECOIN_CURVE {
 			// signatureResponse.Signature = hex.EncodeToString(sig.Message)
 			signatureResponse.Signature = string(sig.Message)
+
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == SUI_EDDSA_CURVE {
 			// For Sui, we return the signature in base64 format
 			signatureResponse.Signature = string(sig.Message) // Already base64 encoded in generateSignature
 			signatureResponse.Address = sig.Address
-			fmt.Println("generated Sui signature for address:", sig.Message)
+			logger.Sugar().Infof("generated Sui signature for address: %s", sig.Message)
 		} else if keyCurve == APTOS_EDDSA_CURVE || keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
 			signatureResponse.Signature = hex.EncodeToString(sig.Message)
-			fmt.Println("generated signature", hex.EncodeToString(sig.Message))
+			logger.Sugar().Infof("generated signature: %s", hex.EncodeToString(sig.Message))
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == ALGORAND_CURVE {
 			// For Algorand, encode the signature in base64 (Algorand's standard)

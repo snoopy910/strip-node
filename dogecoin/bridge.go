@@ -1,23 +1,25 @@
 package dogecoin
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
 
+	"github.com/StripChain/strip-node/common"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-
 )
 
 const (
-	DEFAULT_FEE_RATE     = 0.001 // DOGE per kB
+	DEFAULT_FEE_RATE      = 0.001 // DOGE per kB
 	DEFAULT_CONFIRMATIONS = 6
-	DOGE_DECIMALS        = 8
-	DOGE_TOKEN_SYMBOL    = "DOGE"
-	DOGE_ZERO_ADDRESS    = "0x0000000000000000000000000000000000000000"
+	DOGE_DECIMALS         = 8
+	DOGE_TOKEN_SYMBOL     = "DOGE"
+	DOGE_ZERO_ADDRESS     = "0x0000000000000000000000000000000000000000"
 )
 
 // WithdrawDogeNativeGetSignature returns transaction and dataToSign for
@@ -65,23 +67,35 @@ func WithdrawDogeNativeGetSignature(
 	msgTx.AddTxOut(txOut)
 
 	// Serialize the transaction
-	var txBuf strings.Builder
-	err = msgTx.Serialize(hex.NewEncoder(&txBuf))
+	var txBuf bytes.Buffer
+	err = msgTx.Serialize(&txBuf)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to serialize transaction: %v", err)
 	}
 
-	// The data to sign will be the transaction hash
-	txHash := msgTx.TxHash()
-	dataToSign := hex.EncodeToString(txHash[:])
+	// Create a new transaction for dataToSign
+	msgTxToSign := wire.NewMsgTx(wire.TxVersion)
+	txIn = wire.NewTxIn(dummyOutpoint, script, nil)
+	msgTxToSign.AddTxIn(txIn)
+	msgTxToSign.AddTxOut(txOut)
 
-	return txBuf.String(), dataToSign, nil
+	// Serialize the transaction to sign
+	var txBufToSign bytes.Buffer
+	err = msgTxToSign.Serialize(&txBufToSign)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to serialize transaction: %v", err)
+	}
+
+	// Hash-256 the transaction to get dataToSign
+	dataToSign := sha256.Sum256(txBufToSign.Bytes())
+
+	return hex.EncodeToString(txBuf.Bytes()), hex.EncodeToString(dataToSign[:]), nil
 }
 
 // WithdrawDogeTxn submits transaction to withdraw assets and returns
 // the txHash as the result
 func WithdrawDogeTxn(
-	rpcURL string,
+	chainId string,
 	transaction string,
 	publicKey string,
 	signatureHex string,
@@ -98,14 +112,18 @@ func WithdrawDogeTxn(
 	}
 
 	// Decode the signature
-	signature, err := hex.DecodeString(signatureHex)
+	derSignatureHex, err := derEncode(signatureHex)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode signature: %v", err)
+		return "", fmt.Errorf("error encoding signature: %v", err)
+	}
+	derSignature, err := hex.DecodeString(derSignatureHex)
+	if err != nil {
+		return "", fmt.Errorf("error decoding signature: %v", err)
 	}
 
 	// Create signature script
 	builder := txscript.NewScriptBuilder()
-	builder.AddData(signature)
+	builder.AddData(derSignature)
 	builder.AddData([]byte(publicKey))
 	signatureScript, err := builder.Script()
 	if err != nil {
@@ -118,20 +136,29 @@ func WithdrawDogeTxn(
 	}
 
 	// Serialize the signed transaction
-	var signedTxBuf strings.Builder
-	err = msgTx.Serialize(hex.NewEncoder(&signedTxBuf))
+	var signedTxBuf bytes.Buffer
+	err = msgTx.Serialize(&signedTxBuf)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize signed transaction: %v", err)
 	}
 
 	// Submit the transaction using RPC
-	client := NewDogeRPCClient(rpcURL)
-	txHash, err := client.SendRawTransaction(signedTxBuf.String())
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	apiKey, err := getTatumApiKey(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	client := NewDogeRPCClient(chain.ChainUrl, apiKey)
+
+	txHash, err := client.SendRawTransaction(hex.EncodeToString(signedTxBuf.Bytes()))
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
 
 	return txHash, nil
 }
-
-// Helper function to validate Dogecoin address using regex

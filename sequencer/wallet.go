@@ -149,11 +149,11 @@ func createWallet(identity string, identityCurve string) error {
 		return err
 	}
 
-	// create the wallet whose keycurve is secp256k1 here
+	// create the wallet whose keycurve is dogecoin_ecdsa here
 	createWalletRequest = CreateWalletRequest{
 		Identity:      identity,
 		IdentityCurve: identityCurve,
-		KeyCurve:      "secp256k1",
+		KeyCurve:      "dogecoin_ecdsa",
 		Signers:       signersPublicKeyList,
 	}
 
@@ -333,8 +333,8 @@ func createWallet(identity string, identityCurve string) error {
 	bitcoinTestnetAddress := getBitcoinAddressesResponse.TestnetAddress
 	bitcoinRegtestAddress := getBitcoinAddressesResponse.RegtestAddress
 
-	// get the address of the wallet whose keycurve is secp256k1 for dogecoin mainnet here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=secp256k1" + "&chainID=2000")
+	// get the address of the wallet whose keycurve is dogecoin_ecdsa here
+	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=dogecoin_ecdsa")
 	if err != nil {
 		return err
 	}

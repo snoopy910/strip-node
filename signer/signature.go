@@ -8,12 +8,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/bitcoin"
-	"github.com/StripChain/strip-node/dogecoin"
 	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/util/logger"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
@@ -168,9 +167,11 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 		go localParty.Start()
 
-	} else if keyCurve == SECP256K1_CURVE {
+	} else if keyCurve == DOGECOIN_CURVE {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
+		// msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
+		msg, _ := new(big.Int).SetString(string(hash), 16)
+		fmt.Println("Message to create dogecoin signature: ", msg)
 		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
@@ -293,34 +294,24 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
 
 				go broadcast(message)
-			} else if keyCurve == SECP256K1_CURVE {
+			} else if keyCurve == DOGECOIN_CURVE {
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y
-
-				// Get chain information from metadata
-				var address string
-				var metadata map[string]interface{}
-				// Get chain information
-				if chainId, ok := metadata["chainId"].(string); ok {
-					// Use Dogecoin address format
-					if strings.HasSuffix(chainId, "1") { // Testnet
-						address, err = dogecoin.PublicKeyToTestnetAddress(publicKeyStr)
-					} else { // Mainnet
-						address, err = dogecoin.PublicKeyToAddress(publicKeyStr)
-					}
-					if err != nil {
-						logger.Sugar().Errorw("failed to generate Dogecoin address", "error", err)
-					}
+				compressedPubKeyStr, err := bitcoin.ConvertToCompressedPublicKey(publicKeyStr)
+				if err != nil {
+					logger.Sugar().Errorw("Error converting to compressed public key:", "error", err)
+					return
 				}
 
-				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
+				final := hex.EncodeToString(save.Signature)
+				logger.Sugar().Infof("Final message: %s", final)
 
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,
 					Hash:          hash,
 					Message:       []byte(final),
-					Address:       address,
+					Address:       compressedPubKeyStr,
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,

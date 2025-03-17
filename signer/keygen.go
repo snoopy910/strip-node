@@ -110,17 +110,17 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 
 	// EdDSA channels (for EdDSA-based curves)
 	saveChanEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
-	saveChanBitcoinEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanAptosEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanSuiEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
-
-	// ECDSA channels (for ECDSA-based curves)
-	saveChanSecp256k1 := make(chan *ecdsaKeygen.LocalPartySaveData)
-	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 	saveChanStellarEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanAlgorandEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanRippleEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
 	saveChanCardanoEddsa := make(chan *eddsaKeygen.LocalPartySaveData)
+
+	// ECDSA channels (for ECDSA-based curves)
+	saveChanBitcoinEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
+	saveChanDogecoinEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
+	saveChanEcdsa := make(chan *ecdsaKeygen.LocalPartySaveData)
 
 	if keyCurve == EDDSA_CURVE {
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
@@ -148,13 +148,13 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanBitcoinEcdsa, *preParams)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
-	} else if keyCurve == SECP256K1_CURVE {
+	} else if keyCurve == DOGECOIN_CURVE {
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		preParams, err := ecdsaKeygen.GeneratePreParams(2 * time.Minute)
 		if err != nil {
 			panic(err)
 		}
-		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanSecp256k1, *preParams)
+		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanDogecoinEcdsa, *preParams)
 		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	} else if keyCurve == APTOS_EDDSA_CURVE {
@@ -334,9 +334,9 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 			if val, ok := keygenGeneratedChan[identity+"_"+identityCurve+"_"+keyCurve]; ok {
 				val <- "generated keygen"
 			}
-
 			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
-		case save := <-saveChanSecp256k1:
+      
+		case save := <-saveChanDogecoinEcdsa:
 			logger.Sugar().Infof("saving key")
 
 			x := toHexInt(save.ECDSAPub.X())

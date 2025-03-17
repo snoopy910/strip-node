@@ -14,13 +14,11 @@ import (
 
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
 	identityVerification "github.com/StripChain/strip-node/identity"
 	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/StripChain/strip-node/util/logger"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stellar/go/strkey"
 
 	"github.com/StripChain/strip-node/bitcoin"
@@ -41,7 +39,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	BITCOIN_CURVE     = "bitcoin_ecdsa"
-	SECP256K1_CURVE   = "secp256k1"
+	DOGECOIN_CURVE    = "dogecoin_ecdsa"
 	SUI_EDDSA_CURVE   = "sui_eddsa"     // Sui uses Ed25519 for native transactions
 	STELLAR_CURVE     = "stellar_eddsa" // Stellar uses Ed25519 with StrKey encoding
 	ALGORAND_CURVE    = "algorand_eddsa"
@@ -169,7 +167,7 @@ func startHTTPServer(port string) {
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}
-		} else if keyCurve == SECP256K1_CURVE {
+		} else if keyCurve == DOGECOIN_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
 			x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
@@ -475,31 +473,8 @@ func startHTTPServer(port string) {
 			}
 		} else if keyCurve == BITCOIN_CURVE {
 			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
-		} else if keyCurve == SECP256K1_CURVE {
-			msgHash := crypto.Keccak256([]byte(msg))
-			// Get chain information from the operation
-			chainId := intent.Operations[operationIndexInt].ChainId
-
-			// For UTXO-based chains (Bitcoin, Dogecoin), include chain information in metadata
-			chain, err := common.GetChain(chainId)
-			if err != nil {
-				logger.Sugar().Errorw("failed to get chain info", "error", err)
-				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
-				return
-			}
-
-			// For UTXO-based chains, include chain information in metadata
-			if chain.ChainType == "dogecoin" {
-				metadata := map[string]interface{}{
-					"chainId": chainId,
-					"msg":     hex.EncodeToString(msgHash),
-				}
-				metadataBytes, _ := json.Marshal(metadata)
-				go generateSignatureMessage(identity, identityCurve, keyCurve, metadataBytes)
-			} else {
-				// For other chains, just pass the hash
-				go generateSignatureMessage(identity, identityCurve, keyCurve, msgHash)
-			}
+		} else if keyCurve == DOGECOIN_CURVE {
+			go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))
 		} else if keyCurve == SUI_EDDSA_CURVE {
 			// For Sui, we need to format the message according to Sui's standards
 			// The message should be prefixed with "Sui Message:" for personal messages
@@ -560,8 +535,10 @@ func startHTTPServer(port string) {
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
 			logger.Sugar().Infof("signatureResponse: %v", signatureResponse)
-		} else if keyCurve == SECP256K1_CURVE {
-			signatureResponse.Signature = hex.EncodeToString(sig.Message)
+		} else if keyCurve == DOGECOIN_CURVE {
+			// signatureResponse.Signature = hex.EncodeToString(sig.Message)
+			signatureResponse.Signature = string(sig.Message)
+
 			signatureResponse.Address = sig.Address
 		} else if keyCurve == SUI_EDDSA_CURVE {
 			// For Sui, we return the signature in base64 format

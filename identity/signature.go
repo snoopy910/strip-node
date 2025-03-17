@@ -29,7 +29,7 @@ var (
 	EDDSA_CURVE       = "eddsa"
 	APTOS_EDDSA_CURVE = "aptos_eddsa"
 	BITCOIN_CURVE     = "bitcoin_ecdsa"
-	SECP256K1_CURVE   = "secp256k1"
+	DOGECOIN_CURVE    = "dogecoin_ecdsa"
 	SUI_EDDSA_CURVE   = "sui_eddsa" // Sui uses Ed25519 for native transactions
 	STELLAR_CURVE     = "stellar_eddsa"
 	ALGORAND_CURVE    = "algorand_eddsa"
@@ -196,21 +196,113 @@ func VerifySignature(
 
 		// Check if this is a Dogecoin message
 		var hash [32]byte
-		if strings.HasPrefix(message, "DOGE:") {
-			// For Dogecoin, we use a special message prefix
-			messageBytes := []byte("Dogecoin Signed Message:\n" + strings.TrimPrefix(message, "DOGE:"))
-			firstHash := sha256.Sum256(messageBytes)
-			hash = sha256.Sum256(firstHash[:]) // Double SHA256 like Bitcoin
-			fmt.Println("[VERIFY SECP256K1] Using Dogecoin message format")
-		} else {
-			// Default Bitcoin double SHA-256
-			firstHash := sha256.Sum256([]byte(message))
-			hash = sha256.Sum256(firstHash[:]) // Second round of SHA-256
-		}
+		// if strings.HasPrefix(message, "DOGE:") {
+		// 	// For Dogecoin, we use a special message prefix
+		// 	messageBytes := []byte("Dogecoin Signed Message:\n" + strings.TrimPrefix(message, "DOGE:"))
+		// 	firstHash := sha256.Sum256(messageBytes)
+		// 	hash = sha256.Sum256(firstHash[:]) // Double SHA256 like Bitcoin
+		// 	fmt.Println("[VERIFY SECP256K1] Using Dogecoin message format")
+		// } else {
+		// 	// Default Bitcoin double SHA-256
+		// 	firstHash := sha256.Sum256([]byte(message))
+		// 	hash = sha256.Sum256(firstHash[:]) // Second round of SHA-256
+		// }
 
+		firstHash := sha256.Sum256([]byte(message))
+		hash = sha256.Sum256(firstHash[:]) // Second round of SHA-256
 		// Verify the signature using ECDSA
 		valid := ecdsa.Verify(pubKey, hash[:], r, s)
 		fmt.Printf("[VERIFY BITCOIN] Signature is %svalid\n", func() string {
+			if valid {
+				return ""
+			}
+			return "in"
+		}())
+		return valid, nil
+	} else if identityCurve == DOGECOIN_CURVE {
+		fmt.Println("[VERIFY DOGECOIN] Verifying dogecoin signature")
+		// Parse the public key
+		pubKeyBytes, err := hex.DecodeString(identity)
+		if err != nil {
+			fmt.Printf("[VERIFY DOGECOIN] Error decoding public key: %v\n", err)
+			return false, fmt.Errorf("failed to decode public key: %v", err)
+		}
+
+		// Uncompressed public keys start with 0x04 and are 65 bytes long
+		if len(pubKeyBytes) != 65 || pubKeyBytes[0] != 0x04 {
+			return false, errors.New("public key must be uncompressed and 65 bytes long")
+		}
+
+		// Extract X and Y coordinates
+		x := new(big.Int).SetBytes(pubKeyBytes[1:33])
+		y := new(big.Int).SetBytes(pubKeyBytes[33:65])
+
+		// Create the ECDSA public key
+		pubKey := &ecdsa.PublicKey{
+			Curve: secp256k1.S256(), // Use the SECP256K1 curve from go-ethereum
+			X:     x,
+			Y:     y,
+		}
+
+		// Parse the signature
+		sigBytes, err := hex.DecodeString(signature)
+		if err != nil {
+			fmt.Printf("[VERIFY DOGECOIN] Error decoding signature: %v\n", err)
+			return false, fmt.Errorf("failed to decode signature: %v", err)
+		}
+
+		var r, s *big.Int
+
+		// Handle different signature formats
+		switch len(sigBytes) {
+		case 64: // Compact format: [R (32 bytes) | S (32 bytes)]
+			r = new(big.Int).SetBytes(sigBytes[:32])
+			s = new(big.Int).SetBytes(sigBytes[32:])
+		case 65: // Compact format with recovery ID: [R (32 bytes) | S (32 bytes) | V (1 byte)]
+			r = new(big.Int).SetBytes(sigBytes[:32])
+			s = new(big.Int).SetBytes(sigBytes[32:64])
+			// v := sigBytes[64] // recovery ID (0-3), not needed for verification
+		default:
+			// Try to parse as DER format
+			if len(sigBytes) < 8 || len(sigBytes) > 72 || sigBytes[0] != 0x30 {
+				return false, errors.New("invalid signature format: must be 64/65 bytes compact or DER format")
+			}
+
+			// Parse DER format
+			// DER format: 0x30 [total-length] 0x02 [r-length] [r] 0x02 [s-length] [s]
+			var offset int = 2 // Skip 0x30 and total-length
+
+			// Extract R value
+			if sigBytes[offset] != 0x02 {
+				return false, errors.New("invalid DER signature format: missing R marker")
+			}
+			offset++
+			rLen := int(sigBytes[offset])
+			offset++
+			r = new(big.Int).SetBytes(sigBytes[offset : offset+rLen])
+			offset += rLen
+
+			// Extract S value
+			if sigBytes[offset] != 0x02 {
+				return false, errors.New("invalid DER signature format: missing S marker")
+			}
+			offset++
+			sLen := int(sigBytes[offset])
+			offset++
+			s = new(big.Int).SetBytes(sigBytes[offset : offset+sLen])
+		}
+
+		// Check if this is a Dogecoin message
+		var hash [32]byte
+		// For Dogecoin, we use a special message prefix
+		messageBytes := []byte("Dogecoin Signed Message:\n" + strings.TrimPrefix(message, "DOGE:"))
+		firstHash := sha256.Sum256(messageBytes)
+		hash = sha256.Sum256(firstHash[:]) // Double SHA256 like Bitcoin
+		fmt.Println("[VERIFY DOGECOIN] Using Dogecoin message format")
+
+		// Verify the signature using ECDSA
+		valid := ecdsa.Verify(pubKey, hash[:], r, s)
+		fmt.Printf("[VERIFY DOGECOIN] Signature is %svalid\n", func() string {
 			if valid {
 				return ""
 			}

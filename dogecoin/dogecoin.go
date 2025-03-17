@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/btcsuite/btcd/txscript"
@@ -77,10 +78,26 @@ type TxOut struct {
 }
 
 // NewDogeRPCClient creates a new Dogecoin RPC client
+const (
+	defaultTimeout = 15 * time.Second
+	maxRetries     = 3
+)
+
 func NewDogeRPCClient(endpoint string, apiKey string) *DogeRPCClient {
+	client := &http.Client{
+		Timeout: defaultTimeout,
+		Transport: &http.Transport{
+			MaxIdleConns:          10,
+			IdleConnTimeout:       defaultTimeout,
+			TLSHandshakeTimeout:   defaultTimeout,
+			ExpectContinueTimeout: defaultTimeout,
+			MaxConnsPerHost:       maxRetries,
+		},
+	}
+
 	return &DogeRPCClient{
 		endpoint: endpoint,
-		client:   &http.Client{},
+		client:   client,
 		apiKey:   apiKey,
 	}
 }

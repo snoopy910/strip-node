@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -304,7 +305,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 				}
 
 				final := hex.EncodeToString(save.Signature)
-				fmt.Println("Final message: ", final)
+				logger.Sugar().Infof("Final message: %s", final)
 
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,

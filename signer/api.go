@@ -19,7 +19,6 @@ import (
 	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/StripChain/strip-node/util/logger"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stellar/go/strkey"
 
 	"github.com/StripChain/strip-node/bitcoin"

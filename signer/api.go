@@ -723,6 +723,7 @@ func startHTTPServer(port string) {
 			}
 
 			if chain.ChainType == "solana" {
+				// TODO: Helius API Key
 				transfers, err = sequencer.GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
 				if err != nil {
 					logger.Sugar().Errorw("error getting solana transfers", "error", err)

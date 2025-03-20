@@ -123,6 +123,17 @@ type TotalStats struct {
 	TotalIntents uint `json:"totalIntents"`
 }
 
+type MPCKey struct {
+	Title     string `json:"title"`
+	Network   string `json:"network"`
+	PublicKey string `json:"publicKey"`
+}
+
+type WalletResponse struct {
+	WalletSchema
+	MPCKeys []MPCKey `json:"mpcKeys"`
+}
+
 func enableCors(w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -232,7 +243,45 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		if err := json.NewEncoder(w).Encode(wallet); err != nil {
+		// Create response with extended fields
+		response := WalletResponse{
+			WalletSchema: *wallet,
+			MPCKeys:      []MPCKey{}, // Initialize with empty array
+		}
+
+		// Helper function to add keys to MPCKeys array
+		addKey := func(title, network, publicKey string) {
+			if publicKey != "" {
+				response.MPCKeys = append(response.MPCKeys, MPCKey{
+					Title:     title,
+					Network:   network,
+					PublicKey: publicKey,
+				})
+			}
+		}
+
+		// Add Bitcoin keys
+		addKey("Bitcoin", "mainnet", wallet.BitcoinMainnetPublicKey)
+		addKey("Bitcoin", "testnet", wallet.BitcoinTestnetPublicKey)
+		addKey("Bitcoin Regtest", "testnet", wallet.BitcoinRegtestPublicKey)
+
+		// Add Dogecoin keys
+		addKey("Dogecoin", "mainnet", wallet.DogecoinMainnetPublicKey)
+		addKey("Dogecoin", "testnet", wallet.DogecoinTestnetPublicKey)
+
+		// Add other blockchain keys (all default to testnet)
+		addKey("Stellar", "testnet", wallet.StellarPublicKey)
+		addKey("Ripple", "testnet", wallet.RippleEDDSAPublicKey)
+		addKey("Sui", "testnet", wallet.SuiPublicKey)
+		addKey("Algorand", "testnet", wallet.AlgorandEDDSAPublicKey)
+		addKey("Cardano", "testnet", wallet.CardanoPublicKey)
+		addKey("Aptos", "testnet", wallet.AptosEDDSAPublicKey)
+
+		// Add general cryptographic keys
+		addKey("EDDSA", "testnet", wallet.EDDSAPublicKey)
+		addKey("ECDSA", "testnet", wallet.ECDSAPublicKey)
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
 			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}

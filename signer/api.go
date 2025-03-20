@@ -87,6 +87,11 @@ type SignMessage struct {
 }
 
 func startHTTPServer(port string) {
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
 	http.HandleFunc("/keygen", func(w http.ResponseWriter, r *http.Request) {
 		var createWallet CreateWallet
 

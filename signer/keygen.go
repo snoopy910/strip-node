@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/StripChain/strip-node/bitcoin"
@@ -305,10 +306,17 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 		case save := <-saveChanBitcoinEcdsa:
 			logger.Sugar().Infof("saving key")
 
-			x := toHexInt(save.ECDSAPub.X())
-			y := toHexInt(save.ECDSAPub.Y())
-			publicKeyStr := "04" + x + y
-			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+			xStr := fmt.Sprintf("%064x", save.ECDSAPub.X())
+			prefix := "02"
+			if save.ECDSAPub.Y().Bit(0) == 1 {
+				prefix = "03"
+			}
+			publicKeyStr := prefix + xStr
+			publicKeyBytes, err := hex.DecodeString(publicKeyStr)
+			if err != nil {
+				logger.Sugar().Errorw("error decoding public key", "error", err)
+				return
+			}
 			bitcoinAddressStr, _, _ := bitcoin.PublicKeyToBitcoinAddresses(publicKeyBytes)
 
 			logger.Sugar().Infof("new TSS Address (BTC) is: %s", bitcoinAddressStr)
@@ -335,7 +343,7 @@ func generateKeygen(identity string, identityCurve string, keyCurve string, sign
 				val <- "generated keygen"
 			}
 			logger.Sugar().Infof("completed saving of new keygen %s", publicKeyStr)
-      
+
 		case save := <-saveChanDogecoinEcdsa:
 			logger.Sugar().Infof("saving key")
 

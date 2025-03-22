@@ -268,9 +268,12 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 				go broadcast(message)
 			} else if keyCurve == BITCOIN_CURVE {
-				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
-				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
-				uncompressedPubKeyStr := "04" + x + y
+				xStr := fmt.Sprintf("%064x", rawKeyEcdsa.ECDSAPub.X())
+				prefix := "02"
+				if rawKeyEcdsa.ECDSAPub.Y().Bit(0) == 1 {
+					prefix = "03"
+				}
+				uncompressedPubKeyStr := prefix + xStr
 				logger.Sugar().Infof("Uncompressed public key: %s", uncompressedPubKeyStr)
 				compressedPubKeyStr, err := bitcoin.ConvertToCompressedPublicKey(uncompressedPubKeyStr)
 				if err != nil {

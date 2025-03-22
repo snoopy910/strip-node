@@ -90,16 +90,20 @@ var Chains = []Chain{
 	{
 		ChainId:     "1000",
 		ChainType:   "bitcoin",
-		ChainUrl:    "https://api.blockcypher.com/v1/btc/main",
+		ChainUrl:    "http://172.17.0.1:8332", // Local Bitcoin Core RPC, calling from docker process
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
+		RpcUsername: "your_rpc_user",
+		RpcPassword: "your_rpc_password",
 	},
 	{
 		ChainId:     "1001",
 		ChainType:   "bitcoin",
-		ChainUrl:    "https://api.blockcypher.com/v1/btc/test3",
+		ChainUrl:    "http://172.17.0.1:18332", // Local Bitcoin Core RPC, calling from docker process
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
+		RpcUsername: "your_rpc_user",
+		RpcPassword: "your_rpc_password",
 	},
 	{
 		ChainId:     "1002",

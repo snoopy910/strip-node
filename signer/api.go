@@ -151,11 +151,17 @@ func startHTTPServer(port string) {
 		} else if keyCurve == BITCOIN_CURVE {
 			json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
 
-			x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
-			y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
-
-			publicKeyStr := "04" + x + y
-			publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+			xStr := fmt.Sprintf("%064x", rawKeyEcdsa.ECDSAPub.X())
+			prefix := "02"
+			if rawKeyEcdsa.ECDSAPub.Y().Bit(0) == 1 {
+				prefix = "03"
+			}
+			publicKeyStr := prefix + xStr
+			publicKeyBytes, err := hex.DecodeString(publicKeyStr)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error decoding public key, %v", err), http.StatusBadRequest)
+				return
+			}
 			mainnetAddress, testnetAddress, regtestAddress := bitcoin.PublicKeyToBitcoinAddresses(publicKeyBytes)
 
 			getBitcoinAddressesResponse := GetBitcoinAddressesResponse{
@@ -163,7 +169,7 @@ func startHTTPServer(port string) {
 				TestnetAddress: testnetAddress,
 				RegtestAddress: regtestAddress,
 			}
-			err := json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
+			err = json.NewEncoder(w).Encode(getBitcoinAddressesResponse)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			}

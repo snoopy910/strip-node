@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -27,7 +27,7 @@ type BitcoinNetworkConfig struct {
 	NetworkType   string
 	AddressPrefix []string
 	RPCPort       int
-	Params        *chaincfg.Params
+	Params        chaincfg.Params
 }
 
 var (
@@ -36,7 +36,7 @@ var (
 		NetworkType:   "mainnet",
 		AddressPrefix: []string{"1", "3", "bc1"},
 		RPCPort:       8332,
-		Params:        &chaincfg.MainNetParams,
+		Params:        chaincfg.MainNetParams,
 	}
 
 	TestnetConfig = BitcoinNetworkConfig{
@@ -44,7 +44,7 @@ var (
 		NetworkType:   "testnet3",
 		AddressPrefix: []string{"m", "n", "tb1"},
 		RPCPort:       18332,
-		Params:        &chaincfg.TestNet3Params,
+		Params:        chaincfg.TestNet3Params,
 	}
 
 	RegtestConfig = BitcoinNetworkConfig{
@@ -52,7 +52,7 @@ var (
 		NetworkType:   "regtest",
 		AddressPrefix: []string{"m", "n", "bcrt1"},
 		RPCPort:       18443,
-		Params:        &chaincfg.RegressionNetParams,
+		Params:        chaincfg.RegressionNetParams,
 	}
 )
 
@@ -63,28 +63,42 @@ const (
 	BTC_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" // Representing a zero address for Bitcoin (not used)
 )
 
-// BlockCypherTransaction represents the transaction data structure returned by BlockCypher
-type BlockCypherTransaction struct {
-	Hash          string              `json:"hash"`          // Transaction hash
-	Inputs        []BlockCypherInput  `json:"inputs"`        // List of inputs in the transaction
-	Outputs       []BlockCypherOutput `json:"outputs"`       // List of outputs in the transaction
-	Fees          int64               `json:"fees"`          // Transaction fees in satoshis
-	Confirmations int                 `json:"confirmations"` // Number of confirmations
+// RPCResponse mimics Bitcoin Core's JSON-RPC response
+type RPCResponse struct {
+	Result json.RawMessage `json:"result"`
+	Error  *struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+	ID int `json:"id"`
 }
 
-// BlockCypherInput represents the input of a transaction
-type BlockCypherInput struct {
-	Addresses   []string `json:"addresses"`    // List of addresses involved in the input
-	Value       int64    `json:"value"`        // Value of the input in satoshis
-	OutputValue int64    `json:"output_value"` // Alternative field for output value
+// TxDetails mimics getrawtransaction verbose output
+type TxDetails struct {
+	TxID          string `json:"txid"`
+	Vin           []Vin  `json:"vin"`
+	Vout          []Vout `json:"vout"`
+	BlockHash     string `json:"blockhash,omitempty"`
+	Confirmations int64  `json:"confirmations"`
+}
+type Vin struct {
+	TxID      string `json:"txid"`
+	Vout      uint32 `json:"vout"`
+	ScriptSig struct {
+		Asm string `json:"asm"`
+		Hex string `json:"hex"`
+	} `json:"scriptSig"`
+	Witness []string `json:"txinwitness,omitempty"`
 }
 
-// BlockCypherOutput represents the output of a transaction
-type BlockCypherOutput struct {
-	Addresses   []string `json:"addresses"`    // List of addresses involved in the output
-	Value       int64    `json:"value"`        // Value of the output in satoshis
-	OutputValue int64    `json:"output_value"` // Alternative field for output value
-	Script      string   `json:"script"`       // Output script
+type Vout struct {
+	Value        float64 `json:"value"` // BTC
+	N            uint32  `json:"n"`
+	ScriptPubKey struct {
+		Asm     string `json:"asm"`
+		Hex     string `json:"hex"`
+		Address string `json:"address"`
+	} `json:"scriptPubKey"`
 }
 
 // GetChainFunc is a function type for getting chain information
@@ -103,43 +117,22 @@ type FeeDetails struct {
 	TotalOutputs int64  `json:"totalOutputs"` // Total output value in satoshis
 }
 
-func HashToSign(serializedTxn string) (string, error) {
-	msgTx, err := parseSerializedTransaction(serializedTxn)
-	if err != nil {
-		return "", fmt.Errorf("error parsing transaction: %v", err)
-	}
-
-	// Set the SIGHASH type (we'll use SIGHASH_ALL here as an example)
-	sighashType := txscript.SigHashAll
-
-	// Generate the dataToSign using txscript
-	dataToSign, err := txscript.CalcSignatureHash(msgTx.TxIn[0].SignatureScript, sighashType, msgTx, 0)
-	if err != nil {
-		log.Fatal("Error creating signature hash: ", err)
-	}
-	dataToSign2 := msgTx.TxHash().String()
-	logger.Sugar().Infof("dataToSign: %s", dataToSign2)
-
-	// Convert the dataToSign (SIGHASH) to hex for further use in the signing process
-	dataToSignHex := hex.EncodeToString(dataToSign)
-	return dataToSignHex, nil
-}
-
 func PublicKeyToBitcoinAddresses(pubkey []byte) (string, string, string) {
 	logger.Sugar().Infof("Bitcoin pubkey: %x", pubkey) // NOTE: don't remove this log
-	mainnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.MainNetParams)
+	pubKeyHash := btcutil.Hash160(pubkey)
+	mainnetPubkey, err := btcutil.NewAddressPubKeyHash(pubKeyHash, &MainnetConfig.Params)
 	if err != nil {
 		return "", "", ""
 	}
 	logger.Sugar().Infof("Bitcoin mainnet address: %s", mainnetPubkey)
 
-	testnetPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.TestNet3Params)
+	testnetPubkey, err := btcutil.NewAddressPubKeyHash(pubKeyHash, &TestnetConfig.Params)
 	if err != nil {
 		return mainnetPubkey.EncodeAddress(), "", ""
 	}
 	logger.Sugar().Infof("Bitcoin testnet address: %s", testnetPubkey)
 
-	regtestPubkey, err := btcutil.NewAddressPubKey(pubkey, &chaincfg.RegressionNetParams)
+	regtestPubkey, err := btcutil.NewAddressPubKeyHash(pubKeyHash, &RegtestConfig.Params)
 	if err != nil {
 		return mainnetPubkey.EncodeAddress(), testnetPubkey.EncodeAddress(), ""
 	}
@@ -192,29 +185,57 @@ func VerifyECDSASignature(messageHashHex, signatureHex, pubKeyHex string) bool {
 	return signature.Verify(messageHash, pubKey)
 }
 
-// fetchTransaction fetches transaction details from BlockCypher
-// This function retrieves a Bitcoin transaction by its hash
-func fetchTransaction(chainUrl string, txHash string) (*BlockCypherTransaction, error) {
-	// Construct the URL for the API request using the chain URL and transaction hash
-	url := fmt.Sprintf("%s/txs/%s", chainUrl, txHash)
+func fetchTransaction(chain common.Chain, txHash string) (*TxDetails, error) {
+	// Prepare JSON-RPC request for getrawtransaction
+	rpcRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "getrawtransaction",
+		"params":  []interface{}{txHash, 1}, // 1 for verbose output
+	}
 
-	// Send GET request to BlockCypher API
+	jsonData, err := json.Marshal(rpcRequest)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling RPC request: %v", err)
+	}
+
+	// Send POST request to chain.ChainUrl
+	req, err := http.NewRequest("POST", chain.ChainUrl, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("error creating HTTP request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if chain.RpcUsername != "" && chain.RpcPassword != "" {
+		req.SetBasicAuth(chain.RpcUsername, chain.RpcPassword)
+	}
+
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transaction: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Check if the response status is OK (200)
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %v", err)
 	}
 
-	// Decode the JSON response into a BlockCypherTransaction struct
-	var tx BlockCypherTransaction
-	if err := json.NewDecoder(resp.Body).Decode(&tx); err != nil {
-		return nil, fmt.Errorf("failed to decode transaction response: %v", err)
+	// Parse RPC response
+	var rpcResp RPCResponse
+	if err := json.Unmarshal(body, &rpcResp); err != nil {
+		return nil, fmt.Errorf("error parsing RPC response: %v", err)
+	}
+
+	if rpcResp.Error != nil {
+		return nil, fmt.Errorf("RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
+	}
+
+	// Decode transaction details
+	var tx TxDetails
+	if err := json.Unmarshal(rpcResp.Result, &tx); err != nil {
+		return nil, fmt.Errorf("failed to decode transaction: %v", err)
 	}
 
 	return &tx, nil
@@ -222,24 +243,21 @@ func fetchTransaction(chainUrl string, txHash string) (*BlockCypherTransaction, 
 
 // fetchUTXOValue fetches the value of a UTXO using BlockCypher API
 // This function retrieves the value of an unspent transaction output (UTXO)
-func fetchUTXOValue(chainUrl string, txHash string) (int64, error) {
+func fetchUTXOValue(chain common.Chain, txHash string) (int64, error) {
 	// Fetch the full transaction details
-	tx, err := fetchTransaction(chainUrl, txHash)
+	tx, err := fetchTransaction(chain, txHash)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch transaction: %v", err)
 	}
 
 	// For UTXOs, we're interested in the first output value
 	// In most Bitcoin transactions, the first output is the actual transfer amount
-	if len(tx.Outputs) == 0 {
+	if len(tx.Vout) == 0 {
 		return 0, fmt.Errorf("transaction has no outputs")
 	}
 
 	// Use OutputValue if Value is not available
-	outputValue := tx.Outputs[0].Value
-	if outputValue == 0 {
-		outputValue = tx.Outputs[0].OutputValue
-	}
+	outputValue := int64(tx.Vout[0].Value * 1e8)
 
 	return outputValue, nil
 }
@@ -373,6 +391,10 @@ func derEncode(signature string) (string, error) {
 	sigBytes, err := hex.DecodeString(signature)
 	if err != nil {
 		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+
+	if len(sigBytes) >= 70 && len(sigBytes) <= 72 {
+		return signature, nil
 	}
 
 	if len(sigBytes) != 64 {

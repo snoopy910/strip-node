@@ -109,17 +109,17 @@ func getTatumApiKey(chainID string) (string, error) {
 func GetChainParams(chainId string) (*chaincfg.Params, error) {
 	switch chainId {
 	case "2000":
-		chainParams := &chaincfg.MainNetParams
+		chainParams := chaincfg.MainNetParams
 		chainParams.PubKeyHashAddrID = 0x1e
 		chainParams.ScriptHashAddrID = 0x16
 		chainParams.PrivateKeyID = 0x9e
-		return chainParams, nil
+		return &chainParams, nil
 	case "2001":
-		chainParams := &chaincfg.TestNet3Params
+		chainParams := chaincfg.TestNet3Params
 		chainParams.PubKeyHashAddrID = 0x71
 		chainParams.ScriptHashAddrID = 0xc4
 		chainParams.PrivateKeyID = 0xf1
-		return chainParams, nil
+		return &chainParams, nil
 	default:
 		return nil, fmt.Errorf("unsupported chain ID: %s", chainId)
 	}

@@ -1,2 +1,5 @@
 strip-node
 .DS_Store
+data_bitcoin_regtest/
+mining-wallet.txt
+regtest-wallet.txt

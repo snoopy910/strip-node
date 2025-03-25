@@ -108,11 +108,11 @@ var Chains = []Chain{
 	{
 		ChainId:     "1002",
 		ChainType:   "bitcoin",
-		ChainUrl:    "http://172.17.0.1:18443", // Local Bitcoin Core RPC, calling from docker process
+		ChainUrl:    "http://bitcoind:8332", // Local Bitcoin Core RPC, calling from docker process
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "BTC",
-		RpcUsername: "your_rpc_user",
-		RpcPassword: "your_rpc_password",
+		RpcUsername: "bitcoin",
+		RpcPassword: "bitcoin",
 	},
 	{
 		ChainId:     "3001",

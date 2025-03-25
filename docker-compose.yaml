@@ -5,6 +5,8 @@ services:
     ports:
       - "8545:8545"
     entrypoint: "anvil --chain-id 1337 --host 0.0.0.0 --port 8545 --mnemonic 'rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain'"
+    volumes:
+      - ganache-data:/root/.anvil
     healthcheck:
       test:
         [
@@ -62,6 +64,8 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
+    volumes:
+      - signer1postgres-data:/var/lib/postgresql/data
 
   signer2postgres:
     image: postgres:14.13
@@ -70,6 +74,8 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5433:5432"
+    volumes:
+      - signer2postgres-data:/var/lib/postgresql/data
 
   signer1:
     build:
@@ -148,6 +154,8 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5434:5432"
+    volumes:
+      - sequencerpostgres-data:/var/lib/postgresql/data
 
   sequencer:
     build:
@@ -189,3 +197,51 @@ services:
     ports:
       - "8083:8083"
     command: ["--httpPort", "8083", "--isTestSolver", "true"]
+
+  # Bitcoin Core service
+  bitcoind:
+    image: blockstream/bitcoind:latest
+    container_name: bitcoind
+    restart: unless-stopped
+    ports:
+      - "8332:8332" # RPC port
+      - "8333:8333" # P2P port
+      - "28332:28332" # ZMQ rawblock
+      - "28333:28333" # ZMQ rawtx
+    volumes:
+      - bitcoin-data:/data
+      - ./bitcoin.conf:/data/bitcoin.conf
+    command: bitcoind -conf=/data/bitcoin.conf
+
+  # Electrs (Electrum Rust Server)
+  electrs:
+    image: mempool/electrs:latest
+    container_name: electrs
+    restart: unless-stopped
+    depends_on:
+      - bitcoind
+    ports:
+      - "50001:50001" # Default Electrum server port
+    volumes:
+      - electrs-data:/home/electrs/db
+    command:
+      - --network=regtest
+      - --daemon-rpc-addr=bitcoind:8332
+      - --db-dir=/home/electrs/db
+      - --http-addr=0.0.0.0:50001
+      - --cookie=bitcoin:bitcoin
+      - --jsonrpc-import
+      - --timestamp
+      - --cors=*
+      - --electrum-txs-limit=1000
+      - --address-search
+    environment:
+      - RUST_BACKTRACE=1
+
+volumes:
+  bitcoin-data:
+  electrs-data:
+  signer1postgres-data:
+  signer2postgres-data:
+  sequencerpostgres-data:
+  ganache-data:

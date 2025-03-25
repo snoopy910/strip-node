@@ -180,3 +180,103 @@ For development and testing purposes, you can use the included script to run a c
 ```
 
 This script handles starting all the required services using the pre-built Docker images.
+
+## Bitcoin Support
+
+StripChain includes a full Bitcoin development environment for testing and integration. The setup features:
+
+- Bitcoin Core (bitcoind) running in regtest mode
+- Electrs (Electrum Rust Server) for REST API access
+- Utility scripts for common Bitcoin operations
+
+### Quick Bitcoin Guide
+
+1. **Start Bitcoin Services**:
+   ```sh
+   docker-compose up -d bitcoind electrs
+   ```
+
+2. **Fund the Test Wallet**:
+   ```sh
+   cd bitcoin-scripts
+   ./fund-test-wallet.sh
+   ```
+
+3. **Check Address Balance**:
+   ```sh
+   ./check-address-balance.sh <bitcoin_address>
+   ```
+
+4. **Send Test Bitcoins**:
+   ```sh
+   ./send-bitcoins.sh <address> <amount>
+   ```
+
+5. **Generate Blocks**:
+   ```sh
+   ./generate-blocks.sh <number_of_blocks>
+   ```
+
+For complete documentation of the Bitcoin environment and available utilities, see the [Bitcoin README](BITCOIN-README.md).
+
+## Docker Volumes
+
+StripChain uses Docker volumes to persist data across container restarts. The following volumes are created:
+
+1. **postgres-data-X**: Volumes for each PostgreSQL database (sequencer and signers)
+2. **bitcoin-data**: Contains the Bitcoin blockchain data, wallet information, and configurations
+3. **electrs-data**: Stores the Electrs database and index information
+
+These volumes ensure that your data is preserved even when containers are stopped or restarted. You can view all volumes with:
+
+```sh
+docker volume ls | grep strip-node
+```
+
+## Resetting the System
+
+There are several approaches to reset the system depending on your needs:
+
+### Soft Reset (Preserve Data)
+
+To restart all services while preserving data in volumes:
+
+```sh
+docker-compose down
+docker-compose up -d
+```
+
+### Reset Database Only
+
+To reset just the PostgreSQL databases while preserving other data:
+
+```sh
+docker-compose down
+docker volume rm strip-node_postgres-data-sequencer strip-node_postgres-data-signer1 strip-node_postgres-data-signer2
+docker-compose up -d
+```
+
+### Reset Bitcoin Data Only
+
+To reset just the Bitcoin blockchain data (useful during testing):
+
+```sh
+docker-compose down bitcoind electrs
+docker volume rm strip-node_bitcoin-data strip-node_electrs-data
+docker-compose up -d bitcoind electrs
+# Refund the wallet after reset
+cd bitcoin-scripts
+./fund-test-wallet.sh
+```
+
+### Full Reset
+
+To completely reset the system and all data:
+
+```sh
+docker-compose down
+docker volume rm $(docker volume ls -q | grep strip-node)
+docker-compose up -d
+```
+
+This will remove all data and start with a clean system. You'll need to re-initialize wallets and other state after a full reset.

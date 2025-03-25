@@ -1,7 +1,9 @@
 package lending_solver
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,16 +13,15 @@ import (
 )
 
 const (
-	testRPCURL      = "http://localhost:8545"
-	testChainID     = 1337
-	testLendingPool = "0x1234567890123456789012345678901234567890"
-	testStripUSD    = "0x0987654321098765432109876543210987654321"
+	testRPCURL      = "" // RPC URL
+	testChainID     = 44331
+	testLendingPool = "0xbFd03337714313d0c77d2ae613c8997a07e11c99"
 	testToken       = "0xabcdef0123456789abcdef0123456789abcdef01"
 	testAmount      = "1000000000000000000" // 1 token in wei
 )
 
 func setupTestSolver(t *testing.T) *LendingSolver {
-	solver, err := NewLendingSolver(testRPCURL, testChainID, testLendingPool, testStripUSD)
+	solver, err := NewLendingSolver(testRPCURL, testChainID, testLendingPool)
 	require.NoError(t, err)
 	require.NotNil(t, solver)
 	return solver
@@ -90,7 +91,11 @@ func TestConstruct(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, hash)
-			assert.True(t, common.IsHexAddress(hash[2:]))
+			// Transaction hash should be 0x + 64 hex characters (32 bytes)
+			assert.True(t, strings.HasPrefix(hash, "0x"))
+			assert.Len(t, hash[2:], 64)
+			_, err = hex.DecodeString(hash[2:])
+			assert.NoError(t, err)
 		})
 	}
 }
@@ -104,6 +109,7 @@ func TestSolve(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, hash)
 
+	// NOTE: You need to put signature manually to pass the test
 	// Create a mock signature (65 bytes)
 	mockSig := make([]byte, 65)
 	mockSig[64] = 27 // v value

@@ -10,8 +10,8 @@ type Server struct {
 	solver *LendingSolver
 }
 
-func NewServer(rpcURL string, chainId int64, lendingPool, stripUSD string) (*Server, error) {
-	solver, err := NewLendingSolver(rpcURL, chainId, lendingPool, stripUSD)
+func NewServer(rpcURL string, chainId int64, lendingPool string) (*Server, error) {
+	solver, err := NewLendingSolver(rpcURL, chainId, lendingPool)
 	if err != nil {
 		return nil, err
 	}

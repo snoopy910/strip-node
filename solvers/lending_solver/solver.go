@@ -73,13 +73,12 @@ type LendingSolver struct {
 	client      *ethclient.Client
 	chainId     *big.Int
 	lendingPool common.Address
-	stripUSD    common.Address
 	abi         abi.ABI
 	txStatus    sync.Map // map[string]*TransactionStatus
 }
 
 // NewLendingSolver creates a new instance of LendingSolver
-func NewLendingSolver(rpcURL string, chainId int64, lendingPool, stripUSD string) (*LendingSolver, error) {
+func NewLendingSolver(rpcURL string, chainId int64, lendingPool string) (*LendingSolver, error) {
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Ethereum client: %v", err)
@@ -94,7 +93,6 @@ func NewLendingSolver(rpcURL string, chainId int64, lendingPool, stripUSD string
 		client:      client,
 		chainId:     big.NewInt(chainId),
 		lendingPool: common.HexToAddress(lendingPool),
-		stripUSD:    common.HexToAddress(stripUSD),
 		abi:         contractAbi,
 	}, nil
 }

@@ -1,0 +1,407 @@
+package lending_solver
+
+import (
+	"context"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+)
+
+// Contract ABI strings
+const (
+	LendingPoolABI = `[
+		{
+			"inputs": [
+				{"name": "token", "type": "address"},
+				{"name": "amount", "type": "uint256"}
+			],
+			"name": "supply",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{"name": "amount", "type": "uint256"}
+			],
+			"name": "borrowStripUSD",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{"name": "amount", "type": "uint256"}
+			],
+			"name": "repayStripUSD",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		},
+		{
+			"inputs": [
+				{"name": "token", "type": "address"},
+				{"name": "amount", "type": "uint256"}
+			],
+			"name": "withdrawCollateral",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		}
+	]`
+)
+
+// TransactionStatus represents the status of a transaction
+type TransactionStatus struct {
+	TxHash  string
+	Status  string // pending, success, failure
+	Receipt *types.Receipt
+	Error   error
+}
+
+// LendingSolver handles interactions with the LendingPool contract
+type LendingSolver struct {
+	client      *ethclient.Client
+	chainId     *big.Int
+	lendingPool common.Address
+	abi         abi.ABI
+	txStatus    sync.Map // map[string]*TransactionStatus
+}
+
+// NewLendingSolver creates a new instance of LendingSolver
+func NewLendingSolver(rpcURL string, chainId int64, lendingPool string) (*LendingSolver, error) {
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to Ethereum client: %v", err)
+	}
+
+	contractAbi, err := abi.JSON(strings.NewReader(LendingPoolABI))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse contract ABI: %v", err)
+	}
+
+	return &LendingSolver{
+		client:      client,
+		chainId:     big.NewInt(chainId),
+		lendingPool: common.HexToAddress(lendingPool),
+		abi:         contractAbi,
+	}, nil
+}
+
+// Solve executes the lending operation with a signed transaction
+func (s *LendingSolver) Solve(intent Intent, opIndex int, signature string) (string, error) {
+	if opIndex >= len(intent.Operations) {
+		return "", fmt.Errorf("operation index out of bounds")
+	}
+
+	op := intent.Operations[opIndex]
+	var metadata LendingMetadata
+	if err := json.Unmarshal(op.SolverMetadata, &metadata); err != nil {
+		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
+	}
+
+	// Get the function call data based on operation type
+	var data string
+	var err error
+	switch metadata.Action {
+	case "supply":
+		data, err = s.constructSupply(metadata)
+	case "borrow":
+		data, err = s.constructBorrow(metadata)
+	case "repay":
+		data, err = s.constructRepay(metadata)
+	case "withdraw":
+		data, err = s.constructWithdraw(metadata)
+	default:
+		return "", fmt.Errorf("unknown action: %s", metadata.Action)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	// Get current nonce
+	nonce, err := s.client.PendingNonceAt(context.Background(), common.Address{}) // will be replaced with actual sender
+	if err != nil {
+		return "", fmt.Errorf("failed to get nonce: %v", err)
+	}
+
+	// Get gas price
+	gasPrice, err := s.client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get gas price: %v", err)
+	}
+
+	// Create transaction with the same parameters used in Construct
+	decodedData, err := hex.DecodeString(strings.TrimPrefix(data, "0x"))
+	if err != nil {
+		return "", fmt.Errorf("failed to decode data: %v", err)
+	}
+
+	tx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   s.chainId,
+		Nonce:     nonce,
+		GasTipCap: gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
+		Gas:       300000,
+		To:        &s.lendingPool,
+		Value:     big.NewInt(0),
+		Data:      decodedData,
+	})
+
+	// Decode signature
+	sig, err := hex.DecodeString(strings.TrimPrefix(signature, "0x"))
+	if err != nil {
+		return "", fmt.Errorf("invalid signature: %v", err)
+	}
+	if len(sig) != 65 {
+		return "", fmt.Errorf("invalid signature length: got %d, want 65", len(sig))
+	}
+
+	// Create signed transaction
+	signer := types.NewLondonSigner(s.chainId)
+	signedTx, err := tx.WithSignature(signer, sig)
+	if err != nil {
+		return "", fmt.Errorf("failed to add signature: %v", err)
+	}
+
+	// Send the transaction
+	err = s.client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+
+	// Store the transaction status
+	s.txStatus.Store(signedTx.Hash().Hex(), &TransactionStatus{
+		TxHash: signedTx.Hash().Hex(),
+		Status: "pending",
+	})
+
+	return signedTx.Hash().Hex(), nil
+}
+
+// Status checks the status of a lending operation
+func (s *LendingSolver) Status(intent Intent, opIndex int) (string, error) {
+	if opIndex >= len(intent.Operations) {
+		return "", fmt.Errorf("operation index out of bounds")
+	}
+
+	op := intent.Operations[opIndex]
+	if op.Result == "" {
+		return "pending", nil
+	}
+
+	// Get transaction status from memory
+	statusIface, exists := s.txStatus.Load(op.Result)
+	if !exists {
+		return "pending", nil
+	}
+
+	status := statusIface.(*TransactionStatus)
+	if status.Error != nil {
+		return "failure", status.Error
+	}
+
+	// If we haven't checked the receipt yet
+	if status.Receipt == nil {
+		receipt, err := s.client.TransactionReceipt(context.Background(), common.HexToHash(status.TxHash))
+		if err != nil {
+			if err == ethereum.NotFound {
+				return "pending", nil
+			}
+			status.Error = err
+			return "failure", err
+		}
+
+		status.Receipt = receipt
+		if receipt.Status == 1 {
+			status.Status = "success"
+		} else {
+			status.Status = "failure"
+			status.Error = fmt.Errorf("transaction reverted")
+		}
+	}
+
+	return status.Status, status.Error
+}
+
+// GetOutput retrieves the result of a lending operation
+func (s *LendingSolver) GetOutput(intent Intent, opIndex int) (string, error) {
+	if opIndex >= len(intent.Operations) {
+		return "", fmt.Errorf("operation index out of bounds")
+	}
+
+	op := intent.Operations[opIndex]
+	statusIface, exists := s.txStatus.Load(op.Result)
+	if !exists {
+		return "", fmt.Errorf("transaction not found")
+	}
+
+	status := statusIface.(*TransactionStatus)
+	if status.Error != nil {
+		return "", status.Error
+	}
+
+	// Get operation metadata
+	var metadata LendingMetadata
+	if err := json.Unmarshal(op.SolverMetadata, &metadata); err != nil {
+		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
+	}
+
+	// Create output based on operation type
+	output := LendingOutput{
+		TxHash: status.TxHash,
+	}
+
+	// Add operation-specific data
+	switch metadata.Action {
+	case "supply":
+		output.Amount = metadata.Amount
+	case "borrow":
+		output.Amount = metadata.Amount
+		output.BorrowedUSD = metadata.Amount
+	case "repay":
+		output.Amount = metadata.Amount
+	case "withdraw":
+		output.Amount = metadata.Amount
+	}
+	outputBytes, err := json.Marshal(output)
+	if err != nil {
+		return "", err
+	}
+
+	return string(outputBytes), nil
+}
+
+// Construct builds the transaction data for a lending operation
+func (s *LendingSolver) Construct(intent Intent, opIndex int) (string, error) {
+	if opIndex >= len(intent.Operations) {
+		return "", fmt.Errorf("operation index out of bounds")
+	}
+
+	op := intent.Operations[opIndex]
+	var metadata LendingMetadata
+	if err := json.Unmarshal(op.SolverMetadata, &metadata); err != nil {
+		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
+	}
+
+	// Get the function call data based on operation type
+	var data string
+	var err error
+	switch metadata.Action {
+	case "supply":
+		data, err = s.constructSupply(metadata)
+	case "borrow":
+		data, err = s.constructBorrow(metadata)
+	case "repay":
+		data, err = s.constructRepay(metadata)
+	case "withdraw":
+		data, err = s.constructWithdraw(metadata)
+	default:
+		return "", fmt.Errorf("unknown action: %s", metadata.Action)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	// Get current nonce
+	nonce, err := s.client.PendingNonceAt(context.Background(), common.Address{}) // will be replaced with actual sender
+	if err != nil {
+		return "", fmt.Errorf("failed to get nonce: %v", err)
+	}
+
+	// Get gas price
+	gasPrice, err := s.client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get gas price: %v", err)
+	}
+
+	// Create unsigned transaction
+	decodedData, err := hex.DecodeString(strings.TrimPrefix(data, "0x"))
+	if err != nil {
+		return "", fmt.Errorf("failed to decode data: %v", err)
+	}
+
+	tx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   s.chainId,
+		Nonce:     nonce,
+		GasTipCap: gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)), // Set fee cap to 2x the tip
+		Gas:       300000,                                    // Fixed gas limit, could be estimated
+		To:        &s.lendingPool,
+		Value:     big.NewInt(0),
+		Data:      decodedData,
+	})
+
+	// Get the hash to be signed
+	signer := types.NewLondonSigner(s.chainId)
+	hash := signer.Hash(tx)
+
+	return "0x" + hex.EncodeToString(hash.Bytes()), nil
+}
+
+// constructSupply builds transaction data for supplying assets
+func (s *LendingSolver) constructSupply(metadata LendingMetadata) (string, error) {
+	amount := new(big.Int)
+	amount.SetString(metadata.Amount.Int, 10)
+
+	data, err := s.abi.Pack("supply",
+		common.HexToAddress(metadata.Token),
+		amount,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack supply data: %v", err)
+	}
+
+	return "0x" + hex.EncodeToString(data), nil
+}
+
+// constructBorrow builds transaction data for borrowing assets
+func (s *LendingSolver) constructBorrow(metadata LendingMetadata) (string, error) {
+	amount := new(big.Int)
+	amount.SetString(metadata.Amount.Int, 10)
+
+	data, err := s.abi.Pack("borrowStripUSD", amount)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack borrow data: %v", err)
+	}
+
+	return "0x" + hex.EncodeToString(data), nil
+}
+
+// constructRepay builds transaction data for repaying debt
+func (s *LendingSolver) constructRepay(metadata LendingMetadata) (string, error) {
+	amount := new(big.Int)
+	amount.SetString(metadata.Amount.Int, 10)
+
+	data, err := s.abi.Pack("repayStripUSD", amount)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack repay data: %v", err)
+	}
+
+	return "0x" + hex.EncodeToString(data), nil
+}
+
+// constructWithdraw builds transaction data for withdrawing assets
+func (s *LendingSolver) constructWithdraw(metadata LendingMetadata) (string, error) {
+	amount := new(big.Int)
+	amount.SetString(metadata.Amount.Int, 10)
+
+	data, err := s.abi.Pack("withdrawCollateral",
+		common.HexToAddress(metadata.Token),
+		amount,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to pack withdraw data: %v", err)
+	}
+
+	return "0x" + hex.EncodeToString(data), nil
+}

@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	testRPCURL           = "" // RPC URL
+	testRPCURL           = "" // MODIFY ME: RPC URL
 	testChainID          = 44331
 	testFactoryAddress   = "0xb1a101860602D32A50E0e426CB827ce2121f12D2"
 	testNPMAddress       = "0x782Ed0e82F04fBcF8F6De1F609215A6CeD0EdB85"
@@ -21,7 +22,8 @@ const (
 	testTokenBAddress    = "0xe109F006D577251340F103d3aCE72B56Fdc6E172" // TestTokenA
 	testPoolAddress      = "0x8Fc6e3247c13C56747cE4ae4E7621013763d98BC" // Example pool address
 	testAmount           = "1000000000000000000"                        // 1 token in wei
-	testRecipientAddress = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+	testRecipientAddress = ""                                           // MODIFY ME: Recipient address
+	privateKeyHex        = ""                                           // MODIFY ME: Private key
 )
 
 func setupTestSolver(t *testing.T) *UniswapV3Solver {
@@ -96,8 +98,10 @@ func TestConstruct(t *testing.T) {
 }
 
 func TestMintFlow(t *testing.T) {
+	if privateKeyHex == "" {
+		return
+	}
 	// Setup private key from hex string
-	privateKeyHex := "" // Replace with actual private key
 	privateKey, err := crypto.HexToECDSA(privateKeyHex)
 	require.NoError(t, err)
 
@@ -110,21 +114,21 @@ func TestMintFlow(t *testing.T) {
 	intent := createTestIntent("mint")
 	intent.Identity = testRecipientAddress
 
-	// Test Construct
-	txData, err := solver.Construct(intent, 0)
+	dataToSign, err := solver.Construct(intent, 0)
 	require.NoError(t, err)
-	assert.NotEmpty(t, txData)
+	assert.NotEmpty(t, dataToSign)
 
-	// Sign the transaction data
-	txDataBytes := []byte(txData)
-	signature, err := crypto.Sign(crypto.Keccak256(txDataBytes), privateKey)
+	txHashBytes, err := hex.DecodeString(strings.TrimPrefix(dataToSign, "0x"))
+	require.NoError(t, err)
+	signature, err := crypto.Sign(txHashBytes, privateKey)
 	require.NoError(t, err)
 	signatureHex := "0x" + hex.EncodeToString(signature)
 
-	// Test Solve with actual signature
 	txHash, err := solver.Solve(intent, 0, signatureHex)
 	require.NoError(t, err)
 	assert.NotEmpty(t, txHash)
+
+	intent.Operations[0].Result = txHash
 
 	// Test Status with polling
 	maxAttempts := 20
@@ -158,23 +162,56 @@ func TestMintFlow(t *testing.T) {
 }
 
 func TestExitFlow(t *testing.T) {
+	if privateKeyHex == "" {
+		return
+	}
+	// Setup private key from hex string
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+	testRecipientAddress := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
 	solver := setupTestSolver(t)
 	intent := createTestIntent("exit")
+	intent.Identity = testRecipientAddress
 
 	// Test Construct
-	txData, err := solver.Construct(intent, 0)
+	dataToSign, err := solver.Construct(intent, 0)
 	require.NoError(t, err)
-	assert.NotEmpty(t, txData)
+	assert.NotEmpty(t, dataToSign)
+
+	// Sign the transaction data
+	txHashBytes, err := hex.DecodeString(strings.TrimPrefix(dataToSign, "0x"))
+	require.NoError(t, err)
+	signature, err := crypto.Sign(txHashBytes, privateKey)
+	require.NoError(t, err)
+	signatureHex := "0x" + hex.EncodeToString(signature)
 
 	// Test Solve
-	txHash, err := solver.Solve(intent, 0, "0x1234") // Mock signature
+	txHash, err := solver.Solve(intent, 0, signatureHex)
 	require.NoError(t, err)
 	assert.NotEmpty(t, txHash)
 
-	// Test Status
-	status, err := solver.Status(intent, 0)
-	require.NoError(t, err)
-	assert.Equal(t, "pending", status)
+	intent.Operations[0].Result = txHash
+
+	// Test Status with polling
+	maxAttempts := 20
+	for i := 0; i < maxAttempts; i++ {
+		status, err := solver.Status(intent, 0)
+		require.NoError(t, err)
+
+		if status == "success" || status == "failed" {
+			break
+		}
+		if i == maxAttempts-1 {
+			t.Fatalf("Transaction did not complete within %d attempts", maxAttempts)
+		}
+
+		time.Sleep(2 * time.Second)
+	}
 
 	// Test GetOutput
 	output, err := solver.GetOutput(intent, 0)

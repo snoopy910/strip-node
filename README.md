@@ -219,6 +219,26 @@ StripChain includes a full Bitcoin development environment for testing and integ
 
 For complete documentation of the Bitcoin environment and available utilities, see the [Bitcoin README](BITCOIN-README.md).
 
+## Running Uniswap V3 Solver
+
+To run the Uniswap V3 solver, use the following command:
+
+```sh
+go run ./main.go --isUniswapSolver=true \
+    --rpcURL=<rpc-url> \
+    --httpPort=<port> \
+    --uniswapV3Factory=<uniswap-v3-factory-address> \
+    --npmAddress=<npm-address> \
+    --chainId=<chain-id>
+```
+
+Required parameters:
+- `rpcURL`: Ethereum RPC URL for the network
+- `httpPort`: Port number for the solver's HTTP server
+- `uniswapV3Factory`: Address of the Uniswap V3 Factory contract
+- `npmAddress`: Address of the Uniswap V3 NonfungiblePositionManager contract
+- `chainId`: Chain ID of the network
+
 ## Docker Volumes
 
 StripChain uses Docker volumes to persist data across container restarts. The following volumes are created:

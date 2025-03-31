@@ -5,15 +5,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -21,6 +22,8 @@ import (
 const npmABI = `[
 	{"type":"function","name":"mint","inputs":[{"name":"params","type":"tuple","components":[{"name":"token0","type":"address"},{"name":"token1","type":"address"},{"name":"fee","type":"uint24"},{"name":"tickLower","type":"int24"},{"name":"tickUpper","type":"int24"},{"name":"amount0Desired","type":"uint256"},{"name":"amount1Desired","type":"uint256"},{"name":"amount0Min","type":"uint256"},{"name":"amount1Min","type":"uint256"},{"name":"recipient","type":"address"},{"name":"deadline","type":"uint256"}]}],"outputs":[{"name":"tokenId","type":"uint256"},{"name":"liquidity","type":"uint128"},{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"payable"},
 	{"type":"function","name":"decreaseLiquidity","inputs":[{"name":"params","type":"tuple","components":[{"name":"tokenId","type":"uint256"},{"name":"liquidity","type":"uint128"},{"name":"amount0Min","type":"uint256"},{"name":"amount1Min","type":"uint256"},{"name":"deadline","type":"uint256"}]}],"outputs":[{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"nonpayable"},
+	{"type":"event","name":"DecreaseLiquidity","inputs":[{"name":"tokenId","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"liquidity","type":"uint128","indexed":false,"internalType":"uint128"},{"name":"amount0","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"amount1","type":"uint256","indexed":false,"internalType":"uint256"}],"anonymous":false},
+	{"type":"event","name":"IncreaseLiquidity","inputs":[{"name":"tokenId","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"liquidity","type":"uint128","indexed":false,"internalType":"uint128"},{"name":"amount0","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"amount1","type":"uint256","indexed":false,"internalType":"uint256"}],"anonymous":false},
 	{"type":"function","name":"collect","inputs":[{"name":"tokenId","type":"uint256"},{"name":"recipient","type":"address"},{"name":"amount0Max","type":"uint256"},{"name":"amount1Max","type":"uint256"}],"outputs":[{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"nonpayable"}
 ]`
 
@@ -32,15 +35,27 @@ type TransactionStatus struct {
 	Error   error
 }
 
+type TxParams struct {
+	Calldata  []byte
+	Nonce     uint64
+	GasLimit  uint64
+	GasTipCap *big.Int
+	GasFeeCap *big.Int
+	Deadline  time.Time
+}
+
 // UniswapV3Solver handles interactions with the Uniswap V3 NonfungiblePositionManager contract
 type UniswapV3Solver struct {
-	client   *ethclient.Client
-	chainId  *big.Int
-	factory  common.Address
-	npm      common.Address
-	abi      abi.ABI
-	nonces   map[string]uint64
-	statuses map[string]*TransactionStatus
+	client          *ethclient.Client
+	chainId         *big.Int
+	factory         common.Address
+	npm             common.Address
+	abi             abi.ABI
+	statuses        map[string]*TransactionStatus
+	txParams        map[string]TxParams
+	cleanupInterval time.Duration
+	cleanupStop     chan struct{}
+	cleanupMutex    sync.Mutex
 }
 
 func Start(
@@ -76,13 +91,48 @@ func NewUniswapV3Solver(rpcURL string, chainId int64, factoryAddress string, npm
 		return nil, fmt.Errorf("failed to parse contract ABI: %v", err)
 	}
 
-	return &UniswapV3Solver{
-		client:  client,
-		chainId: big.NewInt(chainId),
-		factory: common.HexToAddress(factoryAddress),
-		npm:     common.HexToAddress(npmAddress),
-		abi:     contractAbi,
-	}, nil
+	solver := &UniswapV3Solver{
+		client:          client,
+		chainId:         big.NewInt(chainId),
+		factory:         common.HexToAddress(factoryAddress),
+		npm:             common.HexToAddress(npmAddress),
+		abi:             contractAbi,
+		statuses:        make(map[string]*TransactionStatus),
+		txParams:        make(map[string]TxParams),
+		cleanupInterval: 5 * time.Minute,
+		cleanupStop:     make(chan struct{}),
+	}
+
+	// Start cleanup goroutine
+	go solver.cleanupExpiredParams()
+
+	return solver, nil
+}
+
+func (s *UniswapV3Solver) cleanupExpiredParams() {
+	ticker := time.NewTicker(s.cleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			s.cleanupMutex.Lock()
+			for hash, params := range s.txParams {
+				if now.After(params.Deadline) {
+					delete(s.txParams, hash)
+				}
+			}
+			s.cleanupMutex.Unlock()
+		case <-s.cleanupStop:
+			return
+		}
+	}
+}
+
+func (s *UniswapV3Solver) StopCleanup() {
+	s.cleanupMutex.Lock()
+	close(s.cleanupStop)
+	s.cleanupMutex.Unlock()
 }
 
 // Solve executes the Uniswap V3 operation with a signed transaction
@@ -91,68 +141,43 @@ func (s *UniswapV3Solver) Solve(intent Intent, opIndex int, signature string) (s
 		return "", fmt.Errorf("operation index out of range")
 	}
 
-	op := intent.Operations[opIndex]
-	var metadata LPMetadata
-	if err := json.Unmarshal(op.SolverMetadata, &metadata); err != nil {
-		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
-	}
-
-	// Get transaction data
-	data, err := s.Construct(intent, opIndex)
+	// Calculate operation hash
+	operation := intent.Operations[opIndex]
+	opBytes, err := json.Marshal(operation)
 	if err != nil {
-		return "", fmt.Errorf("failed to construct transaction: %v", err)
+		return "", fmt.Errorf("failed to marshal operation: %v", err)
+	}
+	opHash := "0x" + hex.EncodeToString(crypto.Keccak256(opBytes))
+
+	// Get stored parameters
+	s.cleanupMutex.Lock()
+	params, ok := s.txParams[opHash]
+	s.cleanupMutex.Unlock()
+	if !ok {
+		return "", fmt.Errorf("transaction parameters not found or expired")
+	}
+	if time.Now().After(params.Deadline) {
+		s.cleanupMutex.Lock()
+		delete(s.txParams, opHash)
+		s.cleanupMutex.Unlock()
+		return "", fmt.Errorf("transaction parameters expired")
 	}
 
-	// Get current nonce
-	nonce, err := s.client.PendingNonceAt(context.Background(), common.HexToAddress(intent.Identity))
-	if err != nil {
-		return "", fmt.Errorf("failed to get nonce: %v", err)
-	}
-
-	// Get gas price
-	gasPrice, err := s.client.SuggestGasPrice(context.Background())
-	if err != nil {
-		return "", fmt.Errorf("failed to get gas price: %v", err)
-	}
-
-	// Decode transaction data
-	decodedData, err := hex.DecodeString(strings.TrimPrefix(data, "0x"))
-	if err != nil {
-		return "", fmt.Errorf("failed to decode data: %v", err)
-	}
-
-	// Estimate gas
-	msg := ethereum.CallMsg{
-		From:      common.HexToAddress(intent.Identity),
-		To:        &s.npm,
-		Gas:       0,
-		GasPrice:  gasPrice,
-		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
-		GasTipCap: gasPrice,
-		Value:     big.NewInt(0),
-		Data:      decodedData,
-	}
-	gasLimit, err := s.client.EstimateGas(context.Background(), msg)
-	if err != nil {
-		return "", fmt.Errorf("failed to estimate gas: %v", err)
-	}
-
-	// Add 20% buffer to estimated gas
-	gasLimit = gasLimit + (gasLimit / 5)
-
-	// Create transaction
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   s.chainId,
-		Nonce:     nonce,
+		Nonce:     params.Nonce,
 		To:        &s.npm,
 		Value:     big.NewInt(0),
-		Gas:       gasLimit,
-		GasTipCap: gasPrice,
-		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
-		Data:      decodedData,
+		Gas:       params.GasLimit,
+		GasTipCap: params.GasTipCap,
+		GasFeeCap: params.GasFeeCap,
+		Data:      params.Calldata,
 	})
 
-	// Decode signature
+	signer := types.NewLondonSigner(s.chainId)
+	txHash := signer.Hash(tx)
+	fmt.Printf("Solve tx hash: %s\n", txHash.Hex()) // Debug
+
 	sig, err := hex.DecodeString(strings.TrimPrefix(signature, "0x"))
 	if err != nil {
 		return "", fmt.Errorf("invalid signature: %v", err)
@@ -161,27 +186,31 @@ func (s *UniswapV3Solver) Solve(intent Intent, opIndex int, signature string) (s
 		return "", fmt.Errorf("invalid signature length: got %d, want 65", len(sig))
 	}
 
-	// Create signed transaction
-	signer := types.NewLondonSigner(s.chainId)
 	signedTx, err := tx.WithSignature(signer, sig)
 	if err != nil {
 		return "", fmt.Errorf("failed to add signature: %v", err)
 	}
 
-	// Send transaction
+	sender, err := signer.Sender(signedTx)
+	if err != nil {
+		return "", fmt.Errorf("failed to recover sender: %v", err)
+	}
+	if sender != common.HexToAddress(intent.Identity) {
+		return "", fmt.Errorf("signature mismatch: sender %s != identity %s", sender.Hex(), intent.Identity)
+	}
+
 	err = s.client.SendTransaction(context.Background(), signedTx)
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
 
-	// Store transaction status
-	txHash := signedTx.Hash().Hex()
-	s.statuses[txHash] = &TransactionStatus{
-		TxHash: txHash,
+	txHashStr := signedTx.Hash().Hex()
+	s.statuses[txHashStr] = &TransactionStatus{
+		TxHash: txHashStr,
 		Status: "pending",
 	}
 
-	return txHash, nil
+	return txHashStr, nil
 }
 
 // Status checks the status of a Uniswap V3 operation
@@ -191,9 +220,9 @@ func (s *UniswapV3Solver) Status(intent Intent, opIndex int) (string, error) {
 	}
 
 	operation := intent.Operations[opIndex]
-	if operation.Result == "" {
-		return "pending", nil
-	}
+	// if operation.Result == "" {
+	// 	return "pending", nil
+	// }
 
 	value, exists := s.statuses[operation.Result]
 	if !exists {
@@ -243,13 +272,11 @@ func (s *UniswapV3Solver) GetOutput(intent Intent, opIndex int) (string, error) 
 		TxHash: status.TxHash,
 	}
 
-	// Parse logs to get operation results
 	receipt := status.Receipt
 	if receipt == nil {
 		return "", fmt.Errorf("transaction receipt not available")
 	}
 
-	// Parse logs based on operation type
 	var metadata LPMetadata
 	if err := json.Unmarshal(operation.SolverMetadata, &metadata); err != nil {
 		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
@@ -257,7 +284,7 @@ func (s *UniswapV3Solver) GetOutput(intent Intent, opIndex int) (string, error) 
 
 	switch metadata.Action {
 	case "mint":
-		// Parse mint event logs
+		found := false
 		for _, log := range receipt.Logs {
 			if log.Address == s.npm {
 				event, err := s.abi.EventByID(log.Topics[0])
@@ -265,18 +292,41 @@ func (s *UniswapV3Solver) GetOutput(intent Intent, opIndex int) (string, error) 
 					continue
 				}
 				if event.Name == "IncreaseLiquidity" {
-					// Parse IncreaseLiquidity event data
-					var tokenId, liquidity, amount0, amount1 big.Int
+					if len(log.Topics) < 2 {
+						return "", fmt.Errorf("invalid IncreaseLiquidity event: insufficient topics")
+					}
+					tokenId := new(big.Int).SetBytes(log.Topics[1][:])
+					dataMap, err := s.abi.Unpack(event.Name, log.Data)
+					if err != nil {
+						return "", fmt.Errorf("failed to unpack IncreaseLiquidity event data: %v", err)
+					}
+					liquidity, ok := dataMap[0].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse liquidity from event data")
+					}
+					amount0, ok := dataMap[1].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse amount0 from event data")
+					}
+					amount1, ok := dataMap[2].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse amount1 from event data")
+					}
 					output.TokenId = uint(tokenId.Uint64())
 					output.Liquidity = liquidity.String()
 					output.AmountA = amount0.String()
 					output.AmountB = amount1.String()
+					found = true
 					break
 				}
 			}
 		}
+		if !found {
+			return "", fmt.Errorf("IncreaseLiquidity event not found in receipt")
+		}
+
 	case "exit":
-		// Parse decreaseLiquidity event logs
+		found := false
 		for _, log := range receipt.Logs {
 			if log.Address == s.npm {
 				event, err := s.abi.EventByID(log.Topics[0])
@@ -284,13 +334,37 @@ func (s *UniswapV3Solver) GetOutput(intent Intent, opIndex int) (string, error) 
 					continue
 				}
 				if event.Name == "DecreaseLiquidity" {
-					// Parse DecreaseLiquidity event data
-					var amount0, amount1 big.Int
+					if len(log.Topics) < 2 {
+						return "", fmt.Errorf("invalid DecreaseLiquidity event: insufficient topics")
+					}
+					tokenId := new(big.Int).SetBytes(log.Topics[1][:])
+					dataMap, err := s.abi.Unpack(event.Name, log.Data)
+					if err != nil {
+						return "", fmt.Errorf("failed to unpack DecreaseLiquidity event data: %v", err)
+					}
+					liquidity, ok := dataMap[0].(*big.Int) // uint128 as *big.Int
+					if !ok {
+						return "", fmt.Errorf("failed to parse liquidity from event data")
+					}
+					amount0, ok := dataMap[1].(*big.Int) // uint256
+					if !ok {
+						return "", fmt.Errorf("failed to parse amount0 from event data")
+					}
+					amount1, ok := dataMap[2].(*big.Int) // uint256
+					if !ok {
+						return "", fmt.Errorf("failed to parse amount1 from event data")
+					}
+					output.TokenId = uint(tokenId.Uint64())
+					output.Liquidity = liquidity.String()
 					output.AmountA = amount0.String()
 					output.AmountB = amount1.String()
+					found = true
 					break
 				}
 			}
+		}
+		if !found {
+			return "", fmt.Errorf("DecreaseLiquidity event not found in receipt")
 		}
 	}
 
@@ -314,40 +388,69 @@ func (s *UniswapV3Solver) Construct(intent Intent, opIndex int) (string, error) 
 		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
 	}
 
-	data, err := s.constructTxData(metadata, intent.Identity)
+	calldata, err := s.constructTxData(metadata, intent.Identity)
 	if err != nil {
 		return "", fmt.Errorf("failed to construct transaction data: %v", err)
 	}
 
-	// Get current nonce
 	nonce, err := s.client.PendingNonceAt(context.Background(), common.HexToAddress(intent.Identity))
 	if err != nil {
 		return "", fmt.Errorf("failed to get nonce: %v", err)
 	}
 
-	// Get gas price
 	gasPrice, err := s.client.SuggestGasPrice(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("failed to get gas price: %v", err)
 	}
 
-	// Create unsigned transaction
+	msg := ethereum.CallMsg{
+		From:      common.HexToAddress(intent.Identity),
+		To:        &s.npm,
+		Gas:       0,
+		GasPrice:  gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
+		GasTipCap: gasPrice,
+		Value:     big.NewInt(0),
+		Data:      calldata,
+	}
+	gasLimit, err := s.client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		return "", fmt.Errorf("failed to estimate gas: %v", err)
+	}
+	gasLimit = gasLimit + (gasLimit / 5)
+
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   s.chainId,
 		Nonce:     nonce,
-		GasTipCap: gasPrice,
-		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)), // Set fee cap to 2x the tip
-		Gas:       300000,                                    // Fixed gas limit for now, could be estimated
 		To:        &s.npm,
 		Value:     big.NewInt(0),
-		Data:      data,
+		Gas:       gasLimit,
+		GasTipCap: gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
+		Data:      calldata,
 	})
 
-	// Get the hash to be signed
 	signer := types.NewLondonSigner(s.chainId)
-	hash := signer.Hash(tx)
+	txHash := signer.Hash(tx)
 
-	return "0x" + hex.EncodeToString(hash.Bytes()), nil
+	// Calculate operation hash
+	opBytes, err := json.Marshal(operation)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal operation: %v", err)
+	}
+	opHash := "0x" + hex.EncodeToString(crypto.Keccak256(opBytes))
+
+	// Store parameters with 5-minute deadline
+	s.txParams[opHash] = TxParams{
+		Calldata:  calldata,
+		Nonce:     nonce,
+		GasLimit:  gasLimit,
+		GasTipCap: gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
+		Deadline:  time.Now().Add(5 * time.Minute),
+	}
+
+	return "0x" + hex.EncodeToString(txHash[:]), nil
 }
 
 // constructTxData builds the transaction data based on the operation type
@@ -402,8 +505,6 @@ func (s *UniswapV3Solver) constructMint(metadata LPMetadata, identity string) ([
 		Recipient:      common.HexToAddress(identity),
 		Deadline:       big.NewInt(time.Now().Unix() + 1800), // 30 minutes from now
 	}
-
-	log.Println(params)
 
 	// Pack as a tuple argument named "params"
 	// return s.abi.Pack("mint", struct{ Params MintParams }{Params: params})

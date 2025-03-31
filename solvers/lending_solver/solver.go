@@ -77,6 +77,26 @@ type LendingSolver struct {
 	txStatus    sync.Map // map[string]*TransactionStatus
 }
 
+func Start(
+	rpcURL string,
+	httpPort string,
+	lendingPoolAddress string,
+	chainId int64,
+) {
+	keepAlive := make(chan string)
+	// Initialize the solver
+	solver, err := NewLendingSolver(rpcURL, chainId, lendingPoolAddress)
+	if err != nil {
+		panic(err)
+	}
+
+	// Start the solver's API server
+	go startHTTPServer(solver, httpPort)
+
+	// Keep the process running
+	<-keepAlive
+}
+
 // NewLendingSolver creates a new instance of LendingSolver
 func NewLendingSolver(rpcURL string, chainId int64, lendingPool string) (*LendingSolver, error) {
 	client, err := ethclient.Dial(rpcURL)
@@ -100,7 +120,7 @@ func NewLendingSolver(rpcURL string, chainId int64, lendingPool string) (*Lendin
 // Solve executes the lending operation with a signed transaction
 func (s *LendingSolver) Solve(intent Intent, opIndex int, signature string) (string, error) {
 	if opIndex >= len(intent.Operations) {
-		return "", fmt.Errorf("operation index out of bounds")
+		return "", fmt.Errorf("operation index out of range")
 	}
 
 	op := intent.Operations[opIndex]
@@ -129,7 +149,7 @@ func (s *LendingSolver) Solve(intent Intent, opIndex int, signature string) (str
 	}
 
 	// Get current nonce
-	nonce, err := s.client.PendingNonceAt(context.Background(), common.Address{}) // will be replaced with actual sender
+	nonce, err := s.client.PendingNonceAt(context.Background(), common.HexToAddress(intent.Identity))
 	if err != nil {
 		return "", fmt.Errorf("failed to get nonce: %v", err)
 	}
@@ -313,7 +333,7 @@ func (s *LendingSolver) Construct(intent Intent, opIndex int) (string, error) {
 	}
 
 	// Get current nonce
-	nonce, err := s.client.PendingNonceAt(context.Background(), common.Address{}) // will be replaced with actual sender
+	nonce, err := s.client.PendingNonceAt(context.Background(), common.HexToAddress(intent.Identity))
 	if err != nil {
 		return "", fmt.Errorf("failed to get nonce: %v", err)
 	}

@@ -14,6 +14,8 @@ import (
 	"github.com/StripChain/strip-node/sequencer"
 	signer "github.com/StripChain/strip-node/signer"
 	"github.com/StripChain/strip-node/solver"
+	lendingsolver "github.com/StripChain/strip-node/solvers/lending_solver"
+	uniswapv3solver "github.com/StripChain/strip-node/solvers/uniswap_v3_solver"
 	solversregistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/util/logger"
 )
@@ -21,6 +23,8 @@ import (
 func main() {
 	isSolanaTest := flag.Bool("isSolanaTest", LookupEnvOrBool("IS_SOLANA_TEST", false), "is the process a signer")
 	isEthereumTest := flag.Bool("isEthereumTest", LookupEnvOrBool("IS_SOLANA_TEST", false), "is the process a signer")
+	isLendingSolver := flag.Bool("isLendingSolver", LookupEnvOrBool("IS_LENDING_SOLVER", false), "start lending solver")
+	isUniswapSolver := flag.Bool("isUniswapSolver", LookupEnvOrBool("IS_UNISWAP_SOLVER", false), "start uniswap v3 solver")
 
 	isDeployIntentOperatorsRegistry := flag.Bool("isDeployIntentOperatorsRegistry", LookupEnvOrBool("IS_DEPLOY_SIGNER_HUB", false), "deploy IntentOperatorsRegistry contract")
 	isDeploySolversRegistry := flag.Bool("isDeploySolversRegistry", LookupEnvOrBool("IS_DEPLOY_SOLVERS_REGISTRY", false), "deploy SolversRegistry contract")
@@ -48,6 +52,9 @@ func main() {
 	intentOperatorsRegistryContractAddress := flag.String("intentOperatorsRegistryAddress", LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of IntentOperatorsRegistry contract")
 	solversRegistryContractAddress := flag.String("solversRegistryAddress", LookupEnvOrString("SOLVERS_REGISTRY_CONTRACT_ADDRESS", "0x56A9bCddF533Af1859842074B46B0daD07b7686a"), "address of SolversRegistry contract")
 	bridgeContractAddress := flag.String("bridgeContractAddress", LookupEnvOrString("BRIDGE_CONTRACT_ADDRESS", "0x79E3A2B39e77dfB5C9C6a370D4a8a4fa42c482c0"), "address of Bridge contract")
+	lendingPoolAddress := flag.String("lendingPoolAddress", LookupEnvOrString("LENDING_POOL_ADDRESS", ""), "address of lending pool contract")
+	uniswapV3FactoryAddress := flag.String("uniswapV3FactoryAddress", LookupEnvOrString("UNISWAP_V3_FACTORY_ADDRESS", ""), "address of Uniswap V3 factory contract")
+	npmAddress := flag.String("npmAddress", LookupEnvOrString("NPM_ADDRESS", ""), "address of Uniswap V3 NonfungiblePositionManager contract")
 	rpcURL := flag.String("rpcURL", LookupEnvOrString("RPC_URL", "http://localhost:8545"), "ethereum node RPC URL")
 	maximumSigners := flag.Int("maximumSigners", LookupEnvOrInt("MAXIMUM_SIGNERS", 3), "maximum number of signers for an account")
 	tokenName := flag.String("tokenName", LookupEnvOrString("TOKEN_NAME", "Strip"), "name of the token")
@@ -111,6 +118,18 @@ func main() {
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)
+	} else if *isUniswapSolver {
+		chainID, err := strconv.ParseInt(*chainId, 10, 64)
+		if err != nil {
+			log.Fatal("Failed to parse chain ID:", err)
+		}
+		uniswapv3solver.Start(*rpcURL, *httpPort, *uniswapV3FactoryAddress, *npmAddress, chainID)
+	} else if *isLendingSolver {
+		chainID, err := strconv.ParseInt(*chainId, 10, 64)
+		if err != nil {
+			log.Fatal("Failed to parse chain ID:", err)
+		}
+		lendingsolver.Start(*rpcURL, *httpPort, *lendingPoolAddress, chainID)
 	} else if *isSolanaTest {
 		sequencer.GetSolanaTransfers(
 			"901",

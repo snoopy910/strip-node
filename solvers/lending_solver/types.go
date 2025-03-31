@@ -10,6 +10,7 @@ type uint256 struct {
 // Intent represents a user's intention to perform lending operations
 type Intent struct {
 	Operations []Operation `json:"operations"`
+	Identity   string      `json:"identity"` // caller's address
 }
 
 // Operation represents a single lending operation

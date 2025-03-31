@@ -1,4 +1,5 @@
-package lending_solver
+// Package uniswap_v3_solver provides HTTP endpoints for Uniswap V3 operations
+package uniswap_v3_solver
 
 import (
 	"encoding/json"
@@ -7,15 +8,26 @@ import (
 )
 
 type Server struct {
-	solver *LendingSolver
+	solver *UniswapV3Solver
 }
 
-func NewServer(rpcURL string, chainId int64, lendingPool string) (*Server, error) {
-	solver, err := NewLendingSolver(rpcURL, chainId, lendingPool)
-	if err != nil {
-		return nil, err
+func NewServer(solver *UniswapV3Solver) *Server {
+	return &Server{
+		solver: solver,
 	}
-	return &Server{solver: solver}, nil
+}
+
+func startHTTPServer(solver *UniswapV3Solver, port string) {
+	server := NewServer(solver)
+
+	http.HandleFunc("/construct", server.handleConstruct)
+	http.HandleFunc("/solve", server.handleSolve)
+	http.HandleFunc("/status", server.handleStatus)
+	http.HandleFunc("/output", server.handleOutput)
+
+	if err := http.ListenAndServe("0.0.0.0:"+port, nil); err != nil {
+		panic(err)
+	}
 }
 
 func (s *Server) Serve() error {
@@ -103,7 +115,6 @@ func (s *Server) handleOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
-		"output": output,
-	})
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(output))
 }

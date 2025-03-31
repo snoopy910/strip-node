@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -19,8 +20,8 @@ import (
 // Contract ABI strings
 const npmABI = `[
 	{"type":"function","name":"mint","inputs":[{"name":"params","type":"tuple","components":[{"name":"token0","type":"address"},{"name":"token1","type":"address"},{"name":"fee","type":"uint24"},{"name":"tickLower","type":"int24"},{"name":"tickUpper","type":"int24"},{"name":"amount0Desired","type":"uint256"},{"name":"amount1Desired","type":"uint256"},{"name":"amount0Min","type":"uint256"},{"name":"amount1Min","type":"uint256"},{"name":"recipient","type":"address"},{"name":"deadline","type":"uint256"}]}],"outputs":[{"name":"tokenId","type":"uint256"},{"name":"liquidity","type":"uint128"},{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"payable"},
-	{"type":"function","name":"decreaseLiquidity","inputs":[{"name":"tokenId","type":"uint256"},{"name":"liquidity","type":"uint128"},{"name":"amount0Min","type":"uint256"},{"name":"amount1Min","type":"uint256"},{"name":"deadline","type":"uint256"}],"outputs":[{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"nonpayable"},
-	{"type":"function","name":"collect","inputs":[{"name":"tokenId","type":"uint256"},{"name":"recipient","type":"address"},{"name":"amount0Max","type":"uint256"},{"name":"amount1Max","type":"uint256"}],"outputs":[{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"nonpayable"},
+	{"type":"function","name":"decreaseLiquidity","inputs":[{"name":"params","type":"tuple","components":[{"name":"tokenId","type":"uint256"},{"name":"liquidity","type":"uint128"},{"name":"amount0Min","type":"uint256"},{"name":"amount1Min","type":"uint256"},{"name":"deadline","type":"uint256"}]}],"outputs":[{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"nonpayable"},
+	{"type":"function","name":"collect","inputs":[{"name":"tokenId","type":"uint256"},{"name":"recipient","type":"address"},{"name":"amount0Max","type":"uint256"},{"name":"amount1Max","type":"uint256"}],"outputs":[{"name":"amount0","type":"uint256"},{"name":"amount1","type":"uint256"}],"stateMutability":"nonpayable"}
 ]`
 
 // TransactionStatus represents the status of a transaction
@@ -34,7 +35,7 @@ type TransactionStatus struct {
 // UniswapV3Solver handles interactions with the Uniswap V3 NonfungiblePositionManager contract
 type UniswapV3Solver struct {
 	client   *ethclient.Client
-	chainId  int64
+	chainId  *big.Int
 	factory  common.Address
 	npm      common.Address
 	abi      abi.ABI
@@ -77,7 +78,7 @@ func NewUniswapV3Solver(rpcURL string, chainId int64, factoryAddress string, npm
 
 	return &UniswapV3Solver{
 		client:  client,
-		chainId: chainId,
+		chainId: big.NewInt(chainId),
 		factory: common.HexToAddress(factoryAddress),
 		npm:     common.HexToAddress(npmAddress),
 		abi:     contractAbi,
@@ -90,37 +91,91 @@ func (s *UniswapV3Solver) Solve(intent Intent, opIndex int, signature string) (s
 		return "", fmt.Errorf("operation index out of range")
 	}
 
-	operation := intent.Operations[opIndex]
+	op := intent.Operations[opIndex]
 	var metadata LPMetadata
-	if err := json.Unmarshal(operation.SolverMetadata, &metadata); err != nil {
+	if err := json.Unmarshal(op.SolverMetadata, &metadata); err != nil {
 		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
 	}
 
 	// Get transaction data
-	data, err := s.constructTxData(metadata, intent.Identity)
+	data, err := s.Construct(intent, opIndex)
 	if err != nil {
-		return "", fmt.Errorf("failed to construct transaction data: %v", err)
+		return "", fmt.Errorf("failed to construct transaction: %v", err)
 	}
+
+	// Get current nonce
+	nonce, err := s.client.PendingNonceAt(context.Background(), common.HexToAddress(intent.Identity))
+	if err != nil {
+		return "", fmt.Errorf("failed to get nonce: %v", err)
+	}
+
+	// Get gas price
+	gasPrice, err := s.client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("failed to get gas price: %v", err)
+	}
+
+	// Decode transaction data
+	decodedData, err := hex.DecodeString(strings.TrimPrefix(data, "0x"))
+	if err != nil {
+		return "", fmt.Errorf("failed to decode data: %v", err)
+	}
+
+	// Estimate gas
+	msg := ethereum.CallMsg{
+		From:      common.HexToAddress(intent.Identity),
+		To:        &s.npm,
+		Gas:       0,
+		GasPrice:  gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
+		GasTipCap: gasPrice,
+		Value:     big.NewInt(0),
+		Data:      decodedData,
+	}
+	gasLimit, err := s.client.EstimateGas(context.Background(), msg)
+	if err != nil {
+		return "", fmt.Errorf("failed to estimate gas: %v", err)
+	}
+
+	// Add 20% buffer to estimated gas
+	gasLimit = gasLimit + (gasLimit / 5)
 
 	// Create transaction
 	tx := types.NewTx(&types.DynamicFeeTx{
-		ChainID:   big.NewInt(s.chainId),
-		Nonce:     0, // TODO: Get nonce from account
+		ChainID:   s.chainId,
+		Nonce:     nonce,
 		To:        &s.npm,
 		Value:     big.NewInt(0),
-		Gas:       0,             // TODO: Estimate gas
-		GasTipCap: big.NewInt(0), // TODO: Get from network
-		GasFeeCap: big.NewInt(0), // TODO: Get from network
-		Data:      data,
+		Gas:       gasLimit,
+		GasTipCap: gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
+		Data:      decodedData,
 	})
 
+	// Decode signature
+	sig, err := hex.DecodeString(strings.TrimPrefix(signature, "0x"))
+	if err != nil {
+		return "", fmt.Errorf("invalid signature: %v", err)
+	}
+	if len(sig) != 65 {
+		return "", fmt.Errorf("invalid signature length: got %d, want 65", len(sig))
+	}
+
+	// Create signed transaction
+	signer := types.NewLondonSigner(s.chainId)
+	signedTx, err := tx.WithSignature(signer, sig)
+	if err != nil {
+		return "", fmt.Errorf("failed to add signature: %v", err)
+	}
+
 	// Send transaction
-	if err := s.client.SendTransaction(context.Background(), tx); err != nil {
+	err = s.client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
 
 	// Store transaction status
-	txHash := tx.Hash().Hex()
+	txHash := signedTx.Hash().Hex()
 	s.statuses[txHash] = &TransactionStatus{
 		TxHash: txHash,
 		Status: "pending",
@@ -278,18 +333,18 @@ func (s *UniswapV3Solver) Construct(intent Intent, opIndex int) (string, error) 
 
 	// Create unsigned transaction
 	tx := types.NewTx(&types.DynamicFeeTx{
-		ChainID:   big.NewInt(s.chainId),
+		ChainID:   s.chainId,
 		Nonce:     nonce,
 		GasTipCap: gasPrice,
 		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)), // Set fee cap to 2x the tip
-		Gas:       300000,                                    // Fixed gas limit, could be estimated
+		Gas:       300000,                                    // Fixed gas limit for now, could be estimated
 		To:        &s.npm,
 		Value:     big.NewInt(0),
 		Data:      data,
 	})
 
 	// Get the hash to be signed
-	signer := types.NewLondonSigner(big.NewInt(s.chainId))
+	signer := types.NewLondonSigner(s.chainId)
 	hash := signer.Hash(tx)
 
 	return "0x" + hex.EncodeToString(hash.Bytes()), nil
@@ -313,9 +368,9 @@ func (s *UniswapV3Solver) constructMint(metadata LPMetadata, identity string) ([
 	type MintParams struct {
 		Token0         common.Address
 		Token1         common.Address
-		Fee            uint32 // uint24 in Solidity
-		TickLower      int32  // int24 in Solidity
-		TickUpper      int32  // int24 in Solidity
+		Fee            *big.Int // Changed from uint32 to *big.Int for uint24
+		TickLower      *big.Int // Changed from int32 to *big.Int for int24
+		TickUpper      *big.Int // Changed from int32 to *big.Int for int24
 		Amount0Desired *big.Int
 		Amount1Desired *big.Int
 		Amount0Min     *big.Int
@@ -329,12 +384,17 @@ func (s *UniswapV3Solver) constructMint(metadata LPMetadata, identity string) ([
 	amount1Desired := new(big.Int)
 	amount1Desired.SetString(metadata.AmountB, 10)
 
+	// Convert Fee, TickLower, and TickUpper to *big.Int
+	fee := big.NewInt(int64(metadata.Fee))
+	tickLower := big.NewInt(int64(metadata.TickLower))
+	tickUpper := big.NewInt(int64(metadata.TickUpper))
+
 	params := MintParams{
 		Token0:         common.HexToAddress(metadata.TokenA),
 		Token1:         common.HexToAddress(metadata.TokenB),
-		Fee:            metadata.Fee,
-		TickLower:      int32(metadata.TickLower),
-		TickUpper:      int32(metadata.TickUpper),
+		Fee:            fee,
+		TickLower:      tickLower,
+		TickUpper:      tickUpper,
 		Amount0Desired: amount0Desired,
 		Amount1Desired: amount1Desired,
 		Amount0Min:     big.NewInt(0),
@@ -343,8 +403,11 @@ func (s *UniswapV3Solver) constructMint(metadata LPMetadata, identity string) ([
 		Deadline:       big.NewInt(time.Now().Unix() + 1800), // 30 minutes from now
 	}
 
+	log.Println(params)
+
 	// Pack as a tuple argument named "params"
-	return s.abi.Pack("mint", struct{ Params MintParams }{Params: params})
+	// return s.abi.Pack("mint", struct{ Params MintParams }{Params: params})
+	return s.abi.Pack("mint", params)
 }
 
 // constructExit builds transaction data for exiting a position
@@ -374,7 +437,8 @@ func (s *UniswapV3Solver) constructExit(metadata LPMetadata, identity string) ([
 		Deadline:   big.NewInt(time.Now().Unix() + 1800), // 30 minutes from now
 	}
 
-	return s.abi.Pack("decreaseLiquidity", struct{ Params DecreaseLiquidityParams }{Params: params})
+	// Pack as a tuple argument named "params"
+	return s.abi.Pack("decreaseLiquidity", params)
 }
 
 func (s *UniswapV3Solver) getPositionLiquidity(tokenId uint) (*big.Int, error) {

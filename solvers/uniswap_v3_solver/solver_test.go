@@ -1,9 +1,13 @@
 package uniswap_v3_solver
 
 import (
+	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +19,7 @@ const (
 	testNPMAddress       = "0x782Ed0e82F04fBcF8F6De1F609215A6CeD0EdB85"
 	testTokenAAddress    = "0xb228f5F03B05137b38C248D73bA591133128faDB" // StripUSD
 	testTokenBAddress    = "0xe109F006D577251340F103d3aCE72B56Fdc6E172" // TestTokenA
-	testPoolAddress      = "0x1234567890123456789012345678901234567890" // Example pool address
+	testPoolAddress      = "0x8Fc6e3247c13C56747cE4ae4E7621013763d98BC" // Example pool address
 	testAmount           = "1000000000000000000"                        // 1 token in wei
 	testRecipientAddress = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 )
@@ -35,9 +39,9 @@ func createTestIntent(action string) Intent {
 		TokenB:    testTokenBAddress,
 		AmountA:   testAmount,
 		AmountB:   testAmount,
-		Fee:       3000,
-		TickLower: -100,
-		TickUpper: 100,
+		Fee:       500,
+		TickLower: -180,
+		TickUpper: 180,
 		TokenId:   1,
 	}
 	metadataBytes, _ := json.Marshal(metadata)
@@ -91,48 +95,98 @@ func TestConstruct(t *testing.T) {
 	}
 }
 
-func TestSolve(t *testing.T) {
+func TestMintFlow(t *testing.T) {
+	// Setup private key from hex string
+	privateKeyHex := "" // Replace with actual private key
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+	testRecipientAddress := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
 	solver := setupTestSolver(t)
 	intent := createTestIntent("mint")
-	signature := "0x1234567890..." // Replace with valid signature
+	intent.Identity = testRecipientAddress
 
-	txHash, err := solver.Solve(intent, 0, signature)
+	// Test Construct
+	txData, err := solver.Construct(intent, 0)
+	require.NoError(t, err)
+	assert.NotEmpty(t, txData)
+
+	// Sign the transaction data
+	txDataBytes := []byte(txData)
+	signature, err := crypto.Sign(crypto.Keccak256(txDataBytes), privateKey)
+	require.NoError(t, err)
+	signatureHex := "0x" + hex.EncodeToString(signature)
+
+	// Test Solve with actual signature
+	txHash, err := solver.Solve(intent, 0, signatureHex)
 	require.NoError(t, err)
 	assert.NotEmpty(t, txHash)
-}
 
-func TestStatus(t *testing.T) {
-	solver := setupTestSolver(t)
-	intent := createTestIntent("mint")
+	// Test Status with polling
+	maxAttempts := 20
+	for i := 0; i < maxAttempts; i++ {
+		status, err := solver.Status(intent, 0)
+		require.NoError(t, err)
 
-	status, err := solver.Status(intent, 0)
-	require.NoError(t, err)
-	assert.Contains(t, []string{"pending", "success", "failed"}, status)
-}
+		if status == "success" || status == "failed" {
+			break
+		}
+		if i == maxAttempts-1 {
+			t.Fatalf("Transaction did not complete within %d attempts", maxAttempts)
+		}
 
-func TestGetOutput(t *testing.T) {
-	solver := setupTestSolver(t)
-	intent := createTestIntent("mint")
+		time.Sleep(2 * time.Second)
+	}
 
+	// Test GetOutput
 	output, err := solver.GetOutput(intent, 0)
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
-}
 
-func TestConstructMint(t *testing.T) {
-	solver := setupTestSolver(t)
-	intent := createTestIntent("mint")
-
-	hash, err := solver.Construct(intent, 0)
+	// Decode and verify output
+	var lpOutput LPOutput
+	err = json.Unmarshal([]byte(output), &lpOutput)
 	require.NoError(t, err)
-	assert.NotEmpty(t, hash)
+	assert.NotEmpty(t, lpOutput.TxHash)
+	assert.NotZero(t, lpOutput.TokenId)
+	assert.NotEmpty(t, lpOutput.AmountA)
+	assert.NotEmpty(t, lpOutput.AmountB)
 }
 
-func TestConstructExit(t *testing.T) {
+func TestExitFlow(t *testing.T) {
 	solver := setupTestSolver(t)
 	intent := createTestIntent("exit")
 
-	hash, err := solver.Construct(intent, 0)
+	// Test Construct
+	txData, err := solver.Construct(intent, 0)
 	require.NoError(t, err)
-	assert.NotEmpty(t, hash)
+	assert.NotEmpty(t, txData)
+
+	// Test Solve
+	txHash, err := solver.Solve(intent, 0, "0x1234") // Mock signature
+	require.NoError(t, err)
+	assert.NotEmpty(t, txHash)
+
+	// Test Status
+	status, err := solver.Status(intent, 0)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", status)
+
+	// Test GetOutput
+	output, err := solver.GetOutput(intent, 0)
+	require.NoError(t, err)
+	assert.NotEmpty(t, output)
+
+	// Decode and verify output
+	var lpOutput LPOutput
+	err = json.Unmarshal([]byte(output), &lpOutput)
+	require.NoError(t, err)
+	assert.NotEmpty(t, lpOutput.TxHash)
+	assert.NotZero(t, lpOutput.TokenId)
+	assert.NotEmpty(t, lpOutput.AmountA)
+	assert.NotEmpty(t, lpOutput.AmountB)
 }

@@ -31,7 +31,7 @@ The Docker Compose configuration includes the following services:
 1. **ganache**: An Ethereum development blockchain for testing
 2. **foundry**: Handles smart contract deployment
 3. **bootnode**: P2P network bootstrap node
-4. **signerX** (signer1, signer2): Signer nodes that participate in the distributed signing process
+4. **validatorX** (validator1, validator2): Signer nodes that participate in the distributed signing process
 5. **signerXpostgres**: PostgreSQL databases for each signer
 6. **sequencer**: Processes transactions and communicates with signers
 7. **sequencerpostgres**: PostgreSQL database for the sequencer
@@ -62,8 +62,8 @@ The Docker Compose configuration includes the following services:
 3. **Access the services**:
 
    - Sequencer API: http://localhost:80
-   - Signer1 API: http://localhost:8080
-   - Signer2 API: http://localhost:8081
+   - Validator1 API: http://localhost:8080
+   - Validator2 API: http://localhost:8081
    - Solver API: http://localhost:8083
 
 4. **Check service status**:
@@ -252,7 +252,7 @@ To reset just the PostgreSQL databases while preserving other data:
 
 ```sh
 docker-compose down
-docker volume rm strip-node_postgres-data-sequencer strip-node_postgres-data-signer1 strip-node_postgres-data-signer2
+docker volume rm strip-node_postgres-data-sequencer strip-node_postgres-data-validator1 strip-node_postgres-data-validator2
 docker-compose up -d
 ```
 

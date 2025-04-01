@@ -57,34 +57,33 @@ services:
       foundry:
         condition: service_completed_successfully
 
-  signer1postgres:
+  validator1postgres:
     image: postgres:14.13
-    container_name: signer1postgres
+    container_name: validator1postgres
     environment:
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
     volumes:
-      - signer1postgres-data:/var/lib/postgresql/data
+      - validator1postgres-data:/var/lib/postgresql/data
 
-  signer2postgres:
+  validator2postgres:
     image: postgres:14.13
-    container_name: signer2postgres
+    container_name: validator2postgres
     environment:
       POSTGRES_PASSWORD: password
     ports:
       - "5433:5432"
     volumes:
-      - signer2postgres-data:/var/lib/postgresql/data
+      - validator2postgres-data:/var/lib/postgresql/data
 
-  signer1:
+  validator1:
     build:
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: signer1
+      context: strip-validator
+    container_name: validator1
     depends_on:
       - bootnode
-      - signer1postgres
+      - validator1postgres
     ports:
       - "30304:30304"
       - "8080:8080"
@@ -96,9 +95,9 @@ services:
       start_period: 2s
     command:
       [
-        "--signerPublicKey",
+        "--validatorPublicKey",
         "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf",
-        "--signerPrivateKey",
+        "--validatorPrivateKey",
         "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2",
         "--rpcURL",
         "http://ganache:8545",
@@ -107,19 +106,18 @@ services:
         "--port",
         "30304",
         "--postgresHost",
-        "signer1postgres:5432",
+        "validator1postgres:5432",
         "--bootnode",
         "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR",
       ]
 
-  signer2:
+  validator2:
     build:
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: signer2
+      context: strip-validator
+    container_name: validator2
     depends_on:
       - bootnode
-      - signer2postgres
+      - validator2postgres
     ports:
       - "30305:30305"
       - "8081:8081"
@@ -131,9 +129,9 @@ services:
       start_period: 2s
     command:
       [
-        "--signerPublicKey",
+        "--validatorPublicKey",
         "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35",
-        "--signerPrivateKey",
+        "--validatorPrivateKey",
         "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de",
         "--rpcURL",
         "http://ganache:8545",
@@ -142,7 +140,7 @@ services:
         "--port",
         "30305",
         "--postgresHost",
-        "signer2postgres:5432",
+        "validator2postgres:5432",
         "--bootnode",
         "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR",
       ]
@@ -163,9 +161,9 @@ services:
       dockerfile: ./Dockerfile
     container_name: sequencer
     depends_on:
-      signer1:
+      validator1:
         condition: service_healthy
-      signer2:
+      validator2:
         condition: service_healthy
     ports:
       - "30306:30306"
@@ -241,7 +239,7 @@ services:
 volumes:
   bitcoin-data:
   electrs-data:
-  signer1postgres-data:
-  signer2postgres-data:
+  validator1postgres-data:
+  validator2postgres-data:
   sequencerpostgres-data:
   ganache-data:

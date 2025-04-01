@@ -1,4 +1,4 @@
-package signer
+package main
 
 import (
 	"context"
@@ -32,7 +32,10 @@ func initDHT(ctx context.Context, h host.Host, bootnode []multiaddr.Multiaddr) (
 	}
 	var wg sync.WaitGroup
 	for _, peerAddr := range bootnode {
-		peerinfo, _ := peer.AddrInfoFromP2pAddr(peerAddr)
+		peerinfo, err := peer.AddrInfoFromP2pAddr(peerAddr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create peer info: %w", err)
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

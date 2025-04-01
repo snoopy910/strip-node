@@ -23,7 +23,10 @@ var SignersList = func() ([]Signer, error) {
 		return nil, fmt.Errorf("failed to dial ethclient: %w", err)
 	}
 
-	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	instance, err := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get intent operators registry contract: %w", err)
+	}
 
 	eventSignature := []byte("SignerUpdated(bytes32,string,bool)")
 	hashEvent := crypto.Keccak256Hash(eventSignature)

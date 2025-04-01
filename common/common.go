@@ -32,12 +32,12 @@ func FileExists(name string) (bool, error) {
 
 func PublicKeyStrToBytes32(publicKey string) [32]byte {
 	pubkey := string([]rune(publicKey)[2:])
-	signerPublicKeyBytes, err := hex.DecodeString(pubkey)
+	validatorPublicKeyBytes, err := hex.DecodeString(pubkey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return *byte32(signerPublicKeyBytes)
+	return *byte32(validatorPublicKeyBytes)
 }
 
 func byte32(s []byte) (a *[32]byte) {

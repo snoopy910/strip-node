@@ -9,6 +9,7 @@ import (
 
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress, NodePrivateKey, NodePublicKey string
 var MaximumSigners int
+var HeliusApiKey string
 
 type PartyProcess struct {
 	Party  *tss.Party
@@ -28,8 +29,10 @@ func Start(
 	intentOperatorsRegistryContractAddress string,
 	solversRegistryContractAddress string,
 	maximumSigners int,
+	heliusApiKey string,
 	bridgeContractAddress string,
 ) {
+	HeliusApiKey = heliusApiKey
 	RPC_URL = rpcURL
 	IntentOperatorsRegistryContractAddress = intentOperatorsRegistryContractAddress
 	SolversRegistryContractAddress = solversRegistryContractAddress

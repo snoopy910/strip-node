@@ -68,6 +68,11 @@ type LockSchema struct {
 	Locked        bool   `json:"locked"`
 }
 
+type HeartbeatSchema struct {
+	PublicKey string    `pg:"publickey,pk"`
+	Timestamp time.Time `pg:"timestamp"`
+}
+
 // Add these constants for pool configuration
 const (
 	minPoolSize     = 2
@@ -81,6 +86,7 @@ func createSchemas(db *pg.DB) error {
 		(*OperationSchema)(nil),
 		(*WalletSchema)(nil),
 		(*LockSchema)(nil),
+		(*HeartbeatSchema)(nil),
 	}
 
 	for _, model := range models {
@@ -605,4 +611,90 @@ var AddWallet = func(wallet *WalletSchema) (int64, error) {
 	}
 
 	return wallet.Id, nil
+}
+
+func AddHeartbeat(publicKey string) error {
+	heartbeat := &HeartbeatSchema{
+		PublicKey: publicKey,
+		Timestamp: time.Now(),
+	}
+	_, err := client.Model(heartbeat).Insert()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func UpdateHeartbeat(publicKey string) error {
+	heartbeat := &HeartbeatSchema{
+		PublicKey: publicKey,
+		Timestamp: time.Now(),
+	}
+	_, err := client.Model(heartbeat).
+		Set("timestamp = ?timestamp").
+		Where("publickey = ?publickey").
+		Update()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetHeartbeat(publicKey string) (HeartbeatSchema, error) {
+	heartbeat := &HeartbeatSchema{
+		PublicKey: publicKey,
+	}
+	err := client.Model(heartbeat).
+		Where("publickey = ?publickey").
+		Select()
+	if err != nil {
+		return HeartbeatSchema{}, err
+	}
+	return *heartbeat, nil
+}
+
+func GetHeartbeats() ([]HeartbeatSchema, error) {
+	var heartbeats []HeartbeatSchema
+	err := client.Model(&heartbeats).Select()
+	if err != nil {
+		return nil, err
+	}
+	return heartbeats, nil
+}
+
+func DeleteHeartbeat(publicKey string) error {
+	heartbeat := &HeartbeatSchema{
+		PublicKey: publicKey,
+	}
+	_, err := client.Model(heartbeat).Delete()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func IsSignerAlive(publicKey string) bool {
+	heartbeat := &HeartbeatSchema{
+		PublicKey: publicKey,
+	}
+	err := client.Model(heartbeat).Last()
+	if err != nil {
+		return false
+	}
+	if time.Since(heartbeat.Timestamp) > HEARTBEAT_TIMEOUT {
+		return false
+	}
+	return true
+}
+
+func GetActiveSigners() ([]HeartbeatSchema, error) {
+	var heartbeats []HeartbeatSchema
+	err := client.Model((*HeartbeatSchema)(nil)).
+		ColumnExpr("distinct publickey").
+		Where("timestamp > ?", time.Now().Add(-HEARTBEAT_TIMEOUT)).
+		Select(&heartbeats)
+	if err != nil {
+		return nil, err
+	}
+	return heartbeats, nil
 }

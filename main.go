@@ -147,6 +147,7 @@ func main() {
 			*intentOperatorsRegistryContractAddress,
 			*solversRegistryContractAddress,
 			*maximumSigners,
+			*heliusApiKey,
 			*bridgeContractAddress,
 		)
 	}

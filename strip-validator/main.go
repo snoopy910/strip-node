@@ -15,6 +15,7 @@ import (
 
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress, NodePrivateKey, NodePublicKey string
 var MaximumSigners int
+var HeliusApiKey string
 
 type PartyProcess struct {
 	Party  *tss.Party
@@ -36,6 +37,7 @@ func main() {
 	solversRegistryContractAddress := flag.String("solversRegistryAddress", util.LookupEnvOrString("SOLVERS_REGISTRY_CONTRACT_ADDRESS", "0x56A9bCddF533Af1859842074B46B0daD07b7686a"), "address of SolversRegistry contract")
 	bridgeContractAddress := flag.String("bridgeContractAddress", util.LookupEnvOrString("BRIDGE_CONTRACT_ADDRESS", "0x79E3A2B39e77dfB5C9C6a370D4a8a4fa42c482c0"), "address of Bridge contract")
 	rpcURL := flag.String("rpcURL", util.LookupEnvOrString("RPC_URL", "http://localhost:8545"), "ethereum node RPC URL")
+	heliusApiKey := flag.String("heliusApiKey", util.LookupEnvOrString("HELIUS_API_KEY", "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"), "helius API key")
 	// maximumSigners := flag.Int("maximumSigners", util.LookupEnvOrInt("MAXIMUM_SIGNERS", 3), "maximum number of signers for an account")
 
 	postgresHost := flag.String("postgresHost", util.LookupEnvOrString("POSTGRES_HOST", "localhost:5432"), "postgres host")
@@ -50,6 +52,7 @@ func main() {
 	BridgeContractAddress = *bridgeContractAddress
 
 	NodePublicKey = *validatorPublicKey
+	HeliusApiKey = *heliusApiKey
 
 	IntentOperatorsRegistryContractAddress = *intentOperatorsRegistryContractAddress
 

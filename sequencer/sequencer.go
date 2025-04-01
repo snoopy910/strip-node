@@ -55,6 +55,7 @@ func StartSequencer(
 	initialiseBridge()
 
 	go startHTTPServer(httpPort)
+	go startCheckingSigner()
 
 	<-keepAlive
 }

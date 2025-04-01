@@ -79,7 +79,8 @@ services:
 
   validator1:
     build:
-      context: strip-validator
+      context: .
+      dockerfile: ./strip-validator/Dockerfile
     container_name: validator1
     depends_on:
       - bootnode
@@ -113,7 +114,8 @@ services:
 
   validator2:
     build:
-      context: strip-validator
+      context: .
+      dockerfile: ./strip-validator/Dockerfile
     container_name: validator2
     depends_on:
       - bootnode

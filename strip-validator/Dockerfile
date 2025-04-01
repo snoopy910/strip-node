@@ -7,20 +7,21 @@ RUN apk add build-base curl
 
 COPY . .
 
-# RUN go mod vendor
-RUN go build -o strip-validator
+# Run go mod vendor and build
+RUN cd strip-validator && go build -o strip-validator
 
 # Final stage
 FROM alpine:latest
+
+# Install curl for healthcheck
+RUN apk add curl
 
 # Create a non-root user for security
 RUN adduser -D appuser
 
 WORKDIR /app
 # Copy only the binary from the builder stage
-COPY --from=builder /build/strip-validator /app/strip-validator
-
-RUN apk add curl
+COPY --from=builder /build/strip-validator/strip-validator /app/strip-validator
 
 # Use the non-root user
 USER appuser

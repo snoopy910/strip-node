@@ -1,11 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: solver
-  namespace: dev
+  name: strip-node-solver
 spec:
-  ports:
-    - port: 8083
-      targetPort: 8083
   selector:
-    app: solver 
+    app: strip-node-solver
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP 

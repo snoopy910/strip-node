@@ -1,38 +1,42 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: solver
-  namespace: dev
+  name: strip-node-solver
+  labels:
+    app: strip-node-solver
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: solver
+      app: strip-node-solver
   template:
     metadata:
       labels:
-        app: solver
+        app: strip-node-solver
     spec:
-      initContainers:
-        - name: wait-for-sequencer
-          image: busybox
-          command: ['sh', '-c', 'until nslookup sequencer.dev.svc.cluster.local; do echo waiting for sequencer; sleep 2; done;']
       containers:
-        - name: solver
-          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-          ports:
-            - containerPort: 8083
-          command:
-            - /bin/sh
-            - -c
-            - >
-              /app/strip-node
-              --httpPort 8083
-              --isTestSolver true 
+      - name: strip-node-solver
+        image: dev/backend/strip-node:solver
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: IS_UNISWAP_SOLVER
+          value: "true"
+        - name: RPC_URL
+          value: "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz/"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: UNISWAP_V3_FACTORY
+          value: "0xb1a101860602D32A50E0e426CB827ce2121f12D2"
+        - name: NPM_ADDRESS
+          value: "0x782Ed0e82F04fBcF8F6De1F609215A6CeD0EdB85"
+        - name: CHAIN_ID
+          value: "44331"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1024Mi"

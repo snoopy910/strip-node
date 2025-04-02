@@ -2926,6 +2926,7 @@ func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, d
 
 	client, err := ethclient.Dial(chain.ChainUrl)
 	if err != nil {
+		logger.Sugar().Errorw("failed to dial ethclient", "error", err)
 		return "", err
 	}
 

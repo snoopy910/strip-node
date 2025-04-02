@@ -19,7 +19,11 @@ const (
 
 func UpdateSignersList() error {
 	// NOTE: ganache is not supporting notification and not able to subscribe new events
-	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	instance, err := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	if err != nil {
+		logger.Sugar().Errorw("Failed to get intent operators registry contract", "error", err)
+		return err
+	}
 	filterOpts := &bind.FilterOpts{Context: context.Background()}
 	itr, err := instance.FilterSignerUpdated(filterOpts, nil)
 	if err != nil {

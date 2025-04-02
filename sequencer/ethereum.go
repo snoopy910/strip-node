@@ -7,6 +7,7 @@ import (
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethCommon "github.com/ethereum/go-ethereum/common"
@@ -26,6 +27,7 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]c
 	// Initialize Ethereum client with chain RPC URL
 	client, err := ethclient.Dial(chain.ChainUrl)
 	if err != nil {
+		logger.Sugar().Errorw("failed to dial ethclient", "error", err)
 		return nil, err
 	}
 

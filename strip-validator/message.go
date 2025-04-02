@@ -1,4 +1,4 @@
-package signer
+package main
 
 import (
 	"context"
@@ -82,7 +82,11 @@ func handleIncomingMessage(message []byte) {
 	compressedPubKeyStr = compressedPubKeyStr[4:]
 	compressedPubKeyStr = "0x" + compressedPubKeyStr
 
-	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	instance, err := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	if err != nil {
+		logger.Sugar().Errorw("failed to get intent operators registry contract", "error", err)
+		log.Fatal(err)
+	}
 
 	signerExists, err := instance.Signers(&bind.CallOpts{}, common.PublicKeyStrToBytes32(compressedPubKeyStr))
 	if err != nil {

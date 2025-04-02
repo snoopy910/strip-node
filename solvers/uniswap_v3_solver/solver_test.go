@@ -44,7 +44,7 @@ func createTestIntent(action string) Intent {
 		Fee:       500,
 		TickLower: -180,
 		TickUpper: 180,
-		TokenId:   1,
+		TokenId:   3, // This value should be same as `_nextId` in NPM contract
 	}
 	metadataBytes, _ := json.Marshal(metadata)
 

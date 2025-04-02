@@ -20,6 +20,7 @@ func NewServer(solver *UniswapV3Solver) *Server {
 func startHTTPServer(solver *UniswapV3Solver, port string) {
 	server := NewServer(solver)
 
+	http.HandleFunc("/health", server.handleHealth)
 	http.HandleFunc("/construct", server.handleConstruct)
 	http.HandleFunc("/solve", server.handleSolve)
 	http.HandleFunc("/status", server.handleStatus)
@@ -28,15 +29,6 @@ func startHTTPServer(solver *UniswapV3Solver, port string) {
 	if err := http.ListenAndServe("0.0.0.0:"+port, nil); err != nil {
 		panic(err)
 	}
-}
-
-func (s *Server) Serve() error {
-	http.HandleFunc("/construct", s.handleConstruct)
-	http.HandleFunc("/solve", s.handleSolve)
-	http.HandleFunc("/status", s.handleStatus)
-	http.HandleFunc("/output", s.handleOutput)
-
-	return http.ListenAndServe(":8080", nil)
 }
 
 func (s *Server) handleConstruct(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +90,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": status,
 	})
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (s *Server) handleOutput(w http.ResponseWriter, r *http.Request) {

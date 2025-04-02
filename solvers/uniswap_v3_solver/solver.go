@@ -65,6 +65,7 @@ func Start(
 	npmAddress string,
 	chainId int64,
 ) {
+	fmt.Printf("Starting Uniswap V3 solver on port %s\n", httpPort)
 	keepAlive := make(chan string)
 	// Initialize the solver
 	solver, err := NewUniswapV3Solver(rpcURL, chainId, uniswapV3FactoryAddress, npmAddress)
@@ -81,6 +82,7 @@ func Start(
 
 // NewUniswapV3Solver creates a new instance of UniswapV3Solver
 func NewUniswapV3Solver(rpcURL string, chainId int64, factoryAddress string, npmAddress string) (*UniswapV3Solver, error) {
+	fmt.Printf("Initializing Uniswap V3 solver with factory %s and NPM %s\n", factoryAddress, npmAddress)
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Ethereum client: %v", err)
@@ -110,6 +112,7 @@ func NewUniswapV3Solver(rpcURL string, chainId int64, factoryAddress string, npm
 }
 
 func (s *UniswapV3Solver) cleanupExpiredParams() {
+	fmt.Println("Starting cleanup routine for expired parameters")
 	ticker := time.NewTicker(s.cleanupInterval)
 	defer ticker.Stop()
 	for {
@@ -130,6 +133,7 @@ func (s *UniswapV3Solver) cleanupExpiredParams() {
 }
 
 func (s *UniswapV3Solver) StopCleanup() {
+	fmt.Println("Stopping cleanup routine")
 	s.cleanupMutex.Lock()
 	close(s.cleanupStop)
 	s.cleanupMutex.Unlock()
@@ -137,6 +141,7 @@ func (s *UniswapV3Solver) StopCleanup() {
 
 // Solve executes the Uniswap V3 operation with a signed transaction
 func (s *UniswapV3Solver) Solve(intent Intent, opIndex int, signature string) (string, error) {
+	fmt.Printf("Solving operation %d for intent %s\n", opIndex, intent.Identity)
 	if opIndex >= len(intent.Operations) {
 		return "", fmt.Errorf("operation index out of range")
 	}
@@ -215,6 +220,7 @@ func (s *UniswapV3Solver) Solve(intent Intent, opIndex int, signature string) (s
 
 // Status checks the status of a Uniswap V3 operation
 func (s *UniswapV3Solver) Status(intent Intent, opIndex int) (string, error) {
+	fmt.Printf("Checking status for operation %d of intent %s\n", opIndex, intent.Identity)
 	if opIndex >= len(intent.Operations) {
 		return "", fmt.Errorf("operation index out of range")
 	}
@@ -253,6 +259,7 @@ func (s *UniswapV3Solver) Status(intent Intent, opIndex int) (string, error) {
 
 // GetOutput retrieves the result of a Uniswap V3 operation
 func (s *UniswapV3Solver) GetOutput(intent Intent, opIndex int) (string, error) {
+	fmt.Printf("Getting output for operation %d of intent %s\n", opIndex, intent.Identity)
 	if opIndex >= len(intent.Operations) {
 		return "", fmt.Errorf("operation index out of range")
 	}
@@ -378,6 +385,7 @@ func (s *UniswapV3Solver) GetOutput(intent Intent, opIndex int) (string, error) 
 
 // Construct builds the transaction data for a Uniswap V3 operation
 func (s *UniswapV3Solver) Construct(intent Intent, opIndex int) (string, error) {
+	fmt.Printf("Constructing transaction for operation %d of intent %s\n", opIndex, intent.Identity)
 	if opIndex >= len(intent.Operations) {
 		return "", fmt.Errorf("operation index out of range")
 	}
@@ -455,6 +463,7 @@ func (s *UniswapV3Solver) Construct(intent Intent, opIndex int) (string, error) 
 
 // constructTxData builds the transaction data based on the operation type
 func (s *UniswapV3Solver) constructTxData(metadata LPMetadata, identity string) ([]byte, error) {
+	fmt.Printf("Constructing tx data for action: %s\n", metadata.Action)
 	switch metadata.Action {
 	case "mint":
 		return s.constructMint(metadata, identity)
@@ -467,6 +476,7 @@ func (s *UniswapV3Solver) constructTxData(metadata LPMetadata, identity string) 
 
 // constructMint builds transaction data for minting a new position
 func (s *UniswapV3Solver) constructMint(metadata LPMetadata, identity string) ([]byte, error) {
+	fmt.Printf("Constructing mint tx for tokens %s/%s\n", metadata.TokenA, metadata.TokenB)
 	// Create MintParams struct matching the ABI tuple structure
 	type MintParams struct {
 		Token0         common.Address
@@ -513,6 +523,7 @@ func (s *UniswapV3Solver) constructMint(metadata LPMetadata, identity string) ([
 
 // constructExit builds transaction data for exiting a position
 func (s *UniswapV3Solver) constructExit(metadata LPMetadata, identity string) ([]byte, error) {
+	fmt.Printf("Constructing exit tx for token ID %d\n", metadata.TokenId)
 	// Create DecreaseLiquidityParams struct matching the ABI structure
 	type DecreaseLiquidityParams struct {
 		TokenId    *big.Int
@@ -543,6 +554,7 @@ func (s *UniswapV3Solver) constructExit(metadata LPMetadata, identity string) ([
 }
 
 func (s *UniswapV3Solver) getPositionLiquidity(tokenId uint) (*big.Int, error) {
+	fmt.Printf("Getting liquidity for token ID %d\n", tokenId)
 
 	positionABI := `[{"inputs":[{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"positions","outputs":[{"internalType":"uint96","name":"nonce","type":"uint96"},{"internalType":"address","name":"operator","type":"address"},{"internalType":"address","name":"token0","type":"address"},{"internalType":"address","name":"token1","type":"address"},{"internalType":"uint24","name":"fee","type":"uint24"},{"internalType":"int24","name":"tickLower","type":"int24"},{"internalType":"int24","name":"tickUpper","type":"int24"},{"internalType":"uint128","name":"liquidity","type":"uint128"},{"internalType":"uint256","name":"feeGrowthInside0LastX128","type":"uint256"},{"internalType":"uint256","name":"feeGrowthInside1LastX128","type":"uint256"},{"internalType":"uint128","name":"tokensOwed0","type":"uint128"},{"internalType":"uint128","name":"tokensOwed1","type":"uint128"}],"stateMutability":"view","type":"function"}]`
 

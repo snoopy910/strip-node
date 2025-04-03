@@ -20,6 +20,7 @@ spec:
       containers:
         - name: validator2
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
+          imagePullPolicy: Always
           resources:
             requests:
               cpu: "1000m"

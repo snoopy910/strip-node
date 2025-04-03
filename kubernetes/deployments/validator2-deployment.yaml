@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: signer1
+  name: validator2
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: signer1
+      app: validator2
   template:
     metadata:
       labels:
-        app: signer1
+        app: validator2
     spec:
       initContainers:
         - name: wait-for-bootnode
           image: busybox
           command: ['sh', '-c', 'until nslookup bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
       containers:
-        - name: signer1
+        - name: validator2
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
           resources:
             requests:
@@ -28,32 +28,27 @@ spec:
               cpu: "3000m"
               memory: "2Gi"
           ports:
-            - containerPort: 8080
-            - containerPort: 30304
+            - containerPort: 8081
+            - containerPort: 30305
           command:
             - /bin/sh
             - -c
             - >
               PGSSLMODE=disable /app/strip-node
-              --signerPublicKey 0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf
-              --signerPrivateKey 0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2
+              --validatorPublicKey 0x2c3e1d0ce0fef4e4ea935424ad1e5e54c0889f4e3c0bfb4c0c1f88e0f0c0c0c0
+              --validatorPrivateKey 0x2c3e1d0ce0fef4e4ea935424ad1e5e54c0889f4e3c0bfb4c0c1f88e0f0c0c0c0
               --rpcURL http://54.82.29.58:8545
-              --httpPort 8080
-              --port 30304
+              --httpPort 8081
+              --port 30305
               --postgresHost dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432
               --postgresPassword z2D76R4euvBd
-              --postgresDB signer1
+              --postgresDB validator2
               --postgresUser postgres
               --bootnode /dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR
-          env:
-            - name: HTTP_CLIENT_TIMEOUT
-              value: "300s"
-            - name: KEYGEN_TIMEOUT
-              value: "600s"
           readinessProbe:
             httpGet:
               path: /status
-              port: 8080
+              port: 8081
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -62,7 +57,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /status
-              port: 8080
+              port: 8081
             initialDelaySeconds: 60
             periodSeconds: 20
             timeoutSeconds: 5

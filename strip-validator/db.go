@@ -1,4 +1,4 @@
-package signer
+package main
 
 import (
 	"github.com/StripChain/strip-node/util/logger"

@@ -32,6 +32,7 @@ import (
 	algorandTypes "github.com/algorand/go-algorand-sdk/types"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/coming-chat/go-sui/v2/sui_types"
 	cardanolib "github.com/echovl/cardano-go"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -205,36 +206,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
-					} else if operation.KeyCurve == "sui_eddsa" {
-						signature, err := getSignature(intent, i)
-						if err != nil {
-							logger.Sugar().Errorw("error getting signature", "error", err)
-							break
-						}
-
-						txnHash, err := sui.SendSuiTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
-						if err != nil {
-							logger.Sugar().Errorw("error sending sui transaction", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
-							break
-						}
-
-						var lockMetadata LockMetadata
-						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
-
-						if lockMetadata.Lock {
-							err := LockIdentity(lockSchema.Id)
-							if err != nil {
-								logger.Sugar().Errorw("error locking identity", "error", err)
-								break
-							}
-
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
-						} else {
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
-						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" || operation.KeyCurve == "sui_eddsa" {
 						chId := operation.ChainId
 						if chId == "" {
 							chId = operation.GenesisHash
@@ -332,6 +304,22 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.CardanoPublicKey, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending Cardano transaction", "error", err)
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+						}
+
+						if chain.ChainType == "sui" {
+							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							if err != nil {
+								logger.Sugar().Errorw("error getting public key", "error", err)
+								break
+							}
+
+							txnHash, err = sui.SendSuiTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.SuiPublicKey, signature)
+							if err != nil {
+								logger.Sugar().Errorw("error sending Sui transaction", "error", err)
 								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
@@ -586,7 +574,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
 						}
-					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" {
+					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" || operation.KeyCurve == "sui_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
 						if err != nil {
 							logger.Sugar().Errorw("error getting chain", "error", err)
@@ -692,6 +680,22 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 							destAddress = tx.Body.Outputs[0].Address.String()
+						case "sui":
+							var tx sui_types.TransactionData
+							txBytes, err := base64.StdEncoding.DecodeString(operation.SerializedTxn)
+							if err != nil {
+								logger.Sugar().Errorw("error decoding Sui transaction", "error", err)
+								break
+							}
+							if err := json.Unmarshal(txBytes, &tx); err != nil {
+								logger.Sugar().Errorw("error parsing Sui transaction", "error", err)
+								break
+							}
+							if len(tx.V1.Kind.ProgrammableTransaction.Inputs) < 1 {
+								logger.Sugar().Errorw("wrong format sui transaction", "error", err)
+								break
+							}
+							destAddress = string(*tx.V1.Kind.ProgrammableTransaction.Inputs[0].Pure)
 						}
 
 						// Verify the extracted destination matches the bridge wallet
@@ -713,6 +717,8 @@ func ProcessIntent(intentId int64) {
 								validDestination = strings.EqualFold(destAddress, bridgeWallet.RippleEDDSAPublicKey)
 							case "cardano":
 								validDestination = strings.EqualFold(destAddress, bridgeWallet.CardanoPublicKey)
+							case "sui":
+								validDestination = strings.EqualFold(destAddress, bridgeWallet.SuiPublicKey)
 							}
 						}
 
@@ -874,7 +880,9 @@ func ProcessIntent(intentId int64) {
 								logger.Sugar().Errorw("error getting solana transfers", "error", err)
 								break
 							}
-						} else if chain.ChainType == "dogecoin" {
+						}
+
+						if chain.ChainType == "dogecoin" {
 							transfers, err = dogecoin.GetDogeTransfers(depositOperation.ChainId, depositOperation.Result)
 							if err != nil {
 								logger.Sugar().Errorw("error getting dogecoin transfers", "error", err)
@@ -2918,6 +2926,7 @@ func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, d
 
 	client, err := ethclient.Dial(chain.ChainUrl)
 	if err != nil {
+		logger.Sugar().Errorw("failed to dial ethclient", "error", err)
 		return "", err
 	}
 

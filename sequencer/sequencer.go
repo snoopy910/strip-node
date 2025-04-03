@@ -40,7 +40,11 @@ func StartSequencer(
 	BridgeContractAddress = bridgeContractAddress
 	PrivateKey = privateKey
 
-	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(rpcURL, intentOperatorsRegistryContractAddress)
+	instance, err := intentoperatorsregistry.GetIntentOperatorsRegistryContract(rpcURL, intentOperatorsRegistryContractAddress)
+	if err != nil {
+		panic(err)
+	}
+
 	_maxSigners, err := instance.MAXIMUMSIGNERS(&bind.CallOpts{})
 	if err != nil {
 		panic(err)
@@ -51,6 +55,7 @@ func StartSequencer(
 	initialiseBridge()
 
 	go startHTTPServer(httpPort)
+	go startCheckingSigner()
 
 	<-keepAlive
 }

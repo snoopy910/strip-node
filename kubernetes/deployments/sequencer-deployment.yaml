@@ -16,7 +16,7 @@ spec:
       initContainers:
         - name: wait-for-signers
           image: busybox
-          command: ['sh', '-c', 'until wget -q -O- http://signer1:8080/status && wget -q -O- http://signer2:8081/status; do echo waiting for signers; sleep 5; done;']
+          command: ['sh', '-c', 'until wget -q -O- http://validator1:8080/status && wget -q -O- http://validator2:8081/status; do echo waiting for signers; sleep 5; done;']
       containers:
         - name: sequencer
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest

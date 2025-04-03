@@ -1,4 +1,4 @@
-package signer
+package main
 
 import (
 	"bytes"

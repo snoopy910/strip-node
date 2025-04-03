@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signerPublicKey string, signerNodeURL string) {
+func AddSignerToHub(rpcURL string, contractAddress string, privKey string, validatorPublicKey string, signerNodeURL string) {
 	time.Sleep(5 * time.Second)
 
 	client, err := ethclient.Dial(rpcURL)
@@ -60,7 +60,7 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 		log.Fatal(err)
 	}
 
-	data, err := abi.Pack("addSigner", tssCommon.PublicKeyStrToBytes32(signerPublicKey), signerNodeURL)
+	data, err := abi.Pack("addSigner", tssCommon.PublicKeyStrToBytes32(validatorPublicKey), signerNodeURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 
 	auth.Nonce = big.NewInt(int64(nonce))
 
-	tx, err := instance.AddSigner(auth, tssCommon.PublicKeyStrToBytes32(signerPublicKey), signerNodeURL)
+	tx, err := instance.AddSigner(auth, tssCommon.PublicKeyStrToBytes32(validatorPublicKey), signerNodeURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -97,5 +97,5 @@ func AddSignerToHub(rpcURL string, contractAddress string, privKey string, signe
 
 	time.Sleep(5 * time.Second)
 
-	fmt.Println("Signer", signerPublicKey, " added. Transaction hash: ", tx.Hash().String())
+	fmt.Println("Signer", validatorPublicKey, " added. Transaction hash: ", tx.Hash().String())
 }

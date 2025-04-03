@@ -19,7 +19,7 @@ spec:
           command: ['sh', '-c', 'until wget -q -O- http://validator1:8080/status && wget -q -O- http://validator2:8081/status; do echo waiting for signers; sleep 5; done;']
       containers:
         - name: sequencer
-          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node:demo
           resources:
             requests:
               cpu: "1000m"
@@ -38,8 +38,6 @@ spec:
               value: "600s"
             - name: POSTGRES_HOST
               value: "dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432"
-            - name: DEBUG
-              value: "true"
           command:
             - /bin/sh
             - -c
@@ -47,30 +45,15 @@ spec:
               echo "Starting sequencer with debug mode..." &&
               PGSSLMODE=disable /app/strip-node
               --privateKey 76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a
-              --rpcURL http://54.82.29.58:8545
+              --rpcURL https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz
               --httpPort 8082
               --port 30306
               --postgresHost dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432
               --postgresPassword z2D76R4euvBd
               --postgresDB sequencer
               --postgresUser postgres
-              --isSequencer true
-              --debug true
-          readinessProbe:
-            httpGet:
-              path: /status
-              port: 8082
-            initialDelaySeconds: 180
-            periodSeconds: 10
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 5
-          livenessProbe:
-            httpGet:
-              path: /status
-              port: 8082
-            initialDelaySeconds: 240
-            periodSeconds: 20
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 5
+              --intentOperatorsRegistryAddress 0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c
+              --solversRegistryAddress 0x77127C2fF8C77bCD8F0461b207fc435d10b86989
+              --bridgeContractAddress 0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4
+          
+    

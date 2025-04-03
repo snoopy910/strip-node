@@ -45,6 +45,9 @@ spec:
               --postgresDB validator2
               --postgresUser postgres
               --bootnode /dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR
+              --intentOperatorsRegistryAddress 0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c
+              --solversRegistryAddress 0x77127C2fF8C77bCD8F0461b207fc435d10b86989
+              --bridgeContractAddress 0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4
           readinessProbe:
             httpGet:
               path: /status

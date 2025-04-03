@@ -32,7 +32,7 @@ spec:
             name: apis-laststrip
             port:
               number: 80
-  - host: dev-sequencer.stripchain.xyz
+  - host: sequencer.stripchain.xyz
     http:
       paths:
       - path: "/"
@@ -42,3 +42,24 @@ spec:
             name: sequencer
             port:
               number: 8082
+  - host: signer1.stripchain.xyz
+    http:
+      paths:
+      - path: "/"
+        pathType: Prefix
+        backend:
+          service:
+            name: signer1
+            port:
+              number: 8080
+  - host: signer2.stripchain.xyz
+    http:
+      paths:
+      - path: "/"
+        pathType: Prefix
+        backend:
+          service:
+            name: signer2
+            port:
+              number: 8081
+  

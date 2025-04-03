@@ -19,7 +19,7 @@ spec:
           command: ['sh', '-c', 'until nslookup bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
       containers:
         - name: validator1
-          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node:demo
           resources:
             requests:
               cpu: "1000m"
@@ -37,7 +37,7 @@ spec:
               PGSSLMODE=disable /app/strip-node
               --validatorPublicKey 0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf
               --validatorPrivateKey 0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2
-              --rpcURL http://54.82.29.58:8545
+              --rpcURL https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz
               --httpPort 8080
               --port 30304
               --postgresHost dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432
@@ -45,26 +45,12 @@ spec:
               --postgresDB validator1
               --postgresUser postgres
               --bootnode /dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR
+              --intentOperatorsRegistryAddress 0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c
+              --solversRegistryAddress 0x77127C2fF8C77bCD8F0461b207fc435d10b86989
+              --bridgeContractAddress 0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4
           env:
             - name: HTTP_CLIENT_TIMEOUT
               value: "300s"
             - name: KEYGEN_TIMEOUT
               value: "600s"
-          readinessProbe:
-            httpGet:
-              path: /status
-              port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 3
-          livenessProbe:
-            httpGet:
-              path: /status
-              port: 8080
-            initialDelaySeconds: 60
-            periodSeconds: 20
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 3
+          

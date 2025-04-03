@@ -42,24 +42,24 @@ spec:
             name: sequencer
             port:
               number: 8082
-  - host: signer1.stripchain.xyz
+  - host: validator1.stripchain.xyz
     http:
       paths:
       - path: "/"
         pathType: Prefix
         backend:
           service:
-            name: signer1
+            name: validator1
             port:
               number: 8080
-  - host: signer2.stripchain.xyz
+  - host: validator2.stripchain.xyz
     http:
       paths:
       - path: "/"
         pathType: Prefix
         backend:
           service:
-            name: signer2
+            name: validator2
             port:
               number: 8081
   

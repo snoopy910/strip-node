@@ -35,8 +35,8 @@ spec:
             - -c
             - >
               PGSSLMODE=disable /app/strip-node
-              --validatorPublicKey 0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf
-              --validatorPrivateKey 0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2
+              --validatorPublicKey 0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35
+              --validatorPrivateKey 0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de
               --rpcURL https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz
               --httpPort 8080
               --port 30304

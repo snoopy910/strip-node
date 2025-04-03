@@ -35,8 +35,8 @@ spec:
             - -c
             - >
               PGSSLMODE=disable /app/strip-node
-              --validatorPublicKey 0x2c3e1d0ce0fef4e4ea935424ad1e5e54c0889f4e3c0bfb4c0c1f88e0f0c0c0c0
-              --validatorPrivateKey 0x2c3e1d0ce0fef4e4ea935424ad1e5e54c0889f4e3c0bfb4c0c1f88e0f0c0c0c0
+              --validatorPublicKey 0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35
+              --validatorPrivateKey 0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de
               --rpcURL http://54.82.29.58:8545
               --httpPort 8081
               --port 30305

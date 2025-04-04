@@ -20,6 +20,7 @@ spec:
       containers:
         - name: validator2
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
+          imagePullPolicy: Always
           resources:
             requests:
               cpu: "1000m"
@@ -35,8 +36,8 @@ spec:
             - -c
             - >
               PGSSLMODE=disable /app/strip-node
-              --validatorPublicKey 0x2c3e1d0ce0fef4e4ea935424ad1e5e54c0889f4e3c0bfb4c0c1f88e0f0c0c0c0
-              --validatorPrivateKey 0x2c3e1d0ce0fef4e4ea935424ad1e5e54c0889f4e3c0bfb4c0c1f88e0f0c0c0c0
+              --validatorPublicKey 0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35
+              --validatorPrivateKey 0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de
               --rpcURL http://54.82.29.58:8545
               --httpPort 8081
               --port 30305
@@ -45,6 +46,9 @@ spec:
               --postgresDB validator2
               --postgresUser postgres
               --bootnode /dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR
+              --intentOperatorsRegistryAddress 0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c
+              --solversRegistryAddress 0x77127C2fF8C77bCD8F0461b207fc435d10b86989
+              --bridgeContractAddress 0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4
           readinessProbe:
             httpGet:
               path: /status

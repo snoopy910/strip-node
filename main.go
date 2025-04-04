@@ -37,8 +37,8 @@ func main() {
 	listenHost := flag.String("host", util.LookupEnvOrString("LISTEN_HOST", "0.0.0.0"), "The bootstrap node host listen address\n")
 	port := flag.Int("port", util.LookupEnvOrInt("PORT", 4001), "The bootstrap node listen port")
 	httpPort := flag.String("httpPort", util.LookupEnvOrString("HTTP_PORT", "8080"), "http API port")
-	validatorPublicKey := flag.String("validatorPublicKey", util.LookupEnvOrString("SIGNER_PUBLIC_KEY", ""), "public key of the signer nodes")
-	signerNodeURL := flag.String("signerNodeURL", util.LookupEnvOrString("SIGNER_NODE_URL", ""), "URL of the signer node")
+	validatorPublicKey := flag.String("validatorPublicKey", util.LookupEnvOrString("VALIDATOR_PUBLIC_KEY", ""), "public key of the signer nodes")
+	validatorNodeURL := flag.String("validatorNodeURL", util.LookupEnvOrString("VALIDATOR_NODE_URL", ""), "URL of the signer node")
 	solverDomain := flag.String("solverDomain", util.LookupEnvOrString("SOLVER_DOMAIN", ""), "domain of the solver")
 	heliusApiKey := flag.String("heliusApiKey", util.LookupEnvOrString("HELIUS_API_KEY", "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"), "helius API key")
 
@@ -79,7 +79,7 @@ func main() {
 	} else if *isDeploySolversRegistry {
 		solversregistry.DeploySolversRegistryContract(*rpcURL, *privateKey)
 	} else if *isAddSigner {
-		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *validatorPublicKey, *signerNodeURL)
+		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *validatorPublicKey, *validatorNodeURL)
 	} else if *isAddSolver {
 		solversregistry.AddSolver(*rpcURL, *solversRegistryContractAddress, *privateKey, *solverDomain)
 	} else if *isAddToken {

@@ -4,13 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	mrand "math/rand"
+	"os"
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/crypto"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -33,7 +33,7 @@ func Start(listenHost string, port int, path string) {
 	}
 
 	if exists {
-		buff, err := ioutil.ReadFile(filePath)
+		buff, err := os.ReadFile(filePath)
 
 		if err != nil {
 			panic(err)
@@ -57,7 +57,7 @@ func Start(listenHost string, port int, path string) {
 			panic(err)
 		}
 
-		err = ioutil.WriteFile(filePath, buff, 0644)
+		err = os.WriteFile(filePath, buff, 0644)
 		if err != nil {
 			panic(err)
 		}

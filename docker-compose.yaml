@@ -39,15 +39,18 @@ services:
 
   bootnode:
     build:
-      context: .
-      dockerfile: ./Dockerfile
+      context: ./bootnode
     container_name: bootnode
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "30303"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
     ports:
       - "30303:30303"
     environment:
       PORT: 30303
-      KEY_PATH: "/app/static-bootnode"
-      IS_BOOTSTRAP: true
 
     depends_on:
       foundry:

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
@@ -71,8 +70,6 @@ func main() {
 		log.Fatal("Failed to initialize logger:", err)
 	}
 	defer logger.Sync()
-
-	fmt.Printf("port: %+v\n", *port)
 
 	MaximumSigners = int(_maxSigners.Int64())
 

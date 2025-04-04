@@ -1,38 +1,46 @@
-package bootnode
+package main
 
 import (
 	"context"
-	"flag"
+	"errors"
 	"fmt"
 	mrand "math/rand"
 	"os"
+	"strconv"
 
-	"github.com/StripChain/strip-node/common"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
 )
 
-var prvKey crypto.PrivKey
+func main() {
+	var listenHost, portStr, path string
+	var ok bool
 
-func Start(listenHost string, port int, path string) {
+	if listenHost, ok = os.LookupEnv("LISTEN_HOST"); !ok {
+		listenHost = "0.0.0.0"
+	}
 
-	flag.Parse()
-
-	fmt.Printf("[*] Listening on: %s with port: %d\n", listenHost, port)
-
-	ctx := context.Background()
-	r := mrand.New(mrand.NewSource(int64(port)))
-
-	filePath := path + "/bootnode.bin"
-
-	exists, err := common.FileExists(filePath)
+	if portStr, ok = os.LookupEnv("PORT"); !ok {
+		portStr = "4001"
+	}
+	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		panic(err)
 	}
 
-	if exists {
+	if path, ok = os.LookupEnv("KEY_PATH"); !ok {
+		path = "static-bootnode"
+	}
+
+	fmt.Printf("[*] Listening on: %s with port: %d\n", listenHost, port)
+
+	filePath := fmt.Sprintf("%s/bootnode.bin", path)
+
+	var prvKey crypto.PrivKey
+
+	if _, err := os.Stat(filePath); err == nil {
 		buff, err := os.ReadFile(filePath)
 
 		if err != nil {
@@ -44,7 +52,9 @@ func Start(listenHost string, port int, path string) {
 		if err != nil {
 			panic(err)
 		}
-	} else {
+	} else if errors.Is(err, os.ErrNotExist) {
+		r := mrand.New(mrand.NewSource(int64(port)))
+
 		// Creates a new RSA key pair for this host.
 		prvKey, _, err = crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
 		if err != nil {
@@ -61,10 +71,15 @@ func Start(listenHost string, port int, path string) {
 		if err != nil {
 			panic(err)
 		}
+	} else {
+		panic(err)
 	}
 
 	// 0.0.0.0 will listen on any interface device.
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", listenHost, port))
+	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", listenHost, port))
+	if err != nil {
+		panic(err)
+	}
 
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
@@ -78,12 +93,10 @@ func Start(listenHost string, port int, path string) {
 		panic(err)
 	}
 
-	_, err = dht.New(ctx, host)
+	_, err = dht.New(context.Background(), host)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("")
-	fmt.Printf("[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", listenHost, port, host.ID().Pretty())
-	fmt.Println("")
+	fmt.Printf("\n[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", listenHost, port, host.ID().Pretty())
 	select {}
 }

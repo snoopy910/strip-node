@@ -3,11 +3,9 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
 	"strconv"
 
 	"github.com/StripChain/strip-node/ERC20"
-	bootnode "github.com/StripChain/strip-node/bootnode"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/bridgeTokenMock"
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
@@ -36,14 +34,11 @@ func main() {
 	isAddToken := flag.Bool("isAddToken", util.LookupEnvOrBool("IS_ADD_TOKEN", false), "add token to Bridge")
 	isSetSwapRouter := flag.Bool("isSetSwapRouter", util.LookupEnvOrBool("IS_SET_SWAP_ROUTER", false), "set swap router in Bridge")
 	privateKey := flag.String("privateKey", util.LookupEnvOrString("PRIVATE_KEY", ""), "private key of account to execute ethereum transactions")
-	isBootstrap := flag.Bool("isBootstrap", util.LookupEnvOrBool("IS_BOOTSTRAP", false), "is the process a signer")
 	isSequencer := flag.Bool("isSequencer", util.LookupEnvOrBool("IS_SEQUENCER", false), "is the process a sequencer")
 	isTestSolver := flag.Bool("isTestSolver", util.LookupEnvOrBool("IS_TEST_SOLVER", false), "is the process a solver")
-	listenHost := flag.String("host", util.LookupEnvOrString("LISTEN_HOST", "0.0.0.0"), "The bootstrap node host listen address\n")
-	port := flag.Int("port", util.LookupEnvOrInt("PORT", 4001), "The bootstrap node listen port")
 	httpPort := flag.String("httpPort", util.LookupEnvOrString("HTTP_PORT", "8080"), "http API port")
-	validatorPublicKey := flag.String("validatorPublicKey", util.LookupEnvOrString("SIGNER_PUBLIC_KEY", ""), "public key of the signer nodes")
-	signerNodeURL := flag.String("signerNodeURL", util.LookupEnvOrString("SIGNER_NODE_URL", ""), "URL of the signer node")
+	validatorPublicKey := flag.String("validatorPublicKey", util.LookupEnvOrString("VALIDATOR_PUBLIC_KEY", ""), "public key of the signer nodes")
+	validatorNodeURL := flag.String("validatorNodeURL", util.LookupEnvOrString("VALIDATOR_NODE_URL", ""), "URL of the signer node")
 	solverDomain := flag.String("solverDomain", util.LookupEnvOrString("SOLVER_DOMAIN", ""), "domain of the solver")
 	heliusApiKey := flag.String("heliusApiKey", util.LookupEnvOrString("HELIUS_API_KEY", "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"), "helius API key")
 
@@ -68,13 +63,6 @@ func main() {
 	postgresUser := flag.String("postgresUser", util.LookupEnvOrString("POSTGRES_USER", "postgres"), "postgres user")
 	postgresPassword := flag.String("postgresPassword", util.LookupEnvOrString("POSTGRES_PASSWORD", "password"), "postgres password")
 
-	defaultPath, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-
-	path := flag.String("keyPath", util.LookupEnvOrString("KEY_PATH", defaultPath+"/keys"), "path to store keygen")
-
 	flag.Parse()
 
 	if err := logger.Init(); err != nil {
@@ -87,7 +75,7 @@ func main() {
 	} else if *isDeploySolversRegistry {
 		solversregistry.DeploySolversRegistryContract(*rpcURL, *privateKey)
 	} else if *isAddSigner {
-		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *validatorPublicKey, *signerNodeURL)
+		intentoperatorsregistry.AddSignerToHub(*rpcURL, *intentOperatorsRegistryContractAddress, *privateKey, *validatorPublicKey, *validatorNodeURL)
 	} else if *isAddSolver {
 		solversregistry.AddSolver(*rpcURL, *solversRegistryContractAddress, *privateKey, *solverDomain)
 	} else if *isAddToken {
@@ -100,8 +88,6 @@ func main() {
 		ERC20.DeployERC20Token(*rpcURL, *privateKey, *tokenName, *tokenSymbol, uint(*tokenDecimals))
 	} else if *isSetSwapRouter {
 		bridge.SetSwapRouter(*rpcURL, *privateKey, *bridgeContractAddress, *swapRouter)
-	} else if *isBootstrap {
-		bootnode.Start(*listenHost, *port, *path)
 	} else if *isSequencer {
 		sequencer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		sequencer.StartSequencer(

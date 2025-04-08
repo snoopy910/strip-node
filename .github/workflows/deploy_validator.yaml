@@ -1,7 +1,6 @@
 name: Deploy Strip Validator
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 env:
   AWS_REGION: us-east-1

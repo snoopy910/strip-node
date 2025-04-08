@@ -39,20 +39,19 @@ services:
 
   bootnode:
     build:
-      context: .
-      dockerfile: ./Dockerfile
+      context: ./bootnode
     container_name: bootnode
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "30303"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
     ports:
       - "30303:30303"
-    command:
-      [
-        "--port",
-        "30303",
-        "--keyPath",
-        "/app/static-bootnode",
-        "--isBootstrap",
-        "true",
-      ]
+    environment:
+      PORT: 30303
+
     depends_on:
       foundry:
         condition: service_completed_successfully
@@ -94,23 +93,14 @@ services:
       timeout: 3s
       retries: 10
       start_period: 2s
-    command:
-      [
-        "--validatorPublicKey",
-        "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf",
-        "--validatorPrivateKey",
-        "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2",
-        "--rpcURL",
-        "http://ganache:8545",
-        "--httpPort",
-        "8080",
-        "--port",
-        "30304",
-        "--postgresHost",
-        "validator1postgres:5432",
-        "--bootnode",
-        "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR",
-      ]
+    environment:
+      VALIDATOR_PUBLIC_KEY: "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf"
+      VALIDATOR_PRIVATE_KEY: "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2"
+      RPC_URL: "http://ganache:8545"
+      HTTP_PORT: 8080
+      PORT: 30304
+      POSTGRES_HOST: "validator1postgres:5432"
+      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"
 
   validator2:
     build:
@@ -129,23 +119,14 @@ services:
       timeout: 3s
       retries: 10
       start_period: 2s
-    command:
-      [
-        "--validatorPublicKey",
-        "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35",
-        "--validatorPrivateKey",
-        "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de",
-        "--rpcURL",
-        "http://ganache:8545",
-        "--httpPort",
-        "8081",
-        "--port",
-        "30305",
-        "--postgresHost",
-        "validator2postgres:5432",
-        "--bootnode",
-        "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR",
-      ]
+    environment:
+      VALIDATOR_PUBLIC_KEY: "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35"
+      VALIDATOR_PRIVATE_KEY: "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de"
+      RPC_URL: "http://ganache:8545"
+      HTTP_PORT: 8081
+      PORT: 30305
+      POSTGRES_HOST: "validator2postgres:5432"
+      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"
 
   sequencerpostgres:
     image: postgres:14.13
@@ -175,19 +156,13 @@ services:
       interval: 15s
       timeout: 3s
       retries: 10
-    command:
-      [
-        "--privateKey",
-        "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a",
-        "--rpcURL",
-        "http://ganache:8545",
-        "--httpPort",
-        "8082",
-        "--postgresHost",
-        "sequencerpostgres:5432",
-        "--isSequencer",
-        "true",
-      ]
+    environment:
+      PRIVATE_KEY: "0x76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
+      RPC_URL: "http://ganache:8545"
+      HTTP_PORT: 8082
+      PORT: 30306
+      POSTGRES_HOST: "sequencerpostgres:5432"
+      IS_SEQUENCER: true
 
   solver:
     build:
@@ -196,7 +171,9 @@ services:
     container_name: solver
     ports:
       - "8083:8083"
-    command: ["--httpPort", "8083", "--isTestSolver", "true"]
+    environment:
+      HTTP_PORT: 8083
+      IS_TEST_SOLVER: true
 
   # Bitcoin Core service
   bitcoind:

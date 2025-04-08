@@ -7,7 +7,6 @@ RUN apk add build-base curl
 
 COPY . .
 
-# Run go mod vendor and build
 RUN cd strip-validator && go build -o strip-validator
 
 # Final stage

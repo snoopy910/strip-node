@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
@@ -30,8 +29,8 @@ func main() {
 	port := flag.Int("port", util.LookupEnvOrInt("PORT", 4001), "The bootstrap node listen port")
 	bootnodeURL := flag.String("bootnode", util.LookupEnvOrString("BOOTNODE_URL", ""), "is the process a signer")
 	httpPort := flag.String("httpPort", util.LookupEnvOrString("HTTP_PORT", "8080"), "http API port")
-	validatorPublicKey := flag.String("validatorPublicKey", util.LookupEnvOrString("SIGNER_PUBLIC_KEY", ""), "public key of the signer nodes")
-	validatorPrivateKey := flag.String("validatorPrivateKey", util.LookupEnvOrString("SIGNER_PRIVATE_KEY", ""), "private key of the signer nodes")
+	validatorPublicKey := flag.String("validatorPublicKey", util.LookupEnvOrString("VALIDATOR_PUBLIC_KEY", ""), "public key of the validator nodes")
+	validatorPrivateKey := flag.String("validatorPrivateKey", util.LookupEnvOrString("VALIDATOR_PRIVATE_KEY", ""), "private key of the validator nodes")
 
 	intentOperatorsRegistryContractAddress := flag.String("intentOperatorsRegistryAddress", util.LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of IntentOperatorsRegistry contract")
 	solversRegistryContractAddress := flag.String("solversRegistryAddress", util.LookupEnvOrString("SOLVERS_REGISTRY_CONTRACT_ADDRESS", "0x56A9bCddF533Af1859842074B46B0daD07b7686a"), "address of SolversRegistry contract")
@@ -71,8 +70,6 @@ func main() {
 		log.Fatal("Failed to initialize logger:", err)
 	}
 	defer logger.Sync()
-
-	fmt.Printf("port: %+v\n", *port)
 
 	MaximumSigners = int(_maxSigners.Int64())
 

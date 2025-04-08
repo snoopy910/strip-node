@@ -8,11 +8,13 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -60,6 +62,15 @@ const (
 	]`
 )
 
+type TxParams struct {
+	Calldata  []byte
+	Nonce     uint64
+	GasLimit  uint64
+	GasTipCap *big.Int
+	GasFeeCap *big.Int
+	Deadline  time.Time
+}
+
 // TransactionStatus represents the status of a transaction
 type TransactionStatus struct {
 	TxHash  string
@@ -70,11 +81,15 @@ type TransactionStatus struct {
 
 // LendingSolver handles interactions with the LendingPool contract
 type LendingSolver struct {
-	client      *ethclient.Client
-	chainId     *big.Int
-	lendingPool common.Address
-	abi         abi.ABI
-	txStatus    sync.Map // map[string]*TransactionStatus
+	client          *ethclient.Client
+	chainId         *big.Int
+	lendingPool     common.Address
+	abi             abi.ABI
+	statuses        map[string]*TransactionStatus
+	txParams        map[string]TxParams
+	cleanupInterval time.Duration
+	cleanupStop     chan struct{}
+	cleanupMutex    sync.Mutex
 }
 
 func Start(
@@ -99,6 +114,7 @@ func Start(
 
 // NewLendingSolver creates a new instance of LendingSolver
 func NewLendingSolver(rpcURL string, chainId int64, lendingPool string) (*LendingSolver, error) {
+	fmt.Printf("Initializing Lending solver with pool %s\n", lendingPool)
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Ethereum client: %v", err)
@@ -109,72 +125,61 @@ func NewLendingSolver(rpcURL string, chainId int64, lendingPool string) (*Lendin
 		return nil, fmt.Errorf("failed to parse contract ABI: %v", err)
 	}
 
-	return &LendingSolver{
-		client:      client,
-		chainId:     big.NewInt(chainId),
-		lendingPool: common.HexToAddress(lendingPool),
-		abi:         contractAbi,
-	}, nil
+	solver := &LendingSolver{
+		client:          client,
+		chainId:         big.NewInt(chainId),
+		lendingPool:     common.HexToAddress(lendingPool),
+		abi:             contractAbi,
+		statuses:        make(map[string]*TransactionStatus),
+		txParams:        make(map[string]TxParams),
+		cleanupInterval: 5 * time.Minute,
+		cleanupStop:     make(chan struct{}),
+	}
+
+	// Start cleanup goroutine
+	go solver.cleanupExpiredParams()
+
+	return solver, nil
 }
 
 // Solve executes the lending operation with a signed transaction
 func (s *LendingSolver) Solve(intent Intent, opIndex int, signature string) (string, error) {
+	fmt.Printf("Solving operation %d for intent %s\n", opIndex, intent.Identity)
 	if opIndex >= len(intent.Operations) {
 		return "", fmt.Errorf("operation index out of range")
 	}
 
-	op := intent.Operations[opIndex]
-	var metadata LendingMetadata
-	if err := json.Unmarshal(op.SolverMetadata, &metadata); err != nil {
-		return "", fmt.Errorf("failed to unmarshal metadata: %v", err)
-	}
-
-	// Get the function call data based on operation type
-	var data string
-	var err error
-	switch metadata.Action {
-	case "supply":
-		data, err = s.constructSupply(metadata)
-	case "borrow":
-		data, err = s.constructBorrow(metadata)
-	case "repay":
-		data, err = s.constructRepay(metadata)
-	case "withdraw":
-		data, err = s.constructWithdraw(metadata)
-	default:
-		return "", fmt.Errorf("unknown action: %s", metadata.Action)
-	}
+	// Calculate operation hash
+	operation := intent.Operations[opIndex]
+	opBytes, err := json.Marshal(operation)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal operation: %v", err)
 	}
+	opHash := "0x" + hex.EncodeToString(crypto.Keccak256(opBytes))
 
-	// Get current nonce
-	nonce, err := s.client.PendingNonceAt(context.Background(), common.HexToAddress(intent.Identity))
-	if err != nil {
-		return "", fmt.Errorf("failed to get nonce: %v", err)
+	// Get stored parameters
+	s.cleanupMutex.Lock()
+	params, ok := s.txParams[opHash]
+	s.cleanupMutex.Unlock()
+	if !ok {
+		return "", fmt.Errorf("transaction parameters not found or expired")
 	}
-
-	// Get gas price
-	gasPrice, err := s.client.SuggestGasPrice(context.Background())
-	if err != nil {
-		return "", fmt.Errorf("failed to get gas price: %v", err)
-	}
-
-	// Create transaction with the same parameters used in Construct
-	decodedData, err := hex.DecodeString(strings.TrimPrefix(data, "0x"))
-	if err != nil {
-		return "", fmt.Errorf("failed to decode data: %v", err)
+	if time.Now().After(params.Deadline) {
+		s.cleanupMutex.Lock()
+		delete(s.txParams, opHash)
+		s.cleanupMutex.Unlock()
+		return "", fmt.Errorf("transaction parameters expired")
 	}
 
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   s.chainId,
-		Nonce:     nonce,
-		GasTipCap: gasPrice,
-		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
-		Gas:       300000,
+		Nonce:     params.Nonce,
 		To:        &s.lendingPool,
 		Value:     big.NewInt(0),
-		Data:      decodedData,
+		Gas:       params.GasLimit,
+		GasTipCap: params.GasTipCap,
+		GasFeeCap: params.GasFeeCap,
+		Data:      params.Calldata,
 	})
 
 	// Decode signature
@@ -200,10 +205,12 @@ func (s *LendingSolver) Solve(intent Intent, opIndex int, signature string) (str
 	}
 
 	// Store the transaction status
-	s.txStatus.Store(signedTx.Hash().Hex(), &TransactionStatus{
+	s.cleanupMutex.Lock()
+	s.statuses[signedTx.Hash().Hex()] = &TransactionStatus{
 		TxHash: signedTx.Hash().Hex(),
 		Status: "pending",
-	})
+	}
+	s.cleanupMutex.Unlock()
 
 	return signedTx.Hash().Hex(), nil
 }
@@ -220,12 +227,12 @@ func (s *LendingSolver) Status(intent Intent, opIndex int) (string, error) {
 	}
 
 	// Get transaction status from memory
-	statusIface, exists := s.txStatus.Load(op.Result)
+	s.cleanupMutex.Lock()
+	status, exists := s.statuses[op.Result]
+	s.cleanupMutex.Unlock()
 	if !exists {
 		return "pending", nil
 	}
-
-	status := statusIface.(*TransactionStatus)
 	if status.Error != nil {
 		return "failure", status.Error
 	}
@@ -254,18 +261,46 @@ func (s *LendingSolver) Status(intent Intent, opIndex int) (string, error) {
 }
 
 // GetOutput retrieves the result of a lending operation
+func (s *LendingSolver) cleanupExpiredParams() {
+	fmt.Println("Starting cleanup routine for expired parameters")
+	ticker := time.NewTicker(s.cleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			s.cleanupMutex.Lock()
+			for hash, params := range s.txParams {
+				if now.After(params.Deadline) {
+					delete(s.txParams, hash)
+				}
+			}
+			s.cleanupMutex.Unlock()
+		case <-s.cleanupStop:
+			return
+		}
+	}
+}
+
+func (s *LendingSolver) StopCleanup() {
+	fmt.Println("Stopping cleanup routine")
+	s.cleanupMutex.Lock()
+	close(s.cleanupStop)
+	s.cleanupMutex.Unlock()
+}
+
 func (s *LendingSolver) GetOutput(intent Intent, opIndex int) (string, error) {
 	if opIndex >= len(intent.Operations) {
 		return "", fmt.Errorf("operation index out of bounds")
 	}
 
 	op := intent.Operations[opIndex]
-	statusIface, exists := s.txStatus.Load(op.Result)
+	s.cleanupMutex.Lock()
+	status, exists := s.statuses[op.Result]
+	s.cleanupMutex.Unlock()
 	if !exists {
 		return "", fmt.Errorf("transaction not found")
 	}
-
-	status := statusIface.(*TransactionStatus)
 	if status.Error != nil {
 		return "", status.Error
 	}

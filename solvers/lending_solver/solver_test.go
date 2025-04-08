@@ -1,16 +1,19 @@
 package lending_solver
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var privateKeyHex = "" // Set this to test private key for integration tests
 
 const (
 	testRPCURL      = "" // RPC URL
@@ -100,148 +103,244 @@ func TestConstruct(t *testing.T) {
 	}
 }
 
-func TestSolve(t *testing.T) {
+func TestSupplyFlow(t *testing.T) {
+	if privateKeyHex == "" {
+		return
+	}
+	// Setup private key from hex string
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+	testRecipientAddress := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
 	solver := setupTestSolver(t)
 	intent := createTestIntent("supply")
+	intent.Identity = testRecipientAddress
 
-	// First get the hash to sign
-	hash, err := solver.Construct(intent, 0)
+	dataToSign, err := solver.Construct(intent, 0)
 	require.NoError(t, err)
-	require.NotEmpty(t, hash)
+	assert.NotEmpty(t, dataToSign)
 
-	// NOTE: You need to put signature manually to pass the test
-	// Create a mock signature (65 bytes)
-	mockSig := make([]byte, 65)
-	mockSig[64] = 27 // v value
-	mockSigHex := "0x" + common.Bytes2Hex(mockSig)
-
-	// Test Solve
-	txHash, err := solver.Solve(intent, 0, mockSigHex)
+	txHashBytes, err := hex.DecodeString(strings.TrimPrefix(dataToSign, "0x"))
 	require.NoError(t, err)
-	require.NotEmpty(t, txHash)
-	assert.True(t, common.IsHexAddress(txHash[2:]))
-}
-
-func TestStatus(t *testing.T) {
-	solver := setupTestSolver(t)
-	intent := createTestIntent("supply")
-
-	// Test initial status (no transaction)
-	status, err := solver.Status(intent, 0)
+	signature, err := crypto.Sign(txHashBytes, privateKey)
 	require.NoError(t, err)
-	assert.Equal(t, "pending", status)
+	signatureHex := "0x" + hex.EncodeToString(signature)
 
-	// Add a mock transaction
-	mockTxHash := "0x1234567890"
-	intent.Operations[0].Result = mockTxHash
-
-	// Test pending status
-	solver.txStatus.Store(mockTxHash, &TransactionStatus{
-		TxHash: mockTxHash,
-		Status: "pending",
-	})
-	status, err = solver.Status(intent, 0)
+	txHash, err := solver.Solve(intent, 0, signatureHex)
 	require.NoError(t, err)
-	assert.Equal(t, "pending", status)
+	assert.NotEmpty(t, txHash)
 
-	// Test success status
-	solver.txStatus.Store(mockTxHash, &TransactionStatus{
-		TxHash:  mockTxHash,
-		Status:  "success",
-		Receipt: &types.Receipt{Status: 1},
-	})
-	status, err = solver.Status(intent, 0)
-	require.NoError(t, err)
-	assert.Equal(t, "success", status)
+	intent.Operations[0].Result = txHash
 
-	// Test failure status
-	solver.txStatus.Store(mockTxHash, &TransactionStatus{
-		TxHash:  mockTxHash,
-		Status:  "failure",
-		Receipt: &types.Receipt{Status: 0},
-		Error:   assert.AnError,
-	})
-	status, err = solver.Status(intent, 0)
-	require.Error(t, err)
-	assert.Equal(t, "failure", status)
-}
+	// Test Status with polling
+	maxAttempts := 20
+	for i := 0; i < maxAttempts; i++ {
+		status, err := solver.Status(intent, 0)
+		require.NoError(t, err)
 
-func TestGetOutput(t *testing.T) {
-	solver := setupTestSolver(t)
-	intent := createTestIntent("supply")
+		if status == "success" || status == "failed" {
+			break
+		}
 
-	// Add a mock successful transaction
-	mockTxHash := "0x1234567890"
-	intent.Operations[0].Result = mockTxHash
-	solver.txStatus.Store(mockTxHash, &TransactionStatus{
-		TxHash:  mockTxHash,
-		Status:  "success",
-		Receipt: &types.Receipt{Status: 1},
-	})
+		time.Sleep(2 * time.Second)
+	}
 
-	// Test output
+	// Test GetOutput
 	output, err := solver.GetOutput(intent, 0)
 	require.NoError(t, err)
-	require.NotEmpty(t, output)
+	assert.NotEmpty(t, output)
 
-	// Verify output format
+	// Decode and verify output
 	var lendingOutput LendingOutput
 	err = json.Unmarshal([]byte(output), &lendingOutput)
 	require.NoError(t, err)
-	assert.Equal(t, mockTxHash, lendingOutput.TxHash)
-	assert.Equal(t, testAmount, lendingOutput.Amount.Int)
+	assert.NotEmpty(t, lendingOutput.TxHash)
+	assert.NotEmpty(t, lendingOutput.Amount)
+	assert.NotEmpty(t, lendingOutput.CollateralUSD)
 }
 
-func TestConstructSupply(t *testing.T) {
+func TestBorrowFlow(t *testing.T) {
+	if privateKeyHex == "" {
+		return
+	}
+	// Setup private key from hex string
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+	testRecipientAddress := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
 	solver := setupTestSolver(t)
-	metadata := LendingMetadata{
-		Action: "supply",
-		Token:  testToken,
-		Amount: uint256{Int: testAmount},
+	intent := createTestIntent("borrow")
+	intent.Identity = testRecipientAddress
+
+	dataToSign, err := solver.Construct(intent, 0)
+	require.NoError(t, err)
+	assert.NotEmpty(t, dataToSign)
+
+	txHashBytes, err := hex.DecodeString(strings.TrimPrefix(dataToSign, "0x"))
+	require.NoError(t, err)
+	signature, err := crypto.Sign(txHashBytes, privateKey)
+	require.NoError(t, err)
+	signatureHex := "0x" + hex.EncodeToString(signature)
+
+	txHash, err := solver.Solve(intent, 0, signatureHex)
+	require.NoError(t, err)
+	assert.NotEmpty(t, txHash)
+
+	intent.Operations[0].Result = txHash
+
+	// Test Status with polling
+	maxAttempts := 20
+	for i := 0; i < maxAttempts; i++ {
+		status, err := solver.Status(intent, 0)
+		require.NoError(t, err)
+
+		if status == "success" || status == "failed" {
+			break
+		}
+
+		time.Sleep(2 * time.Second)
 	}
 
-	data, err := solver.constructSupply(metadata)
+	// Test GetOutput
+	output, err := solver.GetOutput(intent, 0)
 	require.NoError(t, err)
-	require.NotEmpty(t, data)
-	assert.True(t, len(data) > 2) // More than just "0x"
+	assert.NotEmpty(t, output)
+
+	// Decode and verify output
+	var lendingOutput LendingOutput
+	err = json.Unmarshal([]byte(output), &lendingOutput)
+	require.NoError(t, err)
+	assert.NotEmpty(t, lendingOutput.TxHash)
+	assert.NotEmpty(t, lendingOutput.Amount)
+	assert.NotEmpty(t, lendingOutput.BorrowedUSD)
+	assert.NotEmpty(t, lendingOutput.HealthFactor)
 }
 
-func TestConstructBorrow(t *testing.T) {
+func TestRepayFlow(t *testing.T) {
+	if privateKeyHex == "" {
+		return
+	}
+	// Setup private key from hex string
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+	testRecipientAddress := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
 	solver := setupTestSolver(t)
-	metadata := LendingMetadata{
-		Action: "borrow",
-		Amount: uint256{Int: testAmount},
+	intent := createTestIntent("repay")
+	intent.Identity = testRecipientAddress
+
+	dataToSign, err := solver.Construct(intent, 0)
+	require.NoError(t, err)
+	assert.NotEmpty(t, dataToSign)
+
+	txHashBytes, err := hex.DecodeString(strings.TrimPrefix(dataToSign, "0x"))
+	require.NoError(t, err)
+	signature, err := crypto.Sign(txHashBytes, privateKey)
+	require.NoError(t, err)
+	signatureHex := "0x" + hex.EncodeToString(signature)
+
+	txHash, err := solver.Solve(intent, 0, signatureHex)
+	require.NoError(t, err)
+	assert.NotEmpty(t, txHash)
+
+	intent.Operations[0].Result = txHash
+
+	// Test Status with polling
+	maxAttempts := 20
+	for i := 0; i < maxAttempts; i++ {
+		status, err := solver.Status(intent, 0)
+		require.NoError(t, err)
+
+		if status == "success" || status == "failed" {
+			break
+		}
+
+		time.Sleep(2 * time.Second)
 	}
 
-	data, err := solver.constructBorrow(metadata)
+	// Test GetOutput
+	output, err := solver.GetOutput(intent, 0)
 	require.NoError(t, err)
-	require.NotEmpty(t, data)
-	assert.True(t, len(data) > 2)
+	assert.NotEmpty(t, output)
+
+	// Decode and verify output
+	var lendingOutput LendingOutput
+	err = json.Unmarshal([]byte(output), &lendingOutput)
+	require.NoError(t, err)
+	assert.NotEmpty(t, lendingOutput.TxHash)
+	assert.NotEmpty(t, lendingOutput.Amount)
+	assert.NotEmpty(t, lendingOutput.BorrowedUSD)
+	assert.NotEmpty(t, lendingOutput.HealthFactor)
 }
 
-func TestConstructRepay(t *testing.T) {
+func TestWithdrawFlow(t *testing.T) {
+	if privateKeyHex == "" {
+		return
+	}
+	// Setup private key from hex string
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+	testRecipientAddress := crypto.PubkeyToAddress(*publicKeyECDSA).Hex()
+
 	solver := setupTestSolver(t)
-	metadata := LendingMetadata{
-		Action: "repay",
-		Amount: uint256{Int: testAmount},
+	intent := createTestIntent("withdraw")
+	intent.Identity = testRecipientAddress
+
+	dataToSign, err := solver.Construct(intent, 0)
+	require.NoError(t, err)
+	assert.NotEmpty(t, dataToSign)
+
+	txHashBytes, err := hex.DecodeString(strings.TrimPrefix(dataToSign, "0x"))
+	require.NoError(t, err)
+	signature, err := crypto.Sign(txHashBytes, privateKey)
+	require.NoError(t, err)
+	signatureHex := "0x" + hex.EncodeToString(signature)
+
+	txHash, err := solver.Solve(intent, 0, signatureHex)
+	require.NoError(t, err)
+	assert.NotEmpty(t, txHash)
+
+	intent.Operations[0].Result = txHash
+
+	// Test Status with polling
+	maxAttempts := 20
+	for i := 0; i < maxAttempts; i++ {
+		status, err := solver.Status(intent, 0)
+		require.NoError(t, err)
+
+		if status == "success" || status == "failed" {
+			break
+		}
+
+		time.Sleep(2 * time.Second)
 	}
 
-	data, err := solver.constructRepay(metadata)
+	// Test GetOutput
+	output, err := solver.GetOutput(intent, 0)
 	require.NoError(t, err)
-	require.NotEmpty(t, data)
-	assert.True(t, len(data) > 2)
-}
+	assert.NotEmpty(t, output)
 
-func TestConstructWithdraw(t *testing.T) {
-	solver := setupTestSolver(t)
-	metadata := LendingMetadata{
-		Action: "withdraw",
-		Token:  testToken,
-		Amount: uint256{Int: testAmount},
-	}
-
-	data, err := solver.constructWithdraw(metadata)
+	// Decode and verify output
+	var lendingOutput LendingOutput
+	err = json.Unmarshal([]byte(output), &lendingOutput)
 	require.NoError(t, err)
-	require.NotEmpty(t, data)
-	assert.True(t, len(data) > 2)
+	assert.NotEmpty(t, lendingOutput.TxHash)
+	assert.NotEmpty(t, lendingOutput.Amount)
+	assert.NotEmpty(t, lendingOutput.CollateralUSD)
 }

@@ -132,21 +132,90 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/keygen", func(w http.ResponseWriter, r *http.Request) {
+		requestIP := r.RemoteAddr
+		headers := r.Header
+		method := r.Method
+		contentLength := r.ContentLength
+		
+		logger.Sugar().Infow("Received keygen request", 
+			"method", method,
+			"remoteAddr", requestIP,
+			"contentLength", contentLength,
+			"userAgent", headers.Get("User-Agent"),
+			"contentType", headers.Get("Content-Type"))
+		
 		var createWallet CreateWallet
 
-		err := json.NewDecoder(r.Body).Decode(&createWallet)
+		// Read the request body for logging
+		bodyBytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
+			logger.Sugar().Errorw("Failed to read request body", "error", err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		
+		// Log the raw request body if it's not too large
+		if contentLength > 0 && contentLength < 1024 {
+			logger.Sugar().Debugw("Request body", "body", string(bodyBytes))
+		}
+		
+		// Restore the body for further processing
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		
+		err = json.NewDecoder(r.Body).Decode(&createWallet)
+		if err != nil {
+			logger.Sugar().Errorw("Failed to decode keygen request body", "error", err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
+		logger.Sugar().Infow("Processing keygen request", 
+			"identity", createWallet.Identity, 
+			"identityCurve", createWallet.IdentityCurve, 
+			"keyCurve", createWallet.KeyCurve, 
+			"signersCount", len(createWallet.Signers))
+
 		key := createWallet.Identity + "_" + createWallet.IdentityCurve + "_" + createWallet.KeyCurve
 
+		// Create channel for keygen results with error handling
 		keygenGeneratedChan[key] = make(chan string)
+		errorChan := make(chan error, 1)
 
-		go generateKeygenMessage(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve, createWallet.Signers)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Sugar().Errorw("Panic in keygen operation", "error", fmt.Sprintf("%v", r))
+					errorChan <- fmt.Errorf("internal server error: panic in keygen operation")
+				}
+			}()
+			
+			generateKeygenMessage(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve, createWallet.Signers)
+		}()
 
-		<-keygenGeneratedChan[key]
+		logger.Sugar().Infow("Waiting for keygen operation to complete", "key", key)
+		
+		// Add timeout to prevent hanging requests
+		select {
+		case <-keygenGeneratedChan[key]:
+			logger.Sugar().Infow("Keygen operation completed successfully", 
+				"identity", createWallet.Identity, 
+				"identityCurve", createWallet.IdentityCurve, 
+				"keyCurve", createWallet.KeyCurve)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Keygen operation completed successfully"))
+		case err := <-errorChan:
+			logger.Sugar().Errorw("Keygen operation failed", 
+				"identity", createWallet.Identity, 
+				"error", err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		case <-time.After(5 * time.Minute): // 5 minute timeout should be sufficient for keygen
+			logger.Sugar().Errorw("Keygen operation timed out", 
+				"identity", createWallet.Identity,
+				"identityCurve", createWallet.IdentityCurve, 
+				"keyCurve", createWallet.KeyCurve)
+			http.Error(w, "keygen operation timed out", http.StatusGatewayTimeout)
+		}
+		
 		delete(keygenGeneratedChan, key)
 	})
 

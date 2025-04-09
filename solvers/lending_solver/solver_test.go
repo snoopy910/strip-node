@@ -13,14 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var privateKeyHex = "" // Set this to test private key for integration tests
-
 const (
-	testRPCURL      = "" // RPC URL
+	testRPCURL      = "" // MODIFY ME: RPC URL
 	testChainID     = 44331
-	testLendingPool = "0xbFd03337714313d0c77d2ae613c8997a07e11c99"
-	testToken       = "0xabcdef0123456789abcdef0123456789abcdef01"
+	testLendingPool = "0x4a3f5a545210cD900d7AA2330816Bc945BDe7567"
+	testToken       = "0x3Ea4F15Bab4FcCeA81fD8287d5FD3C80b458d379"
 	testAmount      = "1000000000000000000" // 1 token in wei
+	privateKeyHex   = ""                    // MODIFY ME: Set this to test private key for integration tests
 )
 
 func setupTestSolver(t *testing.T) *LendingSolver {
@@ -160,7 +159,7 @@ func TestSupplyFlow(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, lendingOutput.TxHash)
 	assert.NotEmpty(t, lendingOutput.Amount)
-	assert.NotEmpty(t, lendingOutput.CollateralUSD)
+	assert.NotEmpty(t, lendingOutput.Token)
 }
 
 func TestBorrowFlow(t *testing.T) {
@@ -220,7 +219,7 @@ func TestBorrowFlow(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, lendingOutput.TxHash)
 	assert.NotEmpty(t, lendingOutput.Amount)
-	assert.NotEmpty(t, lendingOutput.BorrowedUSD)
+	assert.NotEmpty(t, lendingOutput.RemainingDebt)
 	assert.NotEmpty(t, lendingOutput.HealthFactor)
 }
 
@@ -281,7 +280,7 @@ func TestRepayFlow(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, lendingOutput.TxHash)
 	assert.NotEmpty(t, lendingOutput.Amount)
-	assert.NotEmpty(t, lendingOutput.BorrowedUSD)
+	assert.NotEmpty(t, lendingOutput.RemainingDebt)
 	assert.NotEmpty(t, lendingOutput.HealthFactor)
 }
 
@@ -342,5 +341,5 @@ func TestWithdrawFlow(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, lendingOutput.TxHash)
 	assert.NotEmpty(t, lendingOutput.Amount)
-	assert.NotEmpty(t, lendingOutput.CollateralUSD)
+	assert.NotEmpty(t, lendingOutput.Token)
 }

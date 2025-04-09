@@ -93,14 +93,8 @@ Query parameters:
   "amount": {
     "int": "1000000000000000000"
   },
-  "collateralUSD": {
-    "int": "2000000000"
-  },
-  "borrowedUSD": {
-    "int": "1000000000"
-  },
-  "healthFactor": {
-    "int": "2000000000000000000"
+  "token": {
+    "address": "0x..."
   }
 }
 ```

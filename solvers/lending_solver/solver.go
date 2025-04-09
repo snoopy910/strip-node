@@ -21,44 +21,14 @@ import (
 // Contract ABI strings
 const (
 	LendingPoolABI = `[
-		{
-			"inputs": [
-				{"name": "token", "type": "address"},
-				{"name": "amount", "type": "uint256"}
-			],
-			"name": "supply",
-			"outputs": [],
-			"stateMutability": "nonpayable",
-			"type": "function"
-		},
-		{
-			"inputs": [
-				{"name": "amount", "type": "uint256"}
-			],
-			"name": "borrowStripUSD",
-			"outputs": [],
-			"stateMutability": "nonpayable",
-			"type": "function"
-		},
-		{
-			"inputs": [
-				{"name": "amount", "type": "uint256"}
-			],
-			"name": "repayStripUSD",
-			"outputs": [],
-			"stateMutability": "nonpayable",
-			"type": "function"
-		},
-		{
-			"inputs": [
-				{"name": "token", "type": "address"},
-				{"name": "amount", "type": "uint256"}
-			],
-			"name": "withdrawCollateral",
-			"outputs": [],
-			"stateMutability": "nonpayable",
-			"type": "function"
-		}
+		{"inputs": [{"name": "token", "type": "address"}, {"name": "amount", "type": "uint256"}], "name": "supply", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+		{"inputs": [{"name": "amount", "type": "uint256"}], "name": "borrowStripUSD", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+		{"inputs": [{"name": "amount", "type": "uint256"}], "name": "repayStripUSD", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+		{"inputs": [{"name": "token", "type": "address"}, {"name": "amount", "type": "uint256"}], "name": "withdrawCollateral", "outputs": [], "stateMutability": "nonpayable", "type": "function"},
+		{"type": "event", "name": "Supply", "inputs": [{"name": "token", "type": "address", "indexed": true, "internalType": "address"}, {"name": "user", "type": "address", "indexed": true, "internalType": "address"}, {"name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256"}], "anonymous": false},
+		{"type": "event", "name": "Borrow", "inputs": [{"name": "token", "type": "address", "indexed": true, "internalType": "address"}, {"name": "user", "type": "address", "indexed": true, "internalType": "address"}, {"name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256"}, {"name": "rate", "type": "uint256", "indexed": false, "internalType": "uint256"}], "anonymous": false},
+		{"type": "event", "name": "CollateralWithdrawn", "inputs": [{"name": "token", "type": "address", "indexed": true, "internalType": "address"}, {"name": "user", "type": "address", "indexed": true, "internalType": "address"}, {"name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256"}], "anonymous": false},
+		{"type": "event", "name": "StripUSDRepaid", "inputs": [{"name": "user", "type": "address", "indexed": true, "internalType": "address"}, {"name": "amountRepaid", "type": "uint256", "indexed": false, "internalType": "uint256"}, {"name": "remainingDebt", "type": "uint256", "indexed": false, "internalType": "uint256"}], "anonymous": false}
 	]`
 )
 
@@ -316,17 +286,149 @@ func (s *LendingSolver) GetOutput(intent Intent, opIndex int) (string, error) {
 		TxHash: status.TxHash,
 	}
 
-	// Add operation-specific data
+	// Get transaction receipt
+	receipt := status.Receipt
+	if receipt == nil {
+		return "", fmt.Errorf("transaction receipt not available")
+	}
+
+	// Add operation-specific data from event logs
 	switch metadata.Action {
 	case "supply":
-		output.Amount = metadata.Amount
+		found := false
+		for _, log := range receipt.Logs {
+			if log.Address == s.lendingPool {
+				event, err := s.abi.EventByID(log.Topics[0])
+				if err != nil {
+					continue
+				}
+				if event.Name == "Supply" {
+					if len(log.Topics) < 3 {
+						return "", fmt.Errorf("invalid Supply event: insufficient topics")
+					}
+					// Extract token address from first topic
+					output.Token = common.BytesToAddress(log.Topics[1][:]).Hex()
+					dataMap, err := s.abi.Unpack(event.Name, log.Data)
+					if err != nil {
+						return "", fmt.Errorf("failed to unpack Supply event data: %v", err)
+					}
+					amount, ok := dataMap[0].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse amount from event data")
+					}
+					output.Amount.Int = amount.String()
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return "", fmt.Errorf("Supply event not found in receipt")
+		}
+
 	case "borrow":
-		output.Amount = metadata.Amount
-		output.BorrowedUSD = metadata.Amount
+		found := false
+		for _, log := range receipt.Logs {
+			if log.Address == s.lendingPool {
+				event, err := s.abi.EventByID(log.Topics[0])
+				if err != nil {
+					continue
+				}
+				if event.Name == "Borrow" {
+					if len(log.Topics) < 3 {
+						return "", fmt.Errorf("invalid Borrow event: insufficient topics")
+					}
+					// Extract token address from first topic
+					output.Token = common.BytesToAddress(log.Topics[1][:]).Hex()
+					dataMap, err := s.abi.Unpack(event.Name, log.Data)
+					if err != nil {
+						return "", fmt.Errorf("failed to unpack Borrow event data: %v", err)
+					}
+					amount, ok := dataMap[0].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse amount from event data")
+					}
+					rate, ok := dataMap[1].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse rate from event data")
+					}
+					output.Amount.Int = amount.String()
+					output.Rate = rate.String()
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return "", fmt.Errorf("Borrow event not found in receipt")
+		}
+
 	case "repay":
-		output.Amount = metadata.Amount
+		found := false
+		for _, log := range receipt.Logs {
+			if log.Address == s.lendingPool {
+				event, err := s.abi.EventByID(log.Topics[0])
+				if err != nil {
+					continue
+				}
+				if event.Name == "StripUSDRepaid" {
+					if len(log.Topics) < 2 {
+						return "", fmt.Errorf("invalid StripUSDRepaid event: insufficient topics")
+					}
+					dataMap, err := s.abi.Unpack(event.Name, log.Data)
+					if err != nil {
+						return "", fmt.Errorf("failed to unpack StripUSDRepaid event data: %v", err)
+					}
+					amountRepaid, ok := dataMap[0].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse amountRepaid from event data")
+					}
+					remaining, ok := dataMap[1].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse remainingDebt from event data")
+					}
+					output.Amount.Int = amountRepaid.String()
+					output.RemainingDebt = remaining.String()
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return "", fmt.Errorf("StripUSDRepaid event not found in receipt")
+		}
+
 	case "withdraw":
-		output.Amount = metadata.Amount
+		found := false
+		for _, log := range receipt.Logs {
+			if log.Address == s.lendingPool {
+				event, err := s.abi.EventByID(log.Topics[0])
+				if err != nil {
+					continue
+				}
+				if event.Name == "CollateralWithdrawn" {
+					if len(log.Topics) < 3 {
+						return "", fmt.Errorf("invalid CollateralWithdrawn event: insufficient topics")
+					}
+					// Extract token address from first topic
+					output.Token = common.BytesToAddress(log.Topics[1][:]).Hex()
+					dataMap, err := s.abi.Unpack(event.Name, log.Data)
+					if err != nil {
+						return "", fmt.Errorf("failed to unpack CollateralWithdrawn event data: %v", err)
+					}
+					amount, ok := dataMap[0].(*big.Int)
+					if !ok {
+						return "", fmt.Errorf("failed to parse amount from event data")
+					}
+					output.Amount.Int = amount.String()
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return "", fmt.Errorf("CollateralWithdrawn event not found in receipt")
+		}
 	}
 	outputBytes, err := json.Marshal(output)
 	if err != nil {
@@ -399,6 +501,23 @@ func (s *LendingSolver) Construct(intent Intent, opIndex int) (string, error) {
 	// Get the hash to be signed
 	signer := types.NewLondonSigner(s.chainId)
 	hash := signer.Hash(tx)
+
+	// Calculate operation hash
+	opBytes, err := json.Marshal(op)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal operation: %v", err)
+	}
+	opHash := "0x" + hex.EncodeToString(crypto.Keccak256(opBytes))
+
+	// Store parameters with 5-minute deadline
+	s.txParams[opHash] = TxParams{
+		Calldata:  decodedData,
+		Nonce:     nonce,
+		GasLimit:  300000,
+		GasTipCap: gasPrice,
+		GasFeeCap: new(big.Int).Mul(gasPrice, big.NewInt(2)),
+		Deadline:  time.Now().Add(5 * time.Minute),
+	}
 
 	return "0x" + hex.EncodeToString(hash.Bytes()), nil
 }

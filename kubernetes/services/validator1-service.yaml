@@ -5,9 +5,10 @@ metadata:
   namespace: dev
 spec:
   ports:
-    - port: 8080
+    - port: 80
       targetPort: 8080
       name: http
+      protocol: TCP
     - port: 30304
       targetPort: 30304
       name: p2p

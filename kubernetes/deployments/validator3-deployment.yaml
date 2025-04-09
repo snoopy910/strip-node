@@ -1,47 +1,53 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: validator2
+  name: validator3
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: validator2
+      app: validator3
   template:
     metadata:
       labels:
-        app: validator2
+        app: validator3
     spec:
       initContainers:
         - name: wait-for-bootnode
           image: busybox
           command: ['sh', '-c', 'until nslookup bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
       containers:
-        - name: validator2
+        - name: validator3
           image: public.ecr.aws/p3d4l8o0/strip-validator:latest
           imagePullPolicy: Always
           resources:
             requests:
-              cpu: "1500m"
+              cpu: "500m"
               memory: "512Mi"
             limits:
-              cpu: "3000m"
+              cpu: "1500m"
               memory: "2Gi"
           ports:
             - containerPort: 8080
-            - containerPort: 30305
+              name: http
+            - containerPort: 30306
+              name: p2p
           env:
+            - name: HTTP_CLIENT_TIMEOUT
+              value: "300s"
+            - name: KEYGEN_TIMEOUT
+              value: "600s"
             - name: VALIDATOR_PUBLIC_KEY
-              value: "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35"
+              value: ""
             - name: VALIDATOR_PRIVATE_KEY
-              value: "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de"
+              value: ""
             - name: RPC_URL
               value: "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz/"
             - name: HTTP_PORT
               value: "8080"
             - name: PORT
-              value: "30305"
+              value: "30306"
             - name: POSTGRES_HOST
               value: "dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432"
             - name: POSTGRES_USER
@@ -49,7 +55,7 @@ spec:
             - name: POSTGRES_PASSWORD
               value: z2D76R4euvBd
             - name: POSTGRES_DB
-              value: validator2
+              value: validator3
             - name: BOOTNODE_URL
               value: "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"
             - name: SIGNER_HUB_CONTRACT_ADDRESS

@@ -15,7 +15,8 @@ spec:
     spec:
       containers:
         - name: bootnode
-          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/strip-node:latest
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node:bootnode
+          imagePullPolicy: Always
           resources:
             requests:
               cpu: "250m"
@@ -25,11 +26,6 @@ spec:
               memory: "512Mi"
           ports:
             - containerPort: 30303
-          command:
-            - /bin/sh
-            - -c
-            - >
-              /app/strip-node
-              --port 30303
-              --keyPath /app/static-bootnode
-              --isBootstrap true 
+          env:
+            - name: PORT
+              value: "30303"

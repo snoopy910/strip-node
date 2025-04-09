@@ -16,13 +16,14 @@ spec:
       initContainers:
         - name: wait-for-signers
           image: busybox
-          command: ['sh', '-c', 'until wget -q -O- http://validator1:8080/status && wget -q -O- http://validator2:8081/status; do echo waiting for signers; sleep 5; done;']
+          command: ['sh', '-c', 'until wget -q -O- https://validator1.stripchain.xyz/health && wget -q -O- https://validator2.stripchain.xyz/health; do echo waiting for signers; sleep 5; done;']
       containers:
         - name: sequencer
-          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node:demo
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node:sequencer
+          imagePullPolicy: Always
           resources:
             requests:
-              cpu: "1000m"
+              cpu: "500m"
               memory: "512Mi"
             limits:
               cpu: "1500m"
@@ -36,24 +37,25 @@ spec:
               value: "300s"
             - name: KEYGEN_TIMEOUT
               value: "600s"
+            - name: PRIVATE_KEY
+              value: "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
+            - name: RPC_URL
+              value: "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz"
+            - name: HTTP_PORT
+              value: "8082"
+            - name: PORT
+              value: "30306"
             - name: POSTGRES_HOST
               value: "dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432"
-          command:
-            - /bin/sh
-            - -c
-            - >
-              echo "Starting sequencer with debug mode..." &&
-              PGSSLMODE=disable /app/strip-node
-              --privateKey 76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a
-              --rpcURL https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz
-              --httpPort 8082
-              --port 30306
-              --postgresHost dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432
-              --postgresPassword z2D76R4euvBd
-              --postgresDB sequencer
-              --postgresUser postgres
-              --intentOperatorsRegistryAddress 0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c
-              --solversRegistryAddress 0x77127C2fF8C77bCD8F0461b207fc435d10b86989
-              --bridgeContractAddress 0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4
-          
-    
+            - name: POSTGRES_PASSWORD
+              value: "z2D76R4euvBd"
+            - name: POSTGRES_DB
+              value: "sequencer"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: SIGNER_HUB_CONTRACT_ADDRESS
+              value: "0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c"
+            - name: SOLVERS_REGISTRY_ADDRESS
+              value: "0x77127C2fF8C77bCD8F0461b207fc435d10b86989"
+            - name: BRIDGE_CONTRACT_ADDRESS
+              value: "0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4"

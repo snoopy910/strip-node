@@ -23,14 +23,30 @@ spec:
           imagePullPolicy: Always
           resources:
             requests:
-              cpu: "1500m"
+              cpu: "500m"
               memory: "512Mi"
             limits:
-              cpu: "3000m"
+              cpu: "1500m"
               memory: "2Gi"
           ports:
             - containerPort: 8080
             - containerPort: 30305
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
           env:
             - name: VALIDATOR_PUBLIC_KEY
               value: "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35"

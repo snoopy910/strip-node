@@ -157,7 +157,7 @@ services:
       timeout: 3s
       retries: 10
     environment:
-      PRIVATE_KEY: "0x76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
+      PRIVATE_KEY: 76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a
       RPC_URL: "http://ganache:8545"
       HTTP_PORT: 8082
       PORT: 30306

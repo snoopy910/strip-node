@@ -16,6 +16,7 @@ spec:
       initContainers:
         - name: wait-for-signers
           image: busybox
+          imagePullPolicy: Always
           command: ['sh', '-c', 'until nslookup backend-strip-node-validator1.dev.svc.cluster.local && nslookup backend-strip-node-validator2.dev.svc.cluster.local; do echo waiting for signers; sleep 2; done;']
       containers:
         - name: backend-strip-node-sequencer

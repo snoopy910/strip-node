@@ -16,6 +16,7 @@ spec:
       initContainers:
         - name: wait-for-bootnode
           image: busybox
+          imagePullPolicy: Always
           command: ['sh', '-c', 'until nslookup backend-strip-node-bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
       containers:
         - name: backend-strip-node-validator1

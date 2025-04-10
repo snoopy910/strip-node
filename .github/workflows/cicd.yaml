@@ -95,7 +95,8 @@ jobs:
           else
             namespace="dev"
           fi
-          
+          COMPONENT_TYPE=backend
+          COMPONENT_REPO=strip-node
           # Restart bootnode
           COMPONENT_NAME=bootnode    
           kubectl rollout restart deployment ${COMPONENT_TYPE}-${COMPONENT_REPO}-${COMPONENT_NAME} -n $namespace

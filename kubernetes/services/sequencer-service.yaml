@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: sequencer
+  name: backend-strip-node-sequencer
   namespace: dev
 spec:
   ports:
     - port: 80
-      targetPort: 8082
+      targetPort: 8080
       name: http
     - port: 30306
       targetPort: 30306
       name: p2p
   selector:
-    app: sequencer 
+    app: backend-strip-node-sequencer 

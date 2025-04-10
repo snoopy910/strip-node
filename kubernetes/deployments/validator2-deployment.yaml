@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dev-backend-strip-node-validator2
+  name: backend-strip-node-validator2
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: dev-backend-strip-node-validator2
+      app: backend-strip-node-validator2
   template:
     metadata:
       labels:
-        app: dev-backend-strip-node-validator2
+        app: backend-strip-node-validator2
     spec:
       initContainers:
         - name: wait-for-bootnode
           image: busybox
           command: ['sh', '-c', 'until nslookup bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
       containers:
-        - name: dev-backend-strip-node-validator2
+        - name: backend-strip-node-validator2
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node/validator:latest
           imagePullPolicy: Always
           resources:

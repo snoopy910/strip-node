@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dev-backend-strip-node-sequencer
+  name: backend-strip-node-sequencer
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: dev-backend-strip-node-sequencer
+      app: backend-strip-node-sequencer
   template:
     metadata:
       labels:
-        app: dev-backend-strip-node-sequencer
+        app: backend-strip-node-sequencer
     spec:
       initContainers:
         - name: wait-for-signers
           image: busybox
           command: ['sh', '-c', 'until wget -q -O- https://validator1.stripchain.xyz/health && wget -q -O- https://validator2.stripchain.xyz/health; do echo waiting for signers; sleep 5; done;']
       containers:
-        - name: dev-backend-strip-node-sequencer
+        - name: backend-strip-node-sequencer
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node/sequencer:latest
           imagePullPolicy: Always
           resources:
@@ -42,7 +42,7 @@ spec:
             - name: RPC_URL
               value: "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz"
             - name: HTTP_PORT
-              value: "8082"
+              value: "8080"
             - name: PORT
               value: "30306"
             - name: POSTGRES_HOST

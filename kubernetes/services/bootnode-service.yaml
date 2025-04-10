@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: bootnode
+  name: backend-strip-node-bootnode
   namespace: dev
 spec:
   ports:
     - port: 30303
       targetPort: 30303
   selector:
-    app: bootnode 
+    app: backend-strip-node-bootnode 

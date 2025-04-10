@@ -1,0 +1,156 @@
+name: Strip Node CI/CD for Bootnode
+
+on:
+  push:
+    branches:
+      - main
+      - stage
+      - develop
+  pull_request:
+    branches:
+      - develop
+      - stage
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  IMAGE_TAG: ${{ github.sha }}  
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest 
+    steps:
+      - uses: actions/checkout@v3
+     
+      - name: Update CA certificates
+        run: sudo apt-get update && sudo apt-get install -y ca-certificates
+
+      - name: Configure Git to skip SSL verification
+        run: git config --global http.sslVerify false
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build, tag, and push images to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            REPOSITORY_PREFIX="prod"
+          elif [[ "${{ github.ref }}" == "refs/heads/stage" ]]; then
+            REPOSITORY_PREFIX="stage"
+          else
+            REPOSITORY_PREFIX="dev"
+          fi
+      
+          COMPONENT_TYPE=backend
+          COMPONENT_REPO=strip-node
+
+
+          COMPONENT_NAME=bootnode    
+          IMAGE_TAG_FORMAT="$ECR_REGISTRY/$REPOSITORY_PREFIX/$COMPONENT_TYPE/$COMPONENT_REPO/$COMPONENT_NAME"
+          echo "Building Docker image with tag: $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}"
+          docker build -t $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }} -t $IMAGE_TAG_FORMAT:latest -f ./bootnode/Dockerfile ./bootnode
+          docker push $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}
+          docker push $IMAGE_TAG_FORMAT:latest
+
+          COMPONENT_NAME=validator    
+          IMAGE_TAG_FORMAT="$ECR_REGISTRY/$REPOSITORY_PREFIX/$COMPONENT_TYPE/$COMPONENT_REPO/$COMPONENT_NAME"
+          echo "Building Docker image with tag: $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}"
+          docker build -t $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }} -t $IMAGE_TAG_FORMAT:latest -f ./strip-validator/Dockerfile ./strip-validator
+          docker push $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}
+          docker push $IMAGE_TAG_FORMAT:latest
+
+          COMPONENT_NAME=sequencer    
+          IMAGE_TAG_FORMAT="$ECR_REGISTRY/$REPOSITORY_PREFIX/$COMPONENT_TYPE/$COMPONENT_REPO/$COMPONENT_NAME"
+          echo "Building Docker image with tag: $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}"
+          docker build -t $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }} -t $IMAGE_TAG_FORMAT:latest .
+          docker push $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}
+          docker push $IMAGE_TAG_FORMAT:latest
+
+      - name: Deploy using Kustomize
+        run: |
+          aws eks update-kubeconfig --name stripchain --region ${{ env.AWS_REGION }}
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            namespace="prod"
+          elif [[ "${{ github.ref }}" == "refs/heads/stage" ]]; then
+            namespace="stage"
+          else
+            namespace="dev"
+          fi
+          
+          # Restart bootnode
+          COMPONENT_NAME=bootnode    
+          kubectl rollout restart deployment ${COMPONENT_TYPE}-${COMPONENT_REPO}-${COMPONENT_NAME} -n $namespace
+          echo "Waiting for bootnode deployment to complete..."
+          kubectl rollout status deployment/${COMPONENT_TYPE}-${COMPONENT_REPO}-${COMPONENT_NAME} -n $namespace --timeout=300s
+          
+          if [ $? -eq 0 ]; then
+            echo "Bootnode deployment successful, proceeding to validators..."
+            
+            # Get list of validator deployments
+            VALIDATOR_DEPLOYMENTS=$(kubectl get deployments -n $namespace -o name | grep "${COMPONENT_TYPE}-${COMPONENT_REPO}-validator" | cut -d'/' -f2)
+            
+            if [ -z "$VALIDATOR_DEPLOYMENTS" ]; then
+              echo "No validator deployments found. Exiting..."
+              exit 1
+            fi
+            
+            # Track if all validators succeeded
+            ALL_VALIDATORS_SUCCEEDED=true
+            
+            # Restart each validator
+            for VALIDATOR_DEPLOYMENT in $VALIDATOR_DEPLOYMENTS; do
+              echo "Restarting validator: $VALIDATOR_DEPLOYMENT"
+              kubectl rollout restart deployment/$VALIDATOR_DEPLOYMENT -n $namespace
+              
+              echo "Waiting for $VALIDATOR_DEPLOYMENT deployment to complete..."
+              kubectl rollout status deployment/$VALIDATOR_DEPLOYMENT -n $namespace --timeout=300s
+              
+              if [ $? -ne 0 ]; then
+                echo "Validator $VALIDATOR_DEPLOYMENT deployment failed"
+                ALL_VALIDATORS_SUCCEEDED=false
+                break
+              fi
+            done
+            
+            # Only proceed to sequencer if all validators succeeded
+            if [ "$ALL_VALIDATORS_SUCCEEDED" = true ]; then
+              echo "All validator deployments successful, proceeding to sequencer..."
+              COMPONENT_NAME=sequencer
+              kubectl rollout restart deployment ${COMPONENT_TYPE}-${COMPONENT_REPO}-${COMPONENT_NAME} -n $namespace
+              
+              echo "Waiting for sequencer deployment to complete..."
+              kubectl rollout status deployment/${COMPONENT_TYPE}-${COMPONENT_REPO}-${COMPONENT_NAME} -n $namespace --timeout=300s
+              
+              if [ $? -eq 0 ]; then
+                echo "Sequencer deployment successful. All components restarted successfully."
+              else
+                echo "Sequencer deployment failed."
+                exit 1
+              fi
+            else
+              echo "One or more validator deployments failed, not proceeding to sequencer"
+              exit 1
+            fi
+          else
+            echo "Bootnode deployment failed, not proceeding to validators"
+            exit 1
+          fi

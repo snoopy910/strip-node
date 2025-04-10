@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: strip-node-solver
+  name: backend-strip-node-solver
   labels:
-    app: strip-node-solver
+    app: backend-strip-node-solver
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: strip-node-solver
+      app: backend-strip-node-solver
   template:
     metadata:
       labels:
-        app: strip-node-solver
+        app: backend-strip-node-solver
     spec:
       containers:
-      - name: strip-node-solver
+      - name: backend-strip-node-solver
         image: dev/backend/strip-node:solver
         imagePullPolicy: Always
         ports:

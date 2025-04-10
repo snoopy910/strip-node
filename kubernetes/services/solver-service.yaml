@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: strip-node-solver
+  name: backend-strip-node-solver
 spec:
   selector:
-    app: strip-node-solver
+    app: backend-strip-node-solver
   ports:
     - protocol: TCP
       port: 80

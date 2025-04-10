@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/StripChain/strip-node/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -14,6 +15,10 @@ import (
 )
 
 func TokenExists(rpcURL string, bridgeContractAddress string, chainId string, srcToken string) (bool, string, error) {
+	// Convert srcToken and chainId to lowercase for consistent handling
+	srcToken = strings.ToLower(srcToken)
+	chainId = strings.ToLower(chainId)
+
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return false, "", err
@@ -25,12 +30,13 @@ func TokenExists(rpcURL string, bridgeContractAddress string, chainId string, sr
 	}
 
 	peggedToken, err := instance.PeggedTokens(&bind.CallOpts{}, chainId, srcToken)
-
 	if err != nil {
 		return false, "", err
 	}
 
-	if peggedToken != common.HexToAddress(util.ZERO_ADDRESS) {
+	zeroAddress := common.HexToAddress(util.ZERO_ADDRESS)
+	if peggedToken != zeroAddress {
+		fmt.Printf("TokenExists: Token exists, pegged to: %s\n", peggedToken.Hex())
 		return true, peggedToken.Hex(), nil
 	}
 

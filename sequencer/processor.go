@@ -413,7 +413,6 @@ func ProcessIntent(intentId int64) {
 							logger.Sugar().Errorw("error locking identity", "error", err)
 							break
 						}
-
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, result)
 					} else {
 						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
@@ -433,11 +432,14 @@ func ProcessIntent(intentId int64) {
 					if err != nil {
 						if err.Error() == "pg: no rows in result set" {
 							_, err := AddLock(intent.Identity, intent.IdentityCurve)
+
 							if err != nil {
 								logger.Sugar().Errorw("error adding lock", "error", err)
 								break
 							}
+
 							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+
 							if err != nil {
 								logger.Sugar().Errorw("error getting lock after adding", "error", err)
 								break
@@ -463,7 +465,7 @@ func ProcessIntent(intentId int64) {
 
 						// Extract destination address from serialized transaction
 						var destAddress string
-						if chain.ChainType == "bitcoin" || chain.ChainType == "dogecoin" {
+						if chain.ChainType == "bitcoin" {
 							// For Bitcoin, decode the serialized transaction to get output address
 							var tx wire.MsgTx
 							txBytes, err := hex.DecodeString(operation.SerializedTxn)
@@ -506,7 +508,41 @@ func ProcessIntent(intentId int64) {
 								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 								break
 							}
-							destAddress = tx.To().Hex()
+							if tx.To() == nil {
+								logger.Sugar().Errorw("EVM transaction has nil To address")
+								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								break
+							}
+							if len(tx.Data()) >= 4 && bytes.Equal(tx.Data()[:4], []byte{0xa9, 0x05, 0x9c, 0xbb}) {
+								// ERC20 transfer detected, extract recipient from call data
+								if len(tx.Data()) < 36 {
+									logger.Sugar().Errorw("ERC20 transfer data too short to extract destination")
+									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									break
+								}
+								destAddress = ethCommon.BytesToAddress(tx.Data()[4:36]).Hex()
+
+								// For ERC20 transfers, verify the token exists in the bridge contract
+								tokenAddress := tx.To().Hex()
+								exists, peggedToken, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, operation.ChainId, tokenAddress)
+								if err != nil {
+									logger.Sugar().Errorw("error checking token existence in bridge", "error", err, "token", tokenAddress)
+									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									break
+								}
+								if !exists {
+									logger.Sugar().Errorw("ERC20 token not registered in bridge", "token", tokenAddress, "chain", operation.ChainId)
+									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									break
+								}
+								logger.Sugar().Infow("ERC20 token exists in bridge", "token", tokenAddress, "peggedToken", peggedToken)
+							} else {
+								destAddress = tx.To().Hex()
+							}
 						}
 
 						// Verify destination address matches bridge wallet
@@ -570,6 +606,7 @@ func ProcessIntent(intentId int64) {
 								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
+
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
 						} else {
 							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
@@ -814,7 +851,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						wallet, err := GetWallet(intent.Identity, "ecdsa")
+						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting wallet", "error", err)
 							break
@@ -835,7 +872,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						logger.Sugar().Infof("Minting bridge %s %s %s %s", amount, wallet.ECDSAPublicKey, destAddress, signature)
+						logger.Sugar().Infow("Minting bridge %s %s %s %s", amount, wallet.ECDSAPublicKey, destAddress, signature)
 
 						result, err := mintBridge(
 							amount, wallet.ECDSAPublicKey, destAddress, signature)
@@ -991,6 +1028,8 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
+						logger.Sugar().Infow("Minting bridge %s %s %s %s", amount, wallet.ECDSAPublicKey, destAddress, signature)
+
 						result, err := mintBridge(
 							amount, wallet.ECDSAPublicKey, destAddress, signature)
 
@@ -1014,12 +1053,36 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
+					// Get the deposit operation details to find the actual source token address
+					depositOperation := intent.Operations[i-2] // The operation before bridge deposit is send-to-bridge
+
+					// Get the actual token used in the deposit from the transfer events
+					transfers, err := GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
+					if err != nil {
+						logger.Sugar().Errorw("error getting transfers for swap tokenIn", "error", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					if len(transfers) == 0 {
+						logger.Sugar().Errorw("No transfers found for swap tokenIn", "result", depositOperation.Result)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					// Use the actual token address from the transfer event
+					transfer := transfers[0]
+					tokenIn := transfer.TokenAddress
+					logger.Sugar().Infow("Using token from transfer event", "tokenIn", tokenIn)
+
 					var bridgeDepositData MintOutput
 					var swapMetadata SwapMetadata
 					json.Unmarshal([]byte(bridgeDeposit.SolverOutput), &bridgeDepositData)
 					json.Unmarshal([]byte(operation.SolverMetadata), &swapMetadata)
 
-					tokenIn := bridgeDepositData.Token
+					// Use the token from metadata for tokenOut
 					tokenOut := swapMetadata.Token
 					amountIn := bridgeDepositData.Amount
 					deadline := time.Now().Add(time.Hour).Unix()
@@ -1152,15 +1215,50 @@ func ProcessIntent(intentId int64) {
 
 					// Verify that this operation is followed by a withdraw operation
 					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != OPERATION_TYPE_WITHDRAW {
+						logger.Sugar().Errorw("BURN_SYNTHETIC validation failed: must be followed by WITHDRAW",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"operationIndex", i,
+							"totalOperations", len(intent.Operations),
+							"nextOperationType", getNextOperationType(intent, i))
 						fmt.Println("BURN_SYNTHETIC operation must be followed by a WITHDRAW operation")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
 
+					logger.Sugar().Infow("BURN_SYNTHETIC validation passed: followed by WITHDRAW",
+						"operationId", operation.ID,
+						"nextOperationId", intent.Operations[i+1].ID,
+						"nextOperationType", intent.Operations[i+1].Type)
+
 					err := json.Unmarshal([]byte(operation.SolverMetadata), &burnSyntheticMetadata)
 					if err != nil {
+						logger.Sugar().Errorw("BURN_SYNTHETIC metadata parsing failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"error", err,
+							"rawMetadata", operation.SolverMetadata)
 						fmt.Println("Error unmarshalling burn synthetic metadata:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					logger.Sugar().Infow("BURN_SYNTHETIC metadata parsed successfully",
+						"operationId", operation.ID,
+						"token", burnSyntheticMetadata.Token,
+						"amount", burnSyntheticMetadata.Amount)
+
+					// Validate token address format
+					isValidToken, tokenErr := validateBurnSyntheticToken(burnSyntheticMetadata.Token)
+					if !isValidToken {
+						logger.Sugar().Errorw("BURN_SYNTHETIC invalid token",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"token", burnSyntheticMetadata.Token,
+							"error", tokenErr)
+						fmt.Println("Invalid token address:", tokenErr)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
@@ -1168,23 +1266,48 @@ func ProcessIntent(intentId int64) {
 
 					wallet, err := GetWallet(intent.Identity, "ecdsa")
 					if err != nil {
+						logger.Sugar().Errorw("BURN_SYNTHETIC wallet retrieval failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"identity", intent.Identity,
+							"error", err)
 						fmt.Println("Error getting wallet:", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
 
+					logger.Sugar().Infow("BURN_SYNTHETIC wallet retrieved successfully",
+						"operationId", operation.ID,
+						"publicKey", wallet.ECDSAPublicKey)
+
 					// Verify the user has sufficient token balance
 					balance, err := ERC20.GetBalance(RPC_URL, burnSyntheticMetadata.Token, wallet.ECDSAPublicKey)
 					if err != nil {
+						logger.Sugar().Errorw("BURN_SYNTHETIC balance check failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"token", burnSyntheticMetadata.Token,
+							"account", wallet.ECDSAPublicKey,
+							"error", err)
 						fmt.Println("Error getting token balance:", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
 
+					logger.Sugar().Infow("BURN_SYNTHETIC balance retrieved successfully",
+						"operationId", operation.ID,
+						"token", burnSyntheticMetadata.Token,
+						"account", wallet.ECDSAPublicKey,
+						"balance", balance)
+
 					balanceBig, ok := new(big.Int).SetString(balance, 10)
 					if !ok {
+						logger.Sugar().Errorw("BURN_SYNTHETIC balance parsing failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"balance", balance)
 						fmt.Println("Error parsing balance")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
@@ -1193,18 +1316,68 @@ func ProcessIntent(intentId int64) {
 
 					amountBig, ok := new(big.Int).SetString(burnSyntheticMetadata.Amount, 10)
 					if !ok {
+						logger.Sugar().Errorw("BURN_SYNTHETIC amount parsing failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"amount", burnSyntheticMetadata.Amount)
 						fmt.Println("Error parsing amount")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
 
+					// Log balance check details
+					logBurnSyntheticBalanceCheck(balanceBig, amountBig, burnSyntheticMetadata.Token)
+
 					if balanceBig.Cmp(amountBig) < 0 {
+						logger.Sugar().Errorw("BURN_SYNTHETIC insufficient balance",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"token", burnSyntheticMetadata.Token,
+							"account", wallet.ECDSAPublicKey,
+							"balance", balanceBig.String(),
+							"requiredAmount", amountBig.String())
 						fmt.Println("Insufficient token balance")
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
+
+					logger.Sugar().Infow("BURN_SYNTHETIC sufficient balance confirmed",
+						"operationId", operation.ID,
+						"token", burnSyntheticMetadata.Token,
+						"balance", balanceBig.String(),
+						"amount", amountBig.String())
+
+					// Verify token does NOT exist on bridge contract (BURN_SYNTHETIC is for native L2 tokens, not bridged tokens)
+					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, "ethereum", burnSyntheticMetadata.Token)
+					if err != nil {
+						logger.Sugar().Errorw("BURN_SYNTHETIC bridge token check failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"token", burnSyntheticMetadata.Token,
+							"error", err)
+						fmt.Println("Error checking token existence in bridge:", err)
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					if exists {
+						logger.Sugar().Errorw("BURN_SYNTHETIC invalid token: token exists on bridge",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"token", burnSyntheticMetadata.Token,
+							"peggedToken", destAddress)
+						fmt.Println("Invalid token: token exists on bridge, use BURN instead of BURN_SYNTHETIC")
+						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
+					}
+
+					logger.Sugar().Infow("BURN_SYNTHETIC token validated: not a bridged token",
+						"operationId", operation.ID,
+						"token", burnSyntheticMetadata.Token)
 
 					// Generate data to sign for burning tokens
 					dataToSign, err := bridge.BridgeBurnDataToSign(
@@ -1216,23 +1389,63 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
+						logger.Sugar().Errorw("BURN_SYNTHETIC data generation failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"token", burnSyntheticMetadata.Token,
+							"account", wallet.ECDSAPublicKey,
+							"bridgeContract", BridgeContractAddress,
+							"error", err)
 						fmt.Println("Error generating burn data to sign:", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
 
+					logger.Sugar().Infow("BURN_SYNTHETIC data generated successfully",
+						"operationId", operation.ID,
+						"dataToSignLength", len(dataToSign),
+						"dataToSignPrefix", truncateString(dataToSign, 20))
+
 					// Update operation with data to sign and wait for signature
 					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
+					logger.Sugar().Infow("BURN_SYNTHETIC operation updated with data to sign",
+						"operationId", operation.ID)
+
 					signature, err := getSignature(intent, i)
 					if err != nil {
+						logger.Sugar().Errorw("BURN_SYNTHETIC signature retrieval failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"error", err)
 						fmt.Println("Error getting signature:", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
+
+					// Log signature details
+					logBurnSyntheticSignature(signature, dataToSign)
+
+					// Verify signature locally before submitting
+					isValidSignature, verifyErr := verifyBurnSyntheticSignature(dataToSign, signature, wallet.ECDSAPublicKey)
+					if !isValidSignature {
+						logger.Sugar().Warnw("BURN_SYNTHETIC signature verification warning",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"error", verifyErr,
+							"proceedingAnyway", true)
+						// Note: We're logging the warning but not failing - to maintain the original logic
+					}
+
+					logger.Sugar().Infow("BURN_SYNTHETIC executing burn transaction",
+						"operationId", operation.ID,
+						"account", wallet.ECDSAPublicKey,
+						"amount", burnSyntheticMetadata.Amount,
+						"token", burnSyntheticMetadata.Token,
+						"signatureLength", len(signature))
 
 					fmt.Println("Burning synthetic tokens", wallet.ECDSAPublicKey, burnSyntheticMetadata.Amount, burnSyntheticMetadata.Token, signature)
 
@@ -1245,13 +1458,42 @@ func ProcessIntent(intentId int64) {
 					)
 
 					if err != nil {
+						logger.Sugar().Errorw("BURN_SYNTHETIC transaction failed",
+							"operationId", operation.ID,
+							"intentId", intent.ID,
+							"token", burnSyntheticMetadata.Token,
+							"account", wallet.ECDSAPublicKey,
+							"error", err)
 						fmt.Println("Error burning tokens:", err)
 						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
 						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
 						break
 					}
 
+					logger.Sugar().Infow("BURN_SYNTHETIC transaction submitted successfully",
+						"operationId", operation.ID,
+						"intentId", intent.ID,
+						"token", burnSyntheticMetadata.Token,
+						"account", wallet.ECDSAPublicKey,
+						"transactionHash", result)
+
 					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+
+					// Log integration with next withdraw operation
+					if i+1 < len(intent.Operations) && intent.Operations[i+1].Type == OPERATION_TYPE_WITHDRAW {
+						var withdrawMetadata WithdrawMetadata
+						withdrawErr := json.Unmarshal([]byte(intent.Operations[i+1].SolverMetadata), &withdrawMetadata)
+
+						if withdrawErr == nil {
+							logger.Sugar().Infow("BURN_SYNTHETIC followed by WITHDRAW operation",
+								"burnOperationId", operation.ID,
+								"withdrawOperationId", intent.Operations[i+1].ID,
+								"burnToken", burnSyntheticMetadata.Token,
+								"withdrawToken", withdrawMetadata.Token,
+								"tokensMatch", burnSyntheticMetadata.Token == withdrawMetadata.Token)
+						}
+					}
+
 					break
 				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
 					burn := intent.Operations[i-1]
@@ -2285,8 +2527,8 @@ func ProcessIntent(intentId int64) {
 					} else if operation.KeyCurve == "eddsa" ||
 						operation.KeyCurve == "aptos_eddsa" ||
 						operation.KeyCurve == "stellar_eddsa" ||
-						operation.KeyCurve == "sui_eddsa" ||
 						operation.KeyCurve == "algorand_eddsa" ||
+						operation.KeyCurve == "sui_eddsa" ||
 						operation.KeyCurve == "ripple_eddsa" ||
 						operation.KeyCurve == "cardano_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
@@ -2843,6 +3085,12 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
 
+	// Log the request details for debugging
+	logger.Sugar().Infow("Requesting signature from validator",
+		"url", signer.URL+"/signature?operationIndex="+operationIndexStr,
+		"intentID", intent.ID,
+		"operationIndex", operationIndex)
+
 	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
 
 	if err != nil {
@@ -2850,7 +3098,9 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second, // Add timeout to prevent hanging
+	}
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -2859,18 +3109,55 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 
 	defer resp.Body.Close()
 
+	// Check HTTP status code first
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("validator returned non-OK status: %d", resp.StatusCode)
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", "", fmt.Errorf("error reading response body: %v", err)
 	}
 
+	// Log the response for debugging
+	responseStr := string(body)
+	logger.Sugar().Infow("Received signature response",
+		"contentLength", len(responseStr),
+		"responseBody", responseStr[:min(len(responseStr), 100)]) // Log first 100 chars to avoid excessive logging
+
+	// Handle empty responses
+	if len(responseStr) == 0 {
+		return "", "", fmt.Errorf("empty response from validator")
+	}
+
 	var signatureResponse SignatureResponse
 	err = json.Unmarshal(body, &signatureResponse)
 	if err != nil {
-		return "", "", fmt.Errorf("error unmarshalling response body: %v", err)
+		return "", "", fmt.Errorf("error unmarshalling response body: %v, body: %s", err, truncateString(responseStr, 200))
+	}
+
+	// Validate signature response
+	if signatureResponse.Signature == "" {
+		return "", "", fmt.Errorf("empty signature in response")
 	}
 
 	return signatureResponse.Signature, signatureResponse.Address, nil
+}
+
+// Helper function to truncate strings for logging
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) {
@@ -3036,4 +3323,11 @@ func readBitcoinAddress(wallet *WalletSchema, chainId string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported bitcoin chain ID: %s", chainId)
 	}
+}
+
+func getNextOperationType(intent *Intent, operationIndex int) string {
+	if operationIndex+1 < len(intent.Operations) {
+		return intent.Operations[operationIndex+1].Type
+	}
+	return "none"
 }

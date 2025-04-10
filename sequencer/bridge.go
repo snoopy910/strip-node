@@ -267,7 +267,30 @@ func swapBridge(
 		return "", err
 	}
 
+	// Validate input parameters
+	if tokenIn == "" {
+		return "", fmt.Errorf("tokenIn cannot be empty")
+	}
+
+	// If tokenOut is empty, we need to handle it
+	if tokenOut == "" {
+		return "", fmt.Errorf("tokenOut cannot be empty for swap operation")
+	}
+
+	// Check if tokenIn and tokenOut are the same
+	if strings.EqualFold(tokenIn, tokenOut) {
+		return "", fmt.Errorf("tokenIn and tokenOut cannot be the same: %s", tokenIn)
+	}
+
 	toAddress := common.HexToAddress(BridgeContractAddress)
+
+	// Log the bridge address for debugging
+	logger.Sugar().Infow("Swap details",
+		"bridgeAddress", BridgeContractAddress,
+		"account", account,
+		"tokenIn", tokenIn,
+		"tokenOut", tokenOut,
+		"amountIn", amountIn)
 
 	instance, err := bridge.NewBridge(toAddress, client)
 	if err != nil {
@@ -276,17 +299,22 @@ func swapBridge(
 
 	signatureBytes, err := hex.DecodeString(signature)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to decode signature: %v", err)
 	}
+
+	// Log signature details
+	logger.Sugar().Debugw("Signature bytes length", "length", len(signatureBytes))
 
 	nonce, err := instance.Nonces(&bind.CallOpts{}, common.HexToAddress(account))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get nonce: %v", err)
 	}
+
+	logger.Sugar().Infow("Account nonce", "account", account, "nonce", nonce)
 
 	privateKey, err := crypto.HexToECDSA(PrivateKey)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid private key: %v", err)
 	}
 
 	publicKey := privateKey.Public()
@@ -304,7 +332,7 @@ func swapBridge(
 
 	abi, err := bridge.BridgeMetaData.GetAbi()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get ABI: %v", err)
 	}
 
 	_amountIn, _ := new(big.Int).SetString(amountIn, 10)
@@ -319,6 +347,14 @@ func swapBridge(
 		Deadline:          big.NewInt(0).SetInt64(deadline),
 		SqrtPriceLimitX96: big.NewInt(0),
 	}
+
+	logger.Sugar().Infow("Swap parameters",
+		"tokenIn", params.TokenIn.Hex(),
+		"tokenOut", params.TokenOut.Hex(),
+		"amountIn", params.AmountIn.String(),
+		"fee", params.Fee.String(),
+		"recipient", params.Recipient.Hex(),
+		"deadline", params.Deadline.String())
 
 	ethSigHex := hexutil.Encode(signatureBytes[:])
 	recoveryParam := ethSigHex[len(ethSigHex)-2:]

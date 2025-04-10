@@ -55,6 +55,8 @@ services:
     depends_on:
       foundry:
         condition: service_completed_successfully
+    volumes:
+      - bootnode-keys:/app/static-bootnode
 
   validator1postgres:
     image: postgres:14.13
@@ -222,3 +224,4 @@ volumes:
   validator2postgres-data:
   sequencerpostgres-data:
   ganache-data:
+  bootnode-keys:

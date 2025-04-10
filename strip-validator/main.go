@@ -9,12 +9,14 @@ import (
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/multiformats/go-multiaddr"
 )
 
 var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddress, BridgeContractAddress, NodePrivateKey, NodePublicKey string
 var MaximumSigners int
 var HeliusApiKey string
+var h host.Host
 
 type PartyProcess struct {
 	Party  *tss.Party
@@ -75,12 +77,15 @@ func main() {
 
 	InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 
-	go startHTTPServer(*httpPort)
-
-	h, addr, err := createHost(*listenHost, *port, *bootnodeURL)
+	// Initialize host first
+	var addr multiaddr.Multiaddr
+	h, addr, err = createHost(*listenHost, *port, *bootnodeURL)
 	if err != nil {
 		panic(err)
 	}
+
+	// Start HTTP server after host is initialized
+	go startHTTPServer(*httpPort)
 
 	go discoverPeers(h, []multiaddr.Multiaddr{addr})
 	err = subscribe(h)

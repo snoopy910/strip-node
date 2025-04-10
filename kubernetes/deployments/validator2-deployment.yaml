@@ -16,7 +16,7 @@ spec:
       initContainers:
         - name: wait-for-bootnode
           image: busybox
-          command: ['sh', '-c', 'until nslookup bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
+          command: ['sh', '-c', 'until nslookup backend-strip-node-bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
       containers:
         - name: backend-strip-node-validator2
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node/validator:latest

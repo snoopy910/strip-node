@@ -16,7 +16,7 @@ spec:
       initContainers:
         - name: wait-for-signers
           image: busybox
-          command: ['sh', '-c', 'until wget -q -O- https://validator1.stripchain.xyz/health && wget -q -O- https://validator2.stripchain.xyz/health; do echo waiting for signers; sleep 5; done;']
+          command: ['sh', '-c', 'until nslookup backend-strip-node-validator1.dev.svc.cluster.local && nslookup backend-strip-node-validator2.dev.svc.cluster.local; do echo waiting for signers; sleep 2; done;']
       containers:
         - name: backend-strip-node-sequencer
           image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node/sequencer:latest

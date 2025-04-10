@@ -74,7 +74,7 @@ jobs:
           COMPONENT_NAME=validator    
           IMAGE_TAG_FORMAT="$ECR_REGISTRY/$REPOSITORY_PREFIX/$COMPONENT_TYPE/$COMPONENT_REPO/$COMPONENT_NAME"
           echo "Building Docker image with tag: $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}"
-          docker build -t $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }} -t $IMAGE_TAG_FORMAT:latest -f ./strip-validator/Dockerfile ./strip-validator
+          docker build -t $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }} -t $IMAGE_TAG_FORMAT:latest -f ./strip-validator/Dockerfile
           docker push $IMAGE_TAG_FORMAT:${{ env.IMAGE_TAG }}
           docker push $IMAGE_TAG_FORMAT:latest
 

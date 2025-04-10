@@ -19,7 +19,7 @@ spec:
           command: ['sh', '-c', 'until nslookup bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
       containers:
         - name: validator1
-          image: public.ecr.aws/p3d4l8o0/strip-validator:latest
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node/validator:latest
           imagePullPolicy: Always
           resources:
             requests:

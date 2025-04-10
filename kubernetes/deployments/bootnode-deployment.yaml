@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: bootnode
+  name: dev-backend-strip-node-bootnode
   namespace: dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: bootnode
+      app: dev-backend-strip-node-bootnode
   template:
     metadata:
       labels:
-        app: bootnode
+        app: dev-backend-strip-node-bootnode
     spec:
       containers:
-        - name: bootnode
-          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node:bootnode
+        - name: dev-backend-strip-node-bootnode
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node/bootnode:latest
           imagePullPolicy: Always
           resources:
             requests:

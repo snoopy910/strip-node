@@ -1,4 +1,4 @@
-name: Strip Node CI/CD for Bootnode
+name: Strip Node CI/CD for all components
 
 on:
   push:

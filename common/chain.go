@@ -39,6 +39,13 @@ var Chains = []Chain{
 		TokenSymbol: "ETH",
 	},
 	{
+		ChainId:     "44331",
+		ChainType:   "evm",
+		ChainUrl:    "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz",
+		KeyCurve:    "ecdsa",
+		TokenSymbol: "ETH",
+	},
+	{
 		ChainId:     "421614",
 		ChainType:   "evm",
 		ChainUrl:    "https://arbitrum-sepolia-rpc.publicnode.com",

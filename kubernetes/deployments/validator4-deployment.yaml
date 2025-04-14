@@ -58,3 +58,5 @@ spec:
               value: "0x77127C2fF8C77bCD8F0461b207fc435d10b86989"
             - name: BRIDGE_CONTRACT_ADDRESS
               value: "0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4"
+            - name: SEQUENCER_HOST
+              value: "https://sequencer.stripchain.xyz"

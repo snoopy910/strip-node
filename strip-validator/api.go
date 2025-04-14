@@ -143,14 +143,14 @@ func startHTTPServer(port string) {
 		headers := r.Header
 		method := r.Method
 		contentLength := r.ContentLength
-		
-		logger.Sugar().Infow("Received keygen request", 
+
+		logger.Sugar().Infow("Received keygen request",
 			"method", method,
 			"remoteAddr", requestIP,
 			"contentLength", contentLength,
 			"userAgent", headers.Get("User-Agent"),
 			"contentType", headers.Get("Content-Type"))
-		
+
 		var createWallet CreateWallet
 
 		// Read the request body for logging
@@ -160,15 +160,15 @@ func startHTTPServer(port string) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		
+
 		// Log the raw request body if it's not too large
 		if contentLength > 0 && contentLength < 1024 {
 			logger.Sugar().Debugw("Request body", "body", string(bodyBytes))
 		}
-		
+
 		// Restore the body for further processing
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-		
+
 		err = json.NewDecoder(r.Body).Decode(&createWallet)
 		if err != nil {
 			logger.Sugar().Errorw("Failed to decode keygen request body", "error", err.Error())
@@ -176,10 +176,10 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		logger.Sugar().Infow("Processing keygen request", 
-			"identity", createWallet.Identity, 
-			"identityCurve", createWallet.IdentityCurve, 
-			"keyCurve", createWallet.KeyCurve, 
+		logger.Sugar().Infow("Processing keygen request",
+			"identity", createWallet.Identity,
+			"identityCurve", createWallet.IdentityCurve,
+			"keyCurve", createWallet.KeyCurve,
 			"signersCount", len(createWallet.Signers))
 
 		key := createWallet.Identity + "_" + createWallet.IdentityCurve + "_" + createWallet.KeyCurve
@@ -195,34 +195,34 @@ func startHTTPServer(port string) {
 					errorChan <- fmt.Errorf("internal server error: panic in keygen operation")
 				}
 			}()
-			
+
 			generateKeygenMessage(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve, createWallet.Signers)
 		}()
 
 		logger.Sugar().Infow("Waiting for keygen operation to complete", "key", key)
-		
+
 		// Add timeout to prevent hanging requests
 		select {
 		case <-keygenGeneratedChan[key]:
-			logger.Sugar().Infow("Keygen operation completed successfully", 
-				"identity", createWallet.Identity, 
-				"identityCurve", createWallet.IdentityCurve, 
+			logger.Sugar().Infow("Keygen operation completed successfully",
+				"identity", createWallet.Identity,
+				"identityCurve", createWallet.IdentityCurve,
 				"keyCurve", createWallet.KeyCurve)
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Keygen operation completed successfully"))
 		case err := <-errorChan:
-			logger.Sugar().Errorw("Keygen operation failed", 
-				"identity", createWallet.Identity, 
+			logger.Sugar().Errorw("Keygen operation failed",
+				"identity", createWallet.Identity,
 				"error", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		case <-time.After(5 * time.Minute): // 5 minute timeout should be sufficient for keygen
-			logger.Sugar().Errorw("Keygen operation timed out", 
+			logger.Sugar().Errorw("Keygen operation timed out",
 				"identity", createWallet.Identity,
-				"identityCurve", createWallet.IdentityCurve, 
+				"identityCurve", createWallet.IdentityCurve,
 				"keyCurve", createWallet.KeyCurve)
 			http.Error(w, "keygen operation timed out", http.StatusGatewayTimeout)
 		}
-		
+
 		delete(keygenGeneratedChan, key)
 	})
 
@@ -550,7 +550,7 @@ func startHTTPServer(port string) {
 		} else if operation.Type == sequencer.OPERATION_TYPE_SEND_TO_BRIDGE {
 			// Verify only operation for bridging
 			// Get bridgewallet by calling /getwallet from sequencer api
-			req, err := http.NewRequest("GET", "http://sequencer:8082/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
+			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return
@@ -1187,7 +1187,7 @@ func startHTTPServer(port string) {
 			}
 
 			// Get bridgewallet by calling /getwallet from sequencer api
-			req, err := http.NewRequest("GET", "http://sequencer:8082/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
+			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return

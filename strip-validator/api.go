@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -25,9 +26,12 @@ import (
 	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
+	"github.com/StripChain/strip-node/evm"
 	identityVerification "github.com/StripChain/strip-node/identity"
+	"github.com/StripChain/strip-node/libs"
+	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/ripple"
-	"github.com/StripChain/strip-node/sequencer"
+	"github.com/StripChain/strip-node/solana"
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
 	"github.com/StripChain/strip-node/util/logger"
@@ -39,7 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	bin "github.com/gagliardetto/binary"
-	"github.com/gagliardetto/solana-go"
+	solanasdk "github.com/gagliardetto/solana-go"
 	"github.com/rubblelabs/ripple/data"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/xdr"
@@ -143,32 +147,32 @@ func startHTTPServer(port string) {
 		headers := r.Header
 		method := r.Method
 		contentLength := r.ContentLength
-		
-		logger.Sugar().Infow("Received keygen request", 
+
+		logger.Sugar().Infow("Received keygen request",
 			"method", method,
 			"remoteAddr", requestIP,
 			"contentLength", contentLength,
 			"userAgent", headers.Get("User-Agent"),
 			"contentType", headers.Get("Content-Type"))
-		
+
 		var createWallet CreateWallet
 
 		// Read the request body for logging
-		bodyBytes, err := ioutil.ReadAll(r.Body)
+		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			logger.Sugar().Errorw("Failed to read request body", "error", err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		
+
 		// Log the raw request body if it's not too large
 		if contentLength > 0 && contentLength < 1024 {
 			logger.Sugar().Debugw("Request body", "body", string(bodyBytes))
 		}
-		
+
 		// Restore the body for further processing
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-		
+
 		err = json.NewDecoder(r.Body).Decode(&createWallet)
 		if err != nil {
 			logger.Sugar().Errorw("Failed to decode keygen request body", "error", err.Error())
@@ -176,10 +180,10 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		logger.Sugar().Infow("Processing keygen request", 
-			"identity", createWallet.Identity, 
-			"identityCurve", createWallet.IdentityCurve, 
-			"keyCurve", createWallet.KeyCurve, 
+		logger.Sugar().Infow("Processing keygen request",
+			"identity", createWallet.Identity,
+			"identityCurve", createWallet.IdentityCurve,
+			"keyCurve", createWallet.KeyCurve,
 			"signersCount", len(createWallet.Signers))
 
 		key := createWallet.Identity + "_" + createWallet.IdentityCurve + "_" + createWallet.KeyCurve
@@ -195,34 +199,34 @@ func startHTTPServer(port string) {
 					errorChan <- fmt.Errorf("internal server error: panic in keygen operation")
 				}
 			}()
-			
+
 			generateKeygenMessage(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve, createWallet.Signers)
 		}()
 
 		logger.Sugar().Infow("Waiting for keygen operation to complete", "key", key)
-		
+
 		// Add timeout to prevent hanging requests
 		select {
 		case <-keygenGeneratedChan[key]:
-			logger.Sugar().Infow("Keygen operation completed successfully", 
-				"identity", createWallet.Identity, 
-				"identityCurve", createWallet.IdentityCurve, 
+			logger.Sugar().Infow("Keygen operation completed successfully",
+				"identity", createWallet.Identity,
+				"identityCurve", createWallet.IdentityCurve,
 				"keyCurve", createWallet.KeyCurve)
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Keygen operation completed successfully"))
 		case err := <-errorChan:
-			logger.Sugar().Errorw("Keygen operation failed", 
-				"identity", createWallet.Identity, 
+			logger.Sugar().Errorw("Keygen operation failed",
+				"identity", createWallet.Identity,
 				"error", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		case <-time.After(5 * time.Minute): // 5 minute timeout should be sufficient for keygen
-			logger.Sugar().Errorw("Keygen operation timed out", 
+			logger.Sugar().Errorw("Keygen operation timed out",
 				"identity", createWallet.Identity,
-				"identityCurve", createWallet.IdentityCurve, 
+				"identityCurve", createWallet.IdentityCurve,
 				"keyCurve", createWallet.KeyCurve)
 			http.Error(w, "keygen operation timed out", http.StatusGatewayTimeout)
 		}
-		
+
 		delete(keygenGeneratedChan, key)
 	})
 
@@ -511,7 +515,7 @@ func startHTTPServer(port string) {
 		// the owner of the wallet must have created an intent and signed it.
 		// we generate signature for an intent operation
 
-		var intent sequencer.Intent
+		var intent libs.Intent
 
 		err := json.NewDecoder(r.Body).Decode(&intent)
 		if err != nil {
@@ -545,9 +549,9 @@ func startHTTPServer(port string) {
 		msg := ""
 
 		operation := intent.Operations[operationIndexInt]
-		if operation.Type == sequencer.OPERATION_TYPE_TRANSACTION {
+		if operation.Type == db.OPERATION_TYPE_TRANSACTION {
 			msg = operation.DataToSign
-		} else if operation.Type == sequencer.OPERATION_TYPE_SEND_TO_BRIDGE {
+		} else if operation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE {
 			// Verify only operation for bridging
 			// Get bridgewallet by calling /getwallet from sequencer api
 			req, err := http.NewRequest("GET", "http://sequencer:8082/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
@@ -566,13 +570,13 @@ func startHTTPServer(port string) {
 
 			defer resp.Body.Close()
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				logger.Sugar().Errorw("error reading response body", "error", err)
 				return
 			}
 
-			var bridgeWallet sequencer.WalletSchema
+			var bridgeWallet db.WalletSchema
 			err = json.Unmarshal(body, &bridgeWallet)
 			if err != nil {
 				logger.Sugar().Errorw("error unmarshalling response body", "error", err)
@@ -687,7 +691,7 @@ func startHTTPServer(port string) {
 						logger.Sugar().Errorw("error decoding Solana transaction", "error", err)
 						return
 					}
-					tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
+					tx, err := solanasdk.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
 					if err != nil || len(tx.Message.Instructions) == 0 {
 						logger.Sugar().Errorw("error deserializing Solana transaction", "error", err)
 						return
@@ -822,7 +826,7 @@ func startHTTPServer(port string) {
 
 			// Set message
 			msg = operation.DataToSign
-		} else if operation.Type == sequencer.OPERATION_TYPE_SOLVER {
+		} else if operation.Type == db.OPERATION_TYPE_SOLVER {
 			intentBytes, err := json.Marshal(intent)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -836,7 +840,7 @@ func startHTTPServer(port string) {
 			}
 
 			msg = res
-		} else if operation.Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT {
+		} else if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT {
 			// For bridgeDeposit operations, extract transaction details from metadata
 			logger.Sugar().Infow("Processing bridgeDeposit operation",
 				"intentID", intent.ID,
@@ -844,7 +848,7 @@ func startHTTPServer(port string) {
 				"solverMetadata", operation.SolverMetadata)
 
 			// Create depositOperation variable at the outer scope
-			var depositOperation sequencer.Operation
+			var depositOperation db.Operation
 			var needPreviousOp bool
 			var tokenAddress string
 
@@ -881,7 +885,7 @@ func startHTTPServer(port string) {
 					tokenAddress = metadata.Token
 				} else {
 					// Use the transaction result from metadata
-					depositOperation = sequencer.Operation{
+					depositOperation = db.Operation{
 						ChainId: metadata.ChainId,
 						Result:  metadata.Result,
 					}
@@ -905,7 +909,7 @@ func startHTTPServer(port string) {
 
 				// Get the previous operation which should be sendToBridge
 				prevOp := intent.Operations[operationIndexInt-1]
-				if prevOp.Type != sequencer.OPERATION_TYPE_SEND_TO_BRIDGE {
+				if prevOp.Type != db.OPERATION_TYPE_SEND_TO_BRIDGE {
 					logger.Sugar().Errorw("Previous operation is not sendToBridge",
 						"prevOpType", prevOp.Type,
 						"prevOpIndex", operationIndexInt-1)
@@ -916,7 +920,7 @@ func startHTTPServer(port string) {
 				}
 
 				// Use transaction details from previous operation
-				depositOperation = sequencer.Operation{
+				depositOperation = db.Operation{
 					ChainId: prevOp.ChainId,
 					Result:  prevOp.Result,
 				}
@@ -944,7 +948,7 @@ func startHTTPServer(port string) {
 
 			// Check if the chain type is Ethereum compatible (either "ethereum" or "evm")
 			if chain.ChainType == "ethereum" || chain.ChainType == "evm" {
-				transfers, err = sequencer.GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
+				transfers, err = evm.GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
 				if err != nil {
 					logger.Sugar().Errorw("Error getting ethereum transfers for bridge deposit",
 						"error", err,
@@ -976,7 +980,7 @@ func startHTTPServer(port string) {
 				}
 			} else if chain.ChainType == "solana" {
 				// TODO: Helius API Key
-				transfers, err = sequencer.GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
+				transfers, err = solana.GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
 				if err != nil {
 					logger.Sugar().Errorw("error getting solana transfers", "error", err)
 					return
@@ -1140,27 +1144,27 @@ func startHTTPServer(port string) {
 				"msgLength", len(msg),
 				"transferToken", transfer.Token,
 				"transferAmount", transfer.Amount)
-		} else if operation.Type == sequencer.OPERATION_TYPE_SWAP {
+		} else if operation.Type == db.OPERATION_TYPE_SWAP {
 			// Validate previous operation
 			bridgeDeposit := intent.Operations[operationIndexInt-1]
 
-			if operationIndexInt == 0 || !(bridgeDeposit.Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT) {
+			if operationIndexInt == 0 || !(bridgeDeposit.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT) {
 				logger.Sugar().Errorw("Invalid operation type for swap")
 				return
 			}
 
 			// Set message
 			msg = operation.SolverDataToSign
-		} else if operation.Type == sequencer.OPERATION_TYPE_BURN {
+		} else if operation.Type == db.OPERATION_TYPE_BURN {
 			// Validate nearby operations
 			bridgeSwap := intent.Operations[operationIndex-1]
 
-			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != sequencer.OPERATION_TYPE_WITHDRAW {
+			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != db.OPERATION_TYPE_WITHDRAW {
 				fmt.Println("BURN operation must be followed by a WITHDRAW operation")
 				return
 			}
 
-			if operationIndex == 0 || !(bridgeSwap.Type == sequencer.OPERATION_TYPE_SWAP) {
+			if operationIndex == 0 || !(bridgeSwap.Type == db.OPERATION_TYPE_SWAP) {
 				logger.Sugar().Errorw("Invalid operation type for swap")
 				return
 			}
@@ -1169,13 +1173,13 @@ func startHTTPServer(port string) {
 
 			// Set message
 			msg = operation.SolverDataToSign
-		} else if operation.Type == sequencer.OPERATION_TYPE_BURN_SYNTHETIC {
+		} else if operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC {
 			// This operation allows direct burning of ERC20 tokens from the wallet
 			// without requiring a prior swap operation
 			burnSyntheticMetadata := BurnSyntheticMetadata{}
 
 			// Verify that this operation is followed by a withdraw operation
-			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != sequencer.OPERATION_TYPE_WITHDRAW {
+			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != db.OPERATION_TYPE_WITHDRAW {
 				logger.Sugar().Errorw("BURN_SYNTHETIC operation must be followed by a WITHDRAW operation")
 				return
 			}
@@ -1203,13 +1207,13 @@ func startHTTPServer(port string) {
 
 			defer resp.Body.Close()
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				logger.Sugar().Errorw("error reading response body", "error", err)
 				return
 			}
 
-			var bridgeWallet sequencer.WalletSchema
+			var bridgeWallet db.WalletSchema
 			err = json.Unmarshal(body, &bridgeWallet)
 			if err != nil {
 				logger.Sugar().Errorw("error unmarshalling response body", "error", err)
@@ -1240,11 +1244,11 @@ func startHTTPServer(port string) {
 				return
 			}
 			msg = operation.SolverDataToSign
-		} else if operation.Type == sequencer.OPERATION_TYPE_WITHDRAW {
+		} else if operation.Type == db.OPERATION_TYPE_WITHDRAW {
 			// Verify nearby operations
 			burn := intent.Operations[operationIndex-1]
 
-			if operationIndex == 0 || !(burn.Type == sequencer.OPERATION_TYPE_BURN || burn.Type == sequencer.OPERATION_TYPE_BURN_SYNTHETIC) {
+			if operationIndex == 0 || !(burn.Type == db.OPERATION_TYPE_BURN || burn.Type == db.OPERATION_TYPE_BURN_SYNTHETIC) {
 				logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
 				return
 			}
@@ -1255,12 +1259,12 @@ func startHTTPServer(port string) {
 			// Handle different burn operation types
 			var tokenToWithdraw string
 			var burnTokenAddress string
-			if burn.Type == sequencer.OPERATION_TYPE_BURN {
+			if burn.Type == db.OPERATION_TYPE_BURN {
 				var burnMetadata BurnMetadata
 				json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
 				tokenToWithdraw = withdrawMetadata.Token
 				burnTokenAddress = burnMetadata.Token
-			} else if burn.Type == sequencer.OPERATION_TYPE_BURN_SYNTHETIC {
+			} else if burn.Type == db.OPERATION_TYPE_BURN_SYNTHETIC {
 				var burnSyntheticMetadata BurnSyntheticMetadata
 				json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
 				tokenToWithdraw = withdrawMetadata.Token
@@ -1328,11 +1332,11 @@ func startHTTPServer(port string) {
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else if keyCurve == ECDSA_CURVE {
-			if operation.Type == sequencer.OPERATION_TYPE_BRIDGE_DEPOSIT ||
-				operation.Type == sequencer.OPERATION_TYPE_SWAP ||
-				operation.Type == sequencer.OPERATION_TYPE_BURN ||
-				operation.Type == sequencer.OPERATION_TYPE_BURN_SYNTHETIC ||
-				operation.Type == sequencer.OPERATION_TYPE_WITHDRAW {
+			if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT ||
+				operation.Type == db.OPERATION_TYPE_SWAP ||
+				operation.Type == db.OPERATION_TYPE_BURN ||
+				operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC ||
+				operation.Type == db.OPERATION_TYPE_WITHDRAW {
 				go generateSignatureMessage(BridgeContractAddress, "ecdsa", "ecdsa", []byte(msg))
 			} else {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))

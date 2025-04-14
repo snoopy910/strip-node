@@ -1,4 +1,4 @@
-package sequencer
+package solana
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 
@@ -170,7 +170,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	defer resp.Body.Close()
 
 	// Read response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
@@ -190,7 +190,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 		for _, nativeTransfer := range response.NativeTransfers {
 			// Convert amount to big.Int and format with 9 decimals (SOL decimal places)
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", nativeTransfer.Amount), 10)
-			formattedAmount, _ := FormatUnits(num, 9)
+			formattedAmount, _ := util.FormatUnits(num, 9)
 
 			// Create transfer record for native SOL
 			transfers = append(transfers, common.Transfer{
@@ -237,7 +237,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 
 			// Format token amount using the correct number of decimals
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", tokenTransfer.TokenAmount), 10)
-			formattedAmount, err := FormatUnits(num, int(mint.Decimals))
+			formattedAmount, err := util.FormatUnits(num, int(mint.Decimals))
 
 			if err != nil {
 				return nil, err
@@ -257,4 +257,82 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	}
 
 	return transfers, nil
+}
+
+func CheckSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	c := rpc.New(chain.ChainUrl)
+
+	signature, err := solana.SignatureFromBase58(txnHash)
+	if err != nil {
+		return false, err
+	}
+
+	// Regarding the deprecation of GetConfirmedTransaction in Solana-Core v2, this has been updated to use GetTransaction.
+	// https://spl_governance.crates.io/docs/rpc/deprecated/getconfirmedtransaction
+	_, err = c.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
+		Commitment: rpc.CommitmentConfirmed,
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// SendSolanaTransaction submits a signed Solana transaction to the network
+func SendSolanaTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
+	// Get chain configuration for RPC endpoint
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	// Initialize Solana RPC client
+	c := rpc.New(chain.ChainUrl)
+
+	// Decode the base58-encoded transaction data
+	// Solana transactions are serialized using a custom binary format and base58-encoded
+	decodedTransactionData, err := base58.Decode(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode transaction data: %v", err)
+	}
+
+	// Deserialize the binary data into a Solana transaction
+	// This reconstructs the transaction object with all its instructions
+	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
+	if err != nil {
+		return "", fmt.Errorf("failed to deserialize transaction data: %v", err)
+	}
+
+	// Decode the base58-encoded signature and convert it to Solana's signature format
+	// Solana uses 64-byte Ed25519 signatures
+	sig, _ := base58.Decode(signatureBase58)
+	signature := solana.SignatureFromBytes(sig)
+
+	// Add the signature to the transaction
+	// Solana transactions can have multiple signatures for multi-sig transactions
+	_tx.Signatures = append(_tx.Signatures, signature)
+
+	// Verify that all required signatures are present and valid
+	// This checks signatures against the transaction data and account permissions
+	err = _tx.VerifySignatures()
+	if err != nil {
+		return "", fmt.Errorf("failed to verify signatures: %v", err)
+	}
+
+	// Submit the transaction to the Solana network
+	// The returned hash can be used to track the transaction status
+	hash, err := c.SendTransaction(context.Background(), _tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+
+	// Return the transaction hash as a string
+	return hash.String(), nil
 }

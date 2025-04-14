@@ -6,16 +6,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/stretchr/testify/require"
 )
 
 // MockDB for testing
 type mockDB struct {
-	wallets map[string]WalletSchema
+	wallets map[string]db.WalletSchema
 }
 
 // AddWallet function for mockDB
-func (m *mockDB) AddWallet(wallet *WalletSchema) (int64, error) {
+func (m *mockDB) AddWallet(wallet *db.WalletSchema) (int64, error) {
 	m.wallets[wallet.Identity] = *wallet
 	return 1, nil
 }
@@ -73,22 +74,22 @@ func setupTestEnvironment(t *testing.T) (*httptest.Server, func()) {
 
 	// Store original functions
 	originalSignersList := SignersList
-	originalAddWallet := AddWallet
+	originalAddWallet := db.AddWallet
 
 	// Create mock database
-	mockDB := &mockDB{wallets: make(map[string]WalletSchema)}
+	mockDB := &mockDB{wallets: make(map[string]db.WalletSchema)}
 
 	// Set up mock functions
 	SignersList = func() ([]Signer, error) {
 		return mockSigners, nil
 	}
-	AddWallet = mockDB.AddWallet
+	db.AddWallet = mockDB.AddWallet
 
 	// Return cleanup function
 	cleanup := func() {
 		mockServer.Close()
 		SignersList = originalSignersList
-		AddWallet = originalAddWallet
+		db.AddWallet = originalAddWallet
 	}
 
 	return mockServer, cleanup

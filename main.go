@@ -8,8 +8,11 @@ import (
 	"github.com/StripChain/strip-node/ERC20"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/bridgeTokenMock"
+	"github.com/StripChain/strip-node/evm"
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/sequencer"
+	"github.com/StripChain/strip-node/solana"
 	"github.com/StripChain/strip-node/solver"
 	lendingsolver "github.com/StripChain/strip-node/solvers/lending_solver"
 	uniswapv3solver "github.com/StripChain/strip-node/solvers/uniswap_v3_solver"
@@ -89,7 +92,7 @@ func main() {
 	} else if *isSetSwapRouter {
 		bridge.SetSwapRouter(*rpcURL, *privateKey, *bridgeContractAddress, *swapRouter)
 	} else if *isSequencer {
-		sequencer.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
+		database.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 		sequencer.StartSequencer(
 			*httpPort,
 			*rpcURL,
@@ -114,7 +117,7 @@ func main() {
 		}
 		lendingsolver.Start(*rpcURL, *httpPort, *lendingPoolAddress, chainID)
 	} else if *isSolanaTest {
-		sequencer.GetSolanaTransfers(
+		solana.GetSolanaTransfers(
 			"901",
 			"243hStsqpngr2Dv4ktE9wCW6CZTbFYaRiXo1QAK1PTtyLZBL2xz17XTAuud3HN8YmpYhdSRJmP3Rx3pMHdu6Pxqi",
 			*heliusApiKey,
@@ -135,6 +138,6 @@ func main() {
 
 		// sequencer.TestBuildSolana()
 	} else if *isEthereumTest {
-		sequencer.GetEthereumTransfers("1", "0x1e96c4f5dc65ba33b4ea2a50e350f119d133d2b4c9f36ac79152198382a16375", "0x06Cd69B61900B426499ef0319Fae5CEC2acca4DE")
+		evm.GetEthereumTransfers("1", "0x1e96c4f5dc65ba33b4ea2a50e350f119d133d2b4c9f36ac79152198382a16375", "0x06Cd69B61900B426499ef0319Fae5CEC2acca4DE")
 	}
 }

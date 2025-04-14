@@ -1,4 +1,4 @@
-package sequencer
+package database
 
 import (
 	"context"
@@ -18,7 +18,7 @@ func TestDBConnectionPool(t *testing.T) {
 		InitialiseDB("localhost:5432", "test_db", "test_user", "test_password")
 
 		// Initial pool stats check
-		stats := client.PoolStats()
+		stats := GetDB().PoolStats()
 		if stats.IdleConns < minPoolSize {
 			t.Errorf("Expected minimum %d idle connections, got %d", minPoolSize, stats.IdleConns)
 		}
@@ -33,19 +33,19 @@ func TestDBConnectionPool(t *testing.T) {
 	// - Checks idle connection count doesn't decrease after operations
 	t.Run("Connection Release", func(t *testing.T) {
 		// Get initial pool stats
-		initialStats := client.PoolStats()
+		initialStats := GetDB().PoolStats()
 
 		// Execute a batch of queries
 		const numQueries = 100
 		for i := 0; i < numQueries; i++ {
-			_, err := client.Exec("SELECT 1")
+			_, err := GetDB().Exec("SELECT 1")
 			if err != nil {
 				t.Fatalf("Query failed: %v", err)
 			}
 		}
 
 		// Get stats after queries
-		afterStats := client.PoolStats()
+		afterStats := GetDB().PoolStats()
 
 		// Verify connections are properly released back to the pool
 		if afterStats.IdleConns < initialStats.IdleConns {
@@ -80,7 +80,7 @@ func TestDBConnectionPool(t *testing.T) {
 					if i%5 == 0 {
 						query = "SELECT pg_sleep(0.1)"
 					}
-					_, err := client.Exec(query)
+					_, err := GetDB().Exec(query)
 					if err != nil {
 						errors <- err
 					}
@@ -98,7 +98,7 @@ func TestDBConnectionPool(t *testing.T) {
 		}
 
 		// Verify pool stats are still within bounds
-		finalStats := client.PoolStats()
+		finalStats := GetDB().PoolStats()
 		if finalStats.TotalConns > maxPoolSize {
 			t.Errorf("Pool size exceeded maximum: got %d, want <= %d",
 				finalStats.TotalConns, maxPoolSize)
@@ -114,7 +114,7 @@ func TestDBConnectionPool(t *testing.T) {
 		// First, occupy all connections in the pool
 		var conns []*pg.Conn
 		for i := 0; i < maxPoolSize; i++ {
-			conn := client.Conn()
+			conn := GetDB().Conn()
 			if err := conn.Ping(context.Background()); err != nil {
 				t.Fatalf("Failed to ping connection: %v", err)
 			}
@@ -130,7 +130,7 @@ func TestDBConnectionPool(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
-		_, err := client.ExecContext(ctx, "SELECT 1")
+		_, err := GetDB().ExecContext(ctx, "SELECT 1")
 		if err == nil {
 			t.Error("Expected error due to pool exhaustion, got none")
 		}

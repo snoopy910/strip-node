@@ -1,7 +1,8 @@
-package sequencer
+package evm
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -12,7 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethCommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // GetEthereumTransfers retrieves and parses transfer information from an Ethereum transaction
@@ -117,34 +120,33 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]c
 			decodedMsg := DecodeERC20RevertReason(errorMsg)
 			if decodedMsg != errorMsg {
 				logger.Sugar().Infow("Revert reason (decoded)", "reason", decodedMsg)
-				
+
 				// Enhanced error logging based on the type of error detected
 				if strings.Contains(decodedMsg, "Insufficient Balance") {
 					// Try to extract account and amount information for better diagnostics
-					logger.Sugar().Warnw("Transaction failed due to insufficient balance", 
+					logger.Sugar().Warnw("Transaction failed due to insufficient balance",
 						"txHash", txnHash,
 						"from", ecdsaAddr,
 						"to", tx.To().Hex(),
 						"value", tx.Value().String())
-					
+
 					// Check account balance for more context
 					balance, balErr := client.BalanceAt(context.Background(), ethCommon.HexToAddress(ecdsaAddr), nil)
 					if balErr == nil {
-						logger.Sugar().Infow("Account balance", 
-							"address", ecdsaAddr, 
+						logger.Sugar().Infow("Account balance",
+							"address", ecdsaAddr,
 							"balance", balance.String(),
 							"balanceEth", WeiToEther(balance).String())
 					}
 				} else if strings.Contains(decodedMsg, "Insufficient Allowance") {
 					// For token approvals, log additional context
-					logger.Sugar().Warnw("Transaction failed due to insufficient token allowance", 
+					logger.Sugar().Warnw("Transaction failed due to insufficient token allowance",
 						"txHash", txnHash)
-					
+
 					// If this is a token transfer, extract the token contract address
-					if len(tx.Data()) >= 4 && (
-						fmt.Sprintf("%x", tx.Data()[:4]) == "a9059cbb" || // transfer
+					if len(tx.Data()) >= 4 && (fmt.Sprintf("%x", tx.Data()[:4]) == "a9059cbb" || // transfer
 						fmt.Sprintf("%x", tx.Data()[:4]) == "23b872dd") { // transferFrom
-						
+
 						logger.Sugar().Infow("Token approval required before transfer")
 					}
 				}
@@ -193,7 +195,7 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]c
 
 			// Format token amount using correct number of decimals
 			// log.Data contains the transfer amount in the token's smallest unit
-			formattedAmount, err := FormatUnits(new(big.Int).SetBytes(log.Data), int(decimal))
+			formattedAmount, err := util.FormatUnits(new(big.Int).SetBytes(log.Data), int(decimal))
 
 			if err != nil {
 				logger.Sugar().Warnw("Error formatting token amount", "error", err)
@@ -245,20 +247,6 @@ func GetEthereumTransfers(chainId string, txnHash string, ecdsaAddr string) ([]c
 		"transactionStatus", receipt.Status)
 
 	return transfers, nil
-}
-
-func FormatUnits(value *big.Int, decimals int) (string, error) {
-	// Create the scaling factor as 10^decimals
-	scalingFactor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
-
-	// Convert the value to a big.Float
-	valueFloat := new(big.Float).SetInt(value)
-
-	// Divide the value by the scaling factor
-	result := new(big.Float).Quo(valueFloat, scalingFactor)
-
-	// Convert the result to a string with the appropriate precision
-	return result.Text('f', decimals), nil
 }
 
 func WeiToEther(wei *big.Int) *big.Float {
@@ -320,4 +308,64 @@ func getERC20Details(client *ethclient.Client, tokenAddress ethCommon.Address) (
 	}
 
 	return decimals, symbol, nil
+}
+
+func CheckEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return false, err
+	}
+
+	client, err := ethclient.Dial(chain.ChainUrl)
+	if err != nil {
+		return false, fmt.Errorf("failed to dial EVM client: %v", err)
+	}
+
+	_, isPending, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))
+	if err != nil {
+		return false, err
+	}
+
+	return !isPending, nil
+}
+
+func SendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	client, err := ethclient.Dial(chain.ChainUrl)
+	if err != nil {
+		logger.Sugar().Errorw("failed to dial ethclient", "error", err)
+		return "", err
+	}
+
+	serializedTx, err := hex.DecodeString(serializedTxn)
+	if err != nil {
+		return "", err
+	}
+
+	var tx types.Transaction
+	rlp.DecodeBytes(serializedTx, &tx)
+
+	sigData, err := hex.DecodeString(signatureHex)
+
+	if err != nil {
+		return "", err
+	}
+
+	n, _ := new(big.Int).SetString(chainId, 10)
+	_tx, err := tx.WithSignature(types.NewLondonSigner(n), []byte(sigData))
+
+	if err != nil {
+		return "", err
+	}
+
+	err = client.SendTransaction(context.Background(), _tx)
+	if err != nil {
+		return "", err
+	}
+
+	return _tx.Hash().Hex(), nil
 }

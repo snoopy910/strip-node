@@ -8,13 +8,10 @@ import (
 	"time"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/libs"
+	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-)
-
-const (
-	CHECK_INTERVAL    = 5 * time.Minute
-	HEARTBEAT_TIMEOUT = 2 * time.Hour
 )
 
 func UpdateSignersList() error {
@@ -30,7 +27,7 @@ func UpdateSignersList() error {
 		logger.Sugar().Errorw("Failed to filter old signerUpdated events", "error", err)
 		return err
 	}
-	heartbeats, err := GetHeartbeats()
+	heartbeats, err := db.GetHeartbeats()
 	if err != nil {
 		logger.Sugar().Errorw("Failed to get heartbeats for already registered signer", "error", err)
 		return err
@@ -40,7 +37,7 @@ func UpdateSignersList() error {
 		if event.Added {
 			if len(heartbeats) == 0 {
 				logger.Sugar().Infow("Add heartbeat for newly registered signer", "publickey", "0x"+hex.EncodeToString(event.Publickey[:]), "url", event.Url)
-				if err := AddHeartbeat("0x" + hex.EncodeToString(event.Publickey[:])); err != nil {
+				if err := db.AddHeartbeat("0x" + hex.EncodeToString(event.Publickey[:])); err != nil {
 					logger.Sugar().Errorw("Failed to add heartbeat for already registered signer", "error", err)
 				}
 			} else {
@@ -53,7 +50,7 @@ func UpdateSignersList() error {
 				}
 				if !exist {
 					logger.Sugar().Infow("Add heartbeat for newly registered signer", "publickey", "0x"+hex.EncodeToString(event.Publickey[:]), "url", event.Url)
-					if err := AddHeartbeat("0x" + hex.EncodeToString(event.Publickey[:])); err != nil {
+					if err := db.AddHeartbeat("0x" + hex.EncodeToString(event.Publickey[:])); err != nil {
 						logger.Sugar().Errorw("Failed to add heartbeat for already registered signer", "error", err)
 					}
 				}
@@ -79,7 +76,7 @@ func CheckSignersStatus() {
 			return
 		}
 		if resp != nil && resp.StatusCode == http.StatusOK {
-			err := UpdateHeartbeat(signer.PublicKey)
+			err := db.UpdateHeartbeat(signer.PublicKey)
 			if err != nil {
 				logger.Sugar().Errorf("Failed to update heartbeat for signer %s: %v", signer, err)
 				return
@@ -97,7 +94,7 @@ func startCheckingSigner() {
 			UpdateSignersList()
 			CheckSignersStatus()
 
-			activeSigners, err := GetActiveSigners()
+			activeSigners, err := db.GetActiveSigners()
 			if err != nil {
 				logger.Sugar().Errorw("Failed to get active signers", "error", err)
 				return
@@ -124,7 +121,7 @@ func startCheckingSigner() {
 				}
 			}
 
-			time.Sleep(CHECK_INTERVAL)
+			time.Sleep(libs.SLASHING_CHECK_INTERVAL)
 		}
 	}()
 }

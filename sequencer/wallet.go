@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
+
+	db "github.com/StripChain/strip-node/libs/database"
 )
 
 // createWallet creates a new wallet with the specified identity and identity curve.
@@ -235,7 +237,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -256,7 +258,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -276,7 +278,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -296,7 +298,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 
@@ -317,7 +319,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -341,7 +343,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -364,7 +366,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -409,7 +411,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -454,7 +456,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -499,7 +501,7 @@ func createWallet(identity string, identityCurve string) error {
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -514,7 +516,7 @@ func createWallet(identity string, identityCurve string) error {
 	cardanoAddress := getCardanoAddressesResponse.Address
 
 	// add created wallet to the store
-	wallet := WalletSchema{
+	wallet := db.WalletSchema{
 		Identity:                 identity,
 		IdentityCurve:            identityCurve,
 		Signers:                  strings.Join(signersPublicKeyList, ","),
@@ -533,7 +535,7 @@ func createWallet(identity string, identityCurve string) error {
 		CardanoPublicKey:         cardanoAddress,
 	}
 
-	_, err = AddWallet(&wallet)
+	_, err = db.AddWallet(&wallet)
 	if err != nil {
 		return err
 	}

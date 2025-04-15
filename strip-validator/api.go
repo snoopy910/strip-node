@@ -655,18 +655,47 @@ func startHTTPServer(port string) {
 					} else if chain.ChainType == "dogecoin" {
 						expectedAddress = bridgeWallet.DogecoinMainnetPublicKey
 					} else {
-						expectedAddress = bridgeWallet.ECDSAPublicKey
+						// For Ethereum chains, determine if we need to use the bridge contract address
+						if chain.ChainType == "evm" && !isERC20Transfer {
+							// For native ETH transfers, get the bridge address from the dedicated endpoint
+							bridgeReq, err := http.NewRequest("GET", SequencerHost+"/getBridgeAddress", nil)
+							if err != nil {
+								logger.Sugar().Errorw("error creating bridge address request", "error", err)
+								return
+							}
+
+							bridgeReq.Header.Set("Content-Type", "application/json")
+							bridgeClient := &http.Client{}
+							bridgeResp, err := bridgeClient.Do(bridgeReq)
+							if err != nil {
+								logger.Sugar().Errorw("error fetching bridge address", "error", err)
+								return
+							}
+
+							defer bridgeResp.Body.Close()
+
+							bridgeBody, err := ioutil.ReadAll(bridgeResp.Body)
+							if err != nil {
+								logger.Sugar().Errorw("error reading bridge address response", "error", err)
+								return
+							}
+
+							var bridgeAddressWallet sequencer.WalletSchema
+							err = json.Unmarshal(bridgeBody, &bridgeAddressWallet)
+							if err != nil {
+								logger.Sugar().Errorw("error unmarshalling bridge address response", "error", err)
+								return
+							}
+
+							expectedAddress = bridgeAddressWallet.ECDSAPublicKey
+							logger.Sugar().Infow("using bridge contract address for native ETH transfer", "address", expectedAddress)
+						} else {
+							expectedAddress = bridgeWallet.ECDSAPublicKey
+						}
 					}
 
-					// For ERC20 transfers, we need a different validation approach
-					// We'll verify the contract address instead of the recipient address for ERC20 transfers
-					if isERC20Transfer {
-						// For ERC20 transfers, check the contract address against a list of allowed ERC20 tokens
-						// This is the key validation for ERC20 transfers to the bridge
-						// For now, we'll bypass this check since we don't have a list of allowed tokens
-						logger.Sugar().Infow("ERC20 transfer validation bypassed", "contractAddress", contractAddress, "recipient", destAddress)
-					} else if !strings.EqualFold(destAddress, expectedAddress) {
-						// For non-ERC20 transfers, perform regular destination address validation
+					// Verify the extracted destination matches the bridge wallet
+					if !strings.EqualFold(destAddress, expectedAddress) {
 						logger.Sugar().Errorw("Invalid bridge destination address", "expected", expectedAddress, "got", destAddress)
 						return
 					}

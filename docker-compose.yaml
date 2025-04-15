@@ -51,7 +51,6 @@ services:
       - "30303:30303"
     environment:
       PORT: 30303
-
     depends_on:
       foundry:
         condition: service_completed_successfully
@@ -102,7 +101,7 @@ services:
       HTTP_PORT: 8080
       PORT: 30304
       POSTGRES_HOST: "validator1postgres:5432"
-      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"
+      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmdDinF9dkWKxLeftQhNEo8pWMd1cRWoo4mzAGzTBwJvDp"
 
   validator2:
     build:
@@ -128,7 +127,7 @@ services:
       HTTP_PORT: 8081
       PORT: 30305
       POSTGRES_HOST: "validator2postgres:5432"
-      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"
+      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmdDinF9dkWKxLeftQhNEo8pWMd1cRWoo4mzAGzTBwJvDp"
 
   sequencerpostgres:
     image: postgres:14.13

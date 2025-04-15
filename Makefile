@@ -11,3 +11,11 @@ go-mod-tidy:
 	cd bootnode && go mod tidy
 	cd strip-validator && go mod tidy
 	go mod tidy
+
+go-update:
+	cd bootnode && go get -u ./...
+	cd strip-validator && go get -u ./...
+	go get -u ./...
+
+gen-bootnode-key:
+	cd bootnode && go run bootnode.go

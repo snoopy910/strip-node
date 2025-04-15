@@ -37,9 +37,6 @@ RUN mkdir -p /app/static-bootnode && \
 # Copy only the binary from the builder stage
 COPY --from=builder /build/strip-node /app/strip-node
 
-# Copy the static bootnode key file to ensure consistent peer ID
-COPY bootnode/static-bootnode/ /app/static-bootnode/
-
 # Use the non-root user
 USER appuser
 

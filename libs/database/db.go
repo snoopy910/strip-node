@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -240,7 +239,7 @@ func InitialiseDB(host string, database string, username string, password string
 		panic(fmt.Sprintf("Error pinging main DB client after initialization: %v", err))
 	}
 
-	log.Println("Database initialised successfully.")
+	logger.Sugar().Info("Database initialised successfully.")
 }
 
 func AddLock(identity string, identityCurve string) (int64, error) {

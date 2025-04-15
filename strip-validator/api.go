@@ -680,7 +680,7 @@ func startHTTPServer(port string) {
 								return
 							}
 
-							var bridgeAddressWallet sequencer.WalletSchema
+							var bridgeAddressWallet db.WalletSchema
 							err = json.Unmarshal(bridgeBody, &bridgeAddressWallet)
 							if err != nil {
 								logger.Sugar().Errorw("error unmarshalling bridge address response", "error", err)

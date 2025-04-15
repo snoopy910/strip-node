@@ -97,6 +97,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("\n[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", listenHost, port, host.ID().Pretty())
+	fmt.Printf("\n[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", listenHost, port, host.ID())
 	select {}
 }

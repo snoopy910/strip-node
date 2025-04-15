@@ -12,6 +12,7 @@ import (
 
 	"github.com/StripChain/strip-node/bridge"
 	tssCommon "github.com/StripChain/strip-node/common"
+	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -43,7 +44,7 @@ func initialiseBridge() {
 
 	logger.Sugar().Infow("Creating bridge wallet", "identity", identity, "identityCurve", identityCurve)
 
-	_, err := GetWallet(identity, identityCurve)
+	_, err := db.GetWallet(identity, identityCurve)
 	if err != nil {
 		if err.Error() == "pg: no rows in result set" {
 			_createWallet = true
@@ -65,7 +66,7 @@ func initialiseBridge() {
 
 	logger.Sugar().Info("Bridge wallet created")
 
-	wallet, err := GetWallet(identity, identityCurve)
+	wallet, err := db.GetWallet(identity, identityCurve)
 	if err != nil {
 		panic(err)
 	}

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.19-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Set GOMODCACHE to use the cache that will be mounted
 ENV GOMODCACHE=/go/pkg/mod
@@ -36,6 +36,7 @@ RUN mkdir -p /app/static-bootnode && \
 
 # Copy only the binary from the builder stage
 COPY --from=builder /build/strip-node /app/strip-node
+COPY --from=builder /build/libs/database/migrations /app/migrations
 
 # Copy the static bootnode key file to ensure consistent peer ID
 COPY bootnode/static-bootnode/ /app/static-bootnode/

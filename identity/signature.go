@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/StripChain/strip-node/algorand"
-	"github.com/StripChain/strip-node/sequencer"
+	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -452,7 +452,7 @@ func VerifySignature(
 	}
 }
 
-func SanitiseIntent(intent sequencer.Intent) (string, error) {
+func SanitiseIntent(intent libs.Intent) (string, error) {
 	intentForSigning := IntentForSigning{
 		Identity:      intent.Identity,
 		IdentityCurve: intent.IdentityCurve,

@@ -247,7 +247,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 			if keyCurve == EDDSA_CURVE {
 				pk := edwards.PublicKey{
-					Curve: rawKeyEcdsa.ECDSAPub.Curve(),
+					Curve: rawKeyEddsa.EDDSAPub.Curve(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
 					Y:     rawKeyEddsa.EDDSAPub.Y(),
 				}

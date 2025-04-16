@@ -1,19 +1,22 @@
 package libs
 
+import "time"
+
 type Operation struct {
-	ID               int64  `json:"id"`
-	SerializedTxn    string `json:"serializedTxn"`
-	DataToSign       string `json:"dataToSign"`
-	ChainId          string `json:"chainId"`
-	GenesisHash      string `json:"genesisHash"`
-	KeyCurve         string `json:"keyCurve"`
-	Status           string `json:"status"`
-	Result           string `json:"result"`
-	Type             string `json:"type"`
-	Solver           string `json:"solver"`
-	SolverMetadata   string `json:"solverMetadata"`
-	SolverDataToSign string `json:"solverDataToSign"`
-	SolverOutput     string `json:"solverOutput"`
+	ID               int64     `json:"id"`
+	SerializedTxn    string    `json:"serializedTxn"`
+	DataToSign       string    `json:"dataToSign"`
+	ChainId          string    `json:"chainId"`
+	GenesisHash      string    `json:"genesisHash"`
+	KeyCurve         string    `json:"keyCurve"`
+	Status           string    `json:"status"`
+	Result           string    `json:"result"`
+	Type             string    `json:"type"`
+	Solver           string    `json:"solver"`
+	SolverMetadata   string    `json:"solverMetadata"`
+	SolverDataToSign string    `json:"solverDataToSign"`
+	SolverOutput     string    `json:"solverOutput"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 type Intent struct {

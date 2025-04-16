@@ -2,6 +2,7 @@ package sequencer
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -105,6 +106,40 @@ func ProcessIntent(intentId int64) {
 				continue
 			}
 
+			chain, err := common.GetChain(operation.ChainId)
+			if err != nil {
+				logger.Sugar().Errorw("error getting chain", "error", err)
+				break
+			}
+
+			// Create context with timeout for each operation using chain's OpTimeout
+			ctx, cancel := context.WithTimeout(context.Background(), chain.OpTimeout)
+			defer cancel()
+
+			opCreatedAt := operation.CreatedAt.UTC()
+			now := time.Now().UTC()
+			fmt.Printf("now: %+v\n", now)
+			fmt.Printf("opCreatedAt: %+v\n", opCreatedAt)
+			fmt.Printf("chain.OpTimeout: %+v\n", chain.OpTimeout)
+			fmt.Printf("now.Sub(opCreatedAt): %+v\n", now.Sub(opCreatedAt))
+
+			// Check both operation expiry and context timeout
+			if chain.OpTimeout < now.Sub(opCreatedAt) {
+				db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_EXPIRED)
+				continue
+			}
+
+			select {
+			case <-ctx.Done():
+				logger.Sugar().Warnw("operation processing timed out",
+					"intentId", intentId,
+					"operation", operation)
+				db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_EXPIRED)
+				continue
+			default:
+				// Process the operation...
+			}
+
 			if operation.Status == db.OPERATION_STATUS_PENDING {
 				// sign and send the txn. Change status to waiting
 
@@ -138,11 +173,6 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 
 						var txnHash string
 
@@ -458,11 +488,6 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 
 						// Extract destination address from serialized transaction
 						var destAddress string
@@ -613,11 +638,6 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, txnHash)
 						}
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" || operation.KeyCurve == "sui_eddsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 
 						// Verify destination address matches bridge wallet based on chain type
 						var validDestination bool
@@ -904,11 +924,6 @@ func ProcessIntent(intentId int64) {
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "sui_eddsa" ||
 						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "dogecoin_ecdsa" || depositOperation.KeyCurve == "stellar_eddsa" ||
 						depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" || depositOperation.KeyCurve == "cardano_eddsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 
 						var transfers []common.Transfer
 
@@ -1548,13 +1563,6 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					withdrawalChain, err := common.GetChain(operation.ChainId)
-
-					if err != nil {
-						logger.Sugar().Errorw("error getting chain", "error", err)
-						break
-					}
-
 					bridgeWallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
 					if err != nil {
 						logger.Sugar().Errorw("error getting bridge wallet", "error", err)
@@ -1567,10 +1575,10 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					if withdrawalChain.KeyCurve == "ecdsa" {
+					if chain.KeyCurve == "ecdsa" {
 						// handle ERC20 token
 						dataToSign, tx, err := withdrawERC20GetSignature(
-							withdrawalChain.ChainUrl,
+							chain.ChainUrl,
 							bridgeWallet.ECDSAPublicKey,
 							burn.SolverOutput,
 							user.ECDSAPublicKey,
@@ -1593,7 +1601,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						result, err := withdrawEVMTxn(
-							withdrawalChain.ChainUrl,
+							chain.ChainUrl,
 							signature,
 							tx,
 							operation.ChainId,
@@ -1608,14 +1616,14 @@ func ProcessIntent(intentId int64) {
 
 						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						break
-					} else if withdrawalChain.KeyCurve == "bitcoin_ecdsa" {
-						bridgeWalletBitcoinAddress, err := readBitcoinAddress(bridgeWallet, withdrawalChain.ChainId)
+					} else if chain.KeyCurve == "bitcoin_ecdsa" {
+						bridgeWalletBitcoinAddress, err := readBitcoinAddress(bridgeWallet, chain.ChainId)
 						if err != nil {
 							logger.Sugar().Errorw("error reading bitcoin address", "error", err)
 							break
 						}
 
-						userBitcoinAddress, err := readBitcoinAddress(user, withdrawalChain.ChainId)
+						userBitcoinAddress, err := readBitcoinAddress(user, chain.ChainId)
 						if err != nil {
 							logger.Sugar().Errorw("error reading bitcoin address", "error", err)
 							break
@@ -1623,7 +1631,7 @@ func ProcessIntent(intentId int64) {
 
 						// handle bitcoin withdrawal
 						dataToSign, err := bitcoin.WithdrawBitcoinGetSignature(
-							withdrawalChain.ChainId,
+							chain.ChainId,
 							bridgeWalletBitcoinAddress,
 							burn.SolverOutput,
 							userBitcoinAddress,
@@ -1644,7 +1652,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						result, err := bitcoin.WithdrawBitcoinTxn(
-							withdrawalChain.ChainId,
+							chain.ChainId,
 							dataToSign,
 							signature,
 						)
@@ -1658,7 +1666,7 @@ func ProcessIntent(intentId int64) {
 
 						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						break
-					} else if withdrawalChain.KeyCurve == "dogecoin_ecdsa" {
+					} else if chain.KeyCurve == "dogecoin_ecdsa" {
 						// handle dogecoin withdrawal
 						var solverData map[string]interface{}
 						if err := json.Unmarshal([]byte(burn.SolverOutput), &solverData); err != nil {
@@ -1674,10 +1682,10 @@ func ProcessIntent(intentId int64) {
 
 						// Get appropriate Dogecoin addresses based on network
 						var userAddress, bridgeAddress string
-						if withdrawalChain.ChainId == "2000" {
+						if chain.ChainId == "2000" {
 							userAddress = user.DogecoinMainnetPublicKey
 							bridgeAddress = bridgeWallet.DogecoinMainnetPublicKey
-						} else if withdrawalChain.ChainId == "2001" {
+						} else if chain.ChainId == "2001" {
 							userAddress = user.DogecoinTestnetPublicKey
 							bridgeAddress = bridgeWallet.DogecoinTestnetPublicKey
 						} else {
@@ -1691,7 +1699,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						txn, dataToSign, err := dogecoin.WithdrawDogeNativeGetSignature(
-							withdrawalChain.ChainUrl,
+							chain.ChainUrl,
 							bridgeAddress,
 							amount,
 							userAddress,
@@ -1713,7 +1721,7 @@ func ProcessIntent(intentId int64) {
 
 						// Use the same Dogecoin address we used for signing
 						result, err := dogecoin.WithdrawDogeTxn(
-							withdrawalChain.ChainId,
+							chain.ChainId,
 							txn,         // Use the serialized transaction instead of dataToSign
 							userAddress, // Use Dogecoin address instead of ECDSA key
 							signature,
@@ -1728,11 +1736,11 @@ func ProcessIntent(intentId int64) {
 
 						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						break
-					} else if withdrawalChain.KeyCurve == "eddsa" {
+					} else if chain.KeyCurve == "eddsa" {
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native token
 							transaction, dataToSign, err := withdrawSolanaNativeGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.EDDSAPublicKey,
 								burn.SolverOutput,
 								user.ECDSAPublicKey,
@@ -1753,7 +1761,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := withdrawSolanaTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								transaction,
 								signature,
 							)
@@ -1769,7 +1777,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							// implement SPL
 							transaction, dataToSign, err := withdrawSolanaSPLGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.EDDSAPublicKey,
 								burn.SolverOutput,
 								user.ECDSAPublicKey,
@@ -1791,7 +1799,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := withdrawSolanaTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								transaction,
 								signature,
 							)
@@ -1806,7 +1814,7 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
-					} else if withdrawalChain.KeyCurve == "stellar_eddsa" {
+					} else if chain.KeyCurve == "stellar_eddsa" {
 						wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting wallet", "error", err)
@@ -1823,7 +1831,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						// Initialize Horizon client
-						client := stellar.GetClient(withdrawalChain.ChainId, withdrawalChain.ChainUrl)
+						client := stellar.GetClient(chain.ChainId, chain.ChainUrl)
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// Handle native XLM transfer
 							txn, dataToSign, err := stellar.WithdrawStellarNativeGetSignature(
@@ -1919,7 +1927,7 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
-					} else if withdrawalChain.KeyCurve == "aptos_eddsa" {
+					} else if chain.KeyCurve == "aptos_eddsa" {
 						wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting public key", "error", err)
@@ -1928,7 +1936,7 @@ func ProcessIntent(intentId int64) {
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native token
 							transaction, dataToSign, err := aptos.WithdrawAptosNativeGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.AptosEDDSAPublicKey,
 								burn.SolverOutput,
 								user.AptosEDDSAPublicKey,
@@ -1948,7 +1956,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := aptos.WithdrawAptosTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								transaction,
 								wallet.AptosEDDSAPublicKey,
 								signature,
@@ -1964,7 +1972,7 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 							transaction, dataToSign, err := aptos.WithdrawAptosTokenGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.AptosEDDSAPublicKey,
 								burn.SolverOutput,
 								user.AptosEDDSAPublicKey,
@@ -1986,7 +1994,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := aptos.WithdrawAptosTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								transaction,
 								wallet.AptosEDDSAPublicKey,
 								signature,
@@ -2002,7 +2010,7 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
-					} else if withdrawalChain.KeyCurve == "sui_eddsa" {
+					} else if chain.KeyCurve == "sui_eddsa" {
 						wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting public key", "error", err)
@@ -2012,7 +2020,7 @@ func ProcessIntent(intentId int64) {
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// Handle native SUI token withdrawal
 							transaction, dataToSign, err := sui.WithdrawSuiNativeGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.SuiPublicKey,
 								burn.SolverOutput,
 								user.SuiPublicKey,
@@ -2033,7 +2041,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := sui.WithdrawSuiTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								transaction,
 								wallet.SuiPublicKey,
 								signature,
@@ -2050,7 +2058,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							// Handle Sui token withdrawal
 							transaction, dataToSign, err := sui.WithdrawSuiTokenGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.SuiPublicKey,
 								burn.SolverOutput,
 								user.SuiPublicKey,
@@ -2072,7 +2080,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := sui.WithdrawSuiTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								transaction,
 								wallet.SuiPublicKey,
 								signature,
@@ -2088,12 +2096,12 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
-					} else if withdrawalChain.KeyCurve == "algorand_eddsa" {
+					} else if chain.KeyCurve == "algorand_eddsa" {
 
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native ALGO token
 							dataToSign, tx, err := algorand.WithdrawAlgorandNativeGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.AlgorandEDDSAPublicKey,
 								burn.SolverOutput,
 								user.AlgorandEDDSAPublicKey,
@@ -2115,7 +2123,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := algorand.WithdrawAlgorandTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								signature,
 								tx,
 							)
@@ -2131,7 +2139,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 							// handle ASA (Algorand Standard Asset)
 							dataToSign, tx, err := algorand.WithdrawAlgorandASAGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.AlgorandEDDSAPublicKey,
 								burn.SolverOutput,
 								user.AlgorandEDDSAPublicKey,
@@ -2155,7 +2163,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							result, err := algorand.WithdrawAlgorandTxn(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								signature,
 								tx,
 							)
@@ -2171,11 +2179,11 @@ func ProcessIntent(intentId int64) {
 						}
 						break
 
-					} else if withdrawalChain.KeyCurve == "ripple_eddsa" {
+					} else if chain.KeyCurve == "ripple_eddsa" {
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native token
 							transaction, dataToSign, err := ripple.WithdrawRippleNativeGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.RippleEDDSAPublicKey,
 								burn.SolverOutput,
 								user.RippleEDDSAPublicKey,
@@ -2196,8 +2204,8 @@ func ProcessIntent(intentId int64) {
 
 							result, err := ripple.SendRippleTransaction(
 								transaction,
-								withdrawalChain.ChainId,
-								withdrawalChain.KeyCurve,
+								chain.ChainId,
+								chain.KeyCurve,
 								user.RippleEDDSAPublicKey,
 								signature,
 							)
@@ -2213,7 +2221,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 
 							transaction, dataToSign, err := ripple.WithdrawRippleTokenGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWallet.RippleEDDSAPublicKey,
 								burn.SolverOutput,
 								user.RippleEDDSAPublicKey,
@@ -2236,8 +2244,8 @@ func ProcessIntent(intentId int64) {
 
 							result, err := ripple.SendRippleTransaction(
 								transaction,
-								withdrawalChain.ChainId,
-								withdrawalChain.KeyCurve,
+								chain.ChainId,
+								chain.KeyCurve,
 								user.RippleEDDSAPublicKey,
 								signature,
 							)
@@ -2252,13 +2260,13 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
-					} else if withdrawalChain.KeyCurve == "cardano_eddsa" {
+					} else if chain.KeyCurve == "cardano_eddsa" {
 						bridgeWalletAddress := bridgeWallet.CardanoPublicKey
 						userAddress := user.CardanoPublicKey
 						if tokenToWithdraw == util.ZERO_ADDRESS {
 							// handle native token
 							transaction, dataToSign, err := cardano.WithdrawCardanoNativeGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWalletAddress,
 								burn.SolverOutput,
 								userAddress,
@@ -2279,8 +2287,8 @@ func ProcessIntent(intentId int64) {
 
 							result, err := cardano.SendCardanoTransaction(
 								transaction,
-								withdrawalChain.ChainId,
-								withdrawalChain.KeyCurve,
+								chain.ChainId,
+								chain.KeyCurve,
 								userAddress,
 								signature,
 							)
@@ -2296,7 +2304,7 @@ func ProcessIntent(intentId int64) {
 						} else {
 
 							transaction, dataToSign, err := cardano.WithdrawCardanoTokenGetSignature(
-								withdrawalChain.ChainUrl,
+								chain.ChainUrl,
 								bridgeWalletAddress,
 								burn.SolverOutput,
 								userAddress,
@@ -2319,8 +2327,8 @@ func ProcessIntent(intentId int64) {
 
 							result, err := cardano.SendCardanoTransaction(
 								transaction,
-								withdrawalChain.ChainId,
-								withdrawalChain.KeyCurve,
+								chain.ChainId,
+								chain.KeyCurve,
 								userAddress,
 								signature,
 							)
@@ -2346,11 +2354,6 @@ func ProcessIntent(intentId int64) {
 				if operation.Type == db.OPERATION_TYPE_TRANSACTION {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
@@ -2458,11 +2461,6 @@ func ProcessIntent(intentId int64) {
 					break
 				} else if operation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE {
 					confirmed := false
-					chain, err := common.GetChain(operation.ChainId)
-					if err != nil {
-						logger.Sugar().Errorw("error getting chain", "error", err)
-						break
-					}
 
 					switch chain.ChainType {
 					case "bitcoin":
@@ -2501,11 +2499,6 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -2532,11 +2525,6 @@ func ProcessIntent(intentId int64) {
 						operation.KeyCurve == "sui_eddsa" ||
 						operation.KeyCurve == "ripple_eddsa" ||
 						operation.KeyCurve == "cardano_eddsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 
 						if chain.ChainType == "solana" {
 							confirmed, err = solana.CheckSolanaTransactionConfirmed(operation.ChainId, operation.Result)
@@ -2738,11 +2726,6 @@ func ProcessIntent(intentId int64) {
 				} else if operation.Type == db.OPERATION_TYPE_WITHDRAW {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 						if chain.ChainType == "bitcoin" {
 							confirmed, err = bitcoin.CheckBitcoinTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
@@ -2769,11 +2752,6 @@ func ProcessIntent(intentId int64) {
 						operation.KeyCurve == "sui_eddsa" ||
 						operation.KeyCurve == "ripple_eddsa" ||
 						operation.KeyCurve == "cardano_eddsa" {
-						chain, err := common.GetChain(operation.ChainId)
-						if err != nil {
-							logger.Sugar().Errorw("error getting chain", "error", err)
-							break
-						}
 
 						if chain.ChainType == "solana" {
 							confirmed, err = solana.CheckSolanaTransactionConfirmed(operation.ChainId, operation.Result)

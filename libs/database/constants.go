@@ -12,6 +12,7 @@ const (
 	OPERATION_STATUS_WAITING   = "waiting"
 	OPERATION_STATUS_COMPLETED = "completed"
 	OPERATION_STATUS_FAILED    = "failed"
+	OPERATION_STATUS_EXPIRED   = "expired"
 )
 
 const (

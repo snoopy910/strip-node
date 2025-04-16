@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS intents (
     identity TEXT,
     identity_curve TEXT,
     status TEXT,
-    exipry BIGINT,
+    expiry BIGINT,
     created_at BIGINT
 );
 

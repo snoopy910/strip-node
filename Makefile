@@ -11,7 +11,7 @@ test:
 	# cd ../strip-sdk && yarn test src/__tests__/cardano.intent.test.ts
 	# cd ../strip-sdk && yarn test src/__tests__/dogecoin.intent.test.ts
 	# cd ../strip-sdk && yarn test src/__tests__/aptos.intent.test.ts
-	# cd ../strip-sdk && yarn test src/__tests__/stellar.intent.test.ts
+	cd ../strip-sdk && yarn test src/__tests__/stellar.intent.test.ts
 	cd ../strip-sdk && yarn test src/__tests__/sui.intent.test.ts
 	# cd ../strip-sdk && yarn test src/__tests__/algorand.intent.test.ts
 	

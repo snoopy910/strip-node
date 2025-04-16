@@ -1,6 +1,9 @@
 package common
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Chain struct {
 	ChainId     string
@@ -14,6 +17,7 @@ type Chain struct {
 	TokenSymbol string
 	RpcUsername string
 	RpcPassword string
+	OpTimeout   time.Duration
 }
 
 var Chains = []Chain{
@@ -23,6 +27,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://doge-mainnet.gateway.tatum.io/",
 		KeyCurve:    "secp256k1",
 		TokenSymbol: "DOGE",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "2001",
@@ -30,6 +35,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://doge-testnet.gateway.tatum.io/",
 		KeyCurve:    "secp256k1",
 		TokenSymbol: "DOGE",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1337",
@@ -37,6 +43,7 @@ var Chains = []Chain{
 		ChainUrl:    "http://ganache:8545",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "ETH",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "44331",
@@ -44,6 +51,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "ETH",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "421614",
@@ -51,6 +59,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://arbitrum-sepolia-rpc.publicnode.com",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "ETH",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "11155111",
@@ -58,6 +67,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://ethereum-sepolia-rpc.publicnode.com",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "ETH",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "901",
@@ -65,6 +75,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://api.devnet.solana.com",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "SOL",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1",
@@ -72,6 +83,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://ethereum-rpc.publicnode.com",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "ETH",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "900",
@@ -79,6 +91,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://api.solana.com",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "SOL",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "137",
@@ -86,6 +99,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://polygon-pokt.nodies.app",
 		KeyCurve:    "ecdsa",
 		TokenSymbol: "MATIC",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "11",
@@ -93,6 +107,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://fullnode.mainnet.aptoslabs.com",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "APT",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "167",
@@ -100,6 +115,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://fullnode.devnet.aptoslabs.com",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "APT",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1000",
@@ -109,6 +125,7 @@ var Chains = []Chain{
 		TokenSymbol: "BTC",
 		RpcUsername: "your_rpc_user",
 		RpcPassword: "your_rpc_password",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1001",
@@ -118,6 +135,7 @@ var Chains = []Chain{
 		TokenSymbol: "BTC",
 		RpcUsername: "your_rpc_user",
 		RpcPassword: "your_rpc_password",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1002",
@@ -127,6 +145,7 @@ var Chains = []Chain{
 		TokenSymbol: "BTC",
 		RpcUsername: "bitcoin",
 		RpcPassword: "bitcoin",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "3001",
@@ -134,6 +153,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://fullnode.mainnet.sui.io:443",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "SUI",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "3002",
@@ -141,6 +161,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://fullnode.devnet.sui.io:443",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "SUI",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		GenesisId:   "mainnet-v1.0",
@@ -150,6 +171,7 @@ var Chains = []Chain{
 		IndexerUrl:  "https://mainnet-idx.4160.nodely.dev",
 		KeyCurve:    "ed25519",
 		TokenSymbol: "ALGO",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		GenesisId:   "testnet-v1.0",
@@ -159,6 +181,7 @@ var Chains = []Chain{
 		IndexerUrl:  "https://testnet-idx.4160.nodely.dev",
 		KeyCurve:    "ed25519",
 		TokenSymbol: "ALGO",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		GenesisId:   "betanet-v1.0",
@@ -168,6 +191,7 @@ var Chains = []Chain{
 		IndexerUrl:  "https://betanet-idx.4160.nodely.dev", // port 443?
 		KeyCurve:    "ed25519",
 		TokenSymbol: "ALGO",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "testnet",
@@ -175,6 +199,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://horizon-testnet.stellar.org",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "XLM",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "mainnet",
@@ -182,6 +207,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://horizon.stellar.org",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "XLM",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1003", // Made up id for ripple mainnet
@@ -189,6 +215,7 @@ var Chains = []Chain{
 		ChainUrl:    "wss://s1.ripple.com:51233",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "XRP",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1004", // Made up id for ripple testnet
@@ -196,6 +223,7 @@ var Chains = []Chain{
 		ChainUrl:    "wss://s.altnet.rippletest.net:51233",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "XRP",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1005", // Made up id for cardano mainnet
@@ -203,6 +231,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://cardano-mainnet.blockfrost.io/api/v0",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "ADA",
+		OpTimeout:   time.Second * 10,
 	},
 	{
 		ChainId:     "1006", // Made up id for cardano testnet
@@ -210,6 +239,7 @@ var Chains = []Chain{
 		ChainUrl:    "https://cardano-preprod.blockfrost.io/api/v0",
 		KeyCurve:    "eddsa",
 		TokenSymbol: "ADA",
+		OpTimeout:   time.Second * 10,
 	},
 }
 

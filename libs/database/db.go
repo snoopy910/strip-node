@@ -42,7 +42,7 @@ type IntentSchema struct {
 	Identity      string
 	IdentityCurve string
 	Status        string
-	Exipry        uint64
+	Expiry        uint64
 	CreatedAt     uint64
 }
 
@@ -63,6 +63,7 @@ type OperationSchema struct {
 	SolverMetadata   string
 	SolverDataToSign string
 	SolverOutput     string
+	CreatedAt        time.Time
 }
 
 type WalletSchema struct {
@@ -303,7 +304,7 @@ func AddIntent(
 		Identity:      Intent.Identity,
 		IdentityCurve: Intent.IdentityCurve,
 		Status:        INTENT_STATUS_PROCESSING,
-		Exipry:        Intent.Expiry,
+		Expiry:        Intent.Expiry,
 		CreatedAt:     uint64(time.Now().Unix()),
 	}
 
@@ -314,17 +315,19 @@ func AddIntent(
 
 	for _, operation := range Intent.Operations {
 		operationSchema := &OperationSchema{
-			IntentId:       intentSchema.Id,
-			SerializedTxn:  operation.SerializedTxn,
-			DataToSign:     operation.DataToSign,
-			ChainId:        operation.ChainId,
-			GenesisHash:    operation.GenesisHash,
-			KeyCurve:       operation.KeyCurve,
-			Status:         OPERATION_STATUS_PENDING,
-			Result:         "",
-			Type:           operation.Type,
-			Solver:         operation.Solver,
-			SolverMetadata: operation.SolverMetadata,
+			IntentId:         intentSchema.Id,
+			SerializedTxn:    operation.SerializedTxn,
+			DataToSign:       operation.DataToSign,
+			ChainId:          operation.ChainId,
+			GenesisHash:      operation.GenesisHash,
+			KeyCurve:         operation.KeyCurve,
+			Status:           OPERATION_STATUS_PENDING,
+			Result:           "",
+			Type:             operation.Type,
+			Solver:           operation.Solver,
+			SolverMetadata:   operation.SolverMetadata,
+			SolverDataToSign: operation.SolverDataToSign,
+			CreatedAt:        time.Now().UTC(),
 		}
 
 		_, err := GetDB().Model(operationSchema).Insert()
@@ -365,6 +368,7 @@ func GetIntent(intentId int64) (*libs.Intent, error) {
 			SolverMetadata:   operationSchema.SolverMetadata,
 			SolverDataToSign: operationSchema.SolverDataToSign,
 			SolverOutput:     operationSchema.SolverOutput,
+			CreatedAt:        operationSchema.CreatedAt,
 		}
 	}
 
@@ -381,7 +385,7 @@ func GetIntent(intentId int64) (*libs.Intent, error) {
 		Identity:      intentSchema.Identity,
 		IdentityCurve: intentSchema.IdentityCurve,
 		Status:        intentSchema.Status,
-		Expiry:        intentSchema.Exipry,
+		Expiry:        intentSchema.Expiry,
 		CreatedAt:     intentSchema.CreatedAt,
 	}
 

@@ -2,6 +2,7 @@ package util
 
 import (
 	"log"
+	"math/big"
 	"os"
 	"strconv"
 )
@@ -35,4 +36,18 @@ func LookupEnvOrBool(key string, defaultVal bool) bool {
 		return v
 	}
 	return defaultVal
+}
+
+func FormatUnits(value *big.Int, decimals int) (string, error) {
+	// Create the scaling factor as 10^decimals
+	scalingFactor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
+
+	// Convert the value to a big.Float
+	valueFloat := new(big.Float).SetInt(value)
+
+	// Divide the value by the scaling factor
+	result := new(big.Float).Quo(valueFloat, scalingFactor)
+
+	// Convert the result to a string with the appropriate precision
+	return result.Text('f', decimals), nil
 }

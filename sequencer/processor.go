@@ -2,12 +2,11 @@ package sequencer
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -22,7 +21,11 @@ import (
 	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
+	"github.com/StripChain/strip-node/evm"
+	"github.com/StripChain/strip-node/libs"
+	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/ripple"
+	"github.com/StripChain/strip-node/solana"
 	"github.com/StripChain/strip-node/solver"
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
@@ -36,11 +39,9 @@ import (
 	cardanolib "github.com/echovl/cardano-go"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
 	bin "github.com/gagliardetto/binary"
-	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/rpc"
+	solanasdk "github.com/gagliardetto/solana-go"
 	"github.com/mr-tron/base58"
 	"github.com/rubblelabs/ripple/data"
 	"github.com/stellar/go/xdr"
@@ -76,7 +77,7 @@ type LockMetadata struct {
 
 func ProcessIntent(intentId int64) {
 	for {
-		intent, err := GetIntent(intentId)
+		intent, err := db.GetIntent(intentId)
 		if err != nil {
 			logger.Sugar().Errorw("error getting intent", "error", err)
 			return
@@ -88,37 +89,37 @@ func ProcessIntent(intentId int64) {
 			return
 		}
 
-		if intent.Status != INTENT_STATUS_PROCESSING {
+		if intent.Status != db.INTENT_STATUS_PROCESSING {
 			logger.Sugar().Infow("intent processed", "intent", intent)
 			return
 		}
 
 		if intent.Expiry < uint64(time.Now().Unix()) {
-			UpdateIntentStatus(intent.ID, INTENT_STATUS_EXPIRED)
+			db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_EXPIRED)
 			return
 		}
 
 		// now process the operations of the intent
 		for i, operation := range intent.Operations {
-			if operation.Status == OPERATION_STATUS_COMPLETED || operation.Status == OPERATION_STATUS_FAILED {
+			if operation.Status == db.OPERATION_STATUS_COMPLETED || operation.Status == db.OPERATION_STATUS_FAILED {
 				continue
 			}
 
-			if operation.Status == OPERATION_STATUS_PENDING {
+			if operation.Status == db.OPERATION_STATUS_PENDING {
 				// sign and send the txn. Change status to waiting
 
-				if operation.Type == OPERATION_TYPE_TRANSACTION {
-					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+				if operation.Type == db.OPERATION_TYPE_TRANSACTION {
+					lockSchema, err := db.GetLock(intent.Identity, intent.IdentityCurve)
 					if err != nil {
 						if err.Error() == "pg: no rows in result set" {
-							_, err := AddLock(intent.Identity, intent.IdentityCurve)
+							_, err := db.AddLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
 								logger.Sugar().Errorw("error adding lock", "error", err)
 								break
 							}
 
-							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+							lockSchema, err = db.GetLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
 								logger.Sugar().Errorw("error getting lock after adding", "error", err)
@@ -131,8 +132,8 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if lockSchema.Locked {
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -155,8 +156,8 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error sending bitcoin transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						} else if chain.ChainType == "dogecoin" {
@@ -170,8 +171,8 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error sending dogecoin transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						} else {
@@ -181,13 +182,13 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err = evm.SendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 
 							// @TODO: For our infra errors, don't mark the intent and operation as failed
 							if err != nil {
 								logger.Sugar().Errorw("error sending evm transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						}
@@ -196,15 +197,15 @@ func ProcessIntent(intentId int64) {
 						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 						if lockMetadata.Lock {
-							err := LockIdentity(lockSchema.Id)
+							err := db.LockIdentity(lockSchema.Id)
 							if err != nil {
 								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_COMPLETED, txnHash)
 						} else {
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, txnHash)
 						}
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" || operation.KeyCurve == "sui_eddsa" {
 						chId := operation.ChainId
@@ -214,8 +215,8 @@ func ProcessIntent(intentId int64) {
 						chain, err := common.GetChain(chId)
 						if err != nil {
 							logger.Sugar().Errorw("error getting chain", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -223,26 +224,26 @@ func ProcessIntent(intentId int64) {
 
 						if err != nil {
 							logger.Sugar().Errorw("error getting signature", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
 						var txnHash string
 
 						if chain.ChainType == "solana" {
-							txnHash, err = sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err = solana.SendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending solana transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						}
 
 						if chain.ChainType == "aptos" {
 							// Convert public key
-							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
 								logger.Sugar().Errorw("error getting public key", "error", err)
 								break
@@ -250,8 +251,8 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = aptos.SendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.AptosEDDSAPublicKey, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending aptos transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						}
@@ -260,8 +261,8 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = algorand.SendAlgorandTransaction(operation.SerializedTxn, operation.GenesisHash, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending algorand transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -271,15 +272,15 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = stellar.SendStellarTxn(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending Stellar transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						}
 
 						if chain.ChainType == "ripple" {
 							// Convert public key
-							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
 								logger.Sugar().Errorw("error getting public key", "error", err)
 								break
@@ -288,14 +289,14 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = ripple.SendRippleTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.RippleEDDSAPublicKey, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending Ripple transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						}
 
 						if chain.ChainType == "cardano" {
-							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
 								logger.Sugar().Errorw("error getting public key", "error", err)
 								break
@@ -304,14 +305,14 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = cardano.SendCardanoTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.CardanoPublicKey, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending Cardano transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						}
 
 						if chain.ChainType == "sui" {
-							wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+							wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 							if err != nil {
 								logger.Sugar().Errorw("error getting public key", "error", err)
 								break
@@ -320,8 +321,8 @@ func ProcessIntent(intentId int64) {
 							txnHash, err = sui.SendSuiTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, wallet.SuiPublicKey, signature)
 							if err != nil {
 								logger.Sugar().Errorw("error sending Sui transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 						}
@@ -330,30 +331,30 @@ func ProcessIntent(intentId int64) {
 						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 						if lockMetadata.Lock {
-							err := LockIdentity(lockSchema.Id)
+							err := db.LockIdentity(lockSchema.Id)
 							if err != nil {
 								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_COMPLETED, txnHash)
 						} else {
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, txnHash)
 						}
 
 					}
-				} else if operation.Type == OPERATION_TYPE_SOLVER {
-					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+				} else if operation.Type == db.OPERATION_TYPE_SOLVER {
+					lockSchema, err := db.GetLock(intent.Identity, intent.IdentityCurve)
 					if err != nil {
 						if err.Error() == "pg: no rows in result set" {
-							_, err := AddLock(intent.Identity, intent.IdentityCurve)
+							_, err := db.AddLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
 								logger.Sugar().Errorw("error adding lock", "error", err)
 								break
 							}
 
-							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+							lockSchema, err = db.GetLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
 								logger.Sugar().Errorw("error getting lock after adding", "error", err)
@@ -366,8 +367,8 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if lockSchema.Locked {
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -376,12 +377,12 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						logger.Sugar().Errorw("error constructing solver data to sign", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 
 					// then get the data signed
 					signature, err := getSignature(intent, i)
@@ -399,8 +400,8 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						logger.Sugar().Errorw("error solving", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -408,37 +409,37 @@ func ProcessIntent(intentId int64) {
 					json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 					if lockMetadata.Lock {
-						err := LockIdentity(lockSchema.Id)
+						err := db.LockIdentity(lockSchema.Id)
 						if err != nil {
 							logger.Sugar().Errorw("error locking identity", "error", err)
 							break
 						}
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, result)
+						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_COMPLETED, result)
 					} else {
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 					}
-				} else if operation.Type == OPERATION_TYPE_SEND_TO_BRIDGE {
+				} else if operation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE {
 					// Get bridge wallet for the chain
-					bridgeWallet, err := GetWallet(BridgeContractAddress, operation.KeyCurve)
+					bridgeWallet, err := db.GetWallet(BridgeContractAddress, operation.KeyCurve)
 					if err != nil {
 						logger.Sugar().Errorw("Failed to get bridge wallet", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
 					// Process transaction based on key curve and chain type
-					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+					lockSchema, err := db.GetLock(intent.Identity, intent.IdentityCurve)
 					if err != nil {
 						if err.Error() == "pg: no rows in result set" {
-							_, err := AddLock(intent.Identity, intent.IdentityCurve)
+							_, err := db.AddLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
 								logger.Sugar().Errorw("error adding lock", "error", err)
 								break
 							}
 
-							lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+							lockSchema, err = db.GetLock(intent.Identity, intent.IdentityCurve)
 
 							if err != nil {
 								logger.Sugar().Errorw("error getting lock after adding", "error", err)
@@ -451,8 +452,8 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if lockSchema.Locked {
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -471,14 +472,14 @@ func ProcessIntent(intentId int64) {
 							txBytes, err := hex.DecodeString(operation.SerializedTxn)
 							if err != nil {
 								logger.Sugar().Errorw("error decoding bitcoin&dogecoin transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 							if err := tx.Deserialize(bytes.NewReader(txBytes)); err != nil {
 								logger.Sugar().Errorw("error deserializing bitcoin&dogecoin transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 							// Get the first output's address (assuming it's the bridge address)
@@ -486,8 +487,8 @@ func ProcessIntent(intentId int64) {
 								_, addrs, _, err := txscript.ExtractPkScriptAddrs(tx.TxOut[0].PkScript, nil)
 								if err != nil || len(addrs) == 0 {
 									logger.Sugar().Errorw("error extracting bitcoin&dogecoin address", "error", err)
-									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+									db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 									break
 								}
 								destAddress = addrs[0].String()
@@ -497,29 +498,29 @@ func ProcessIntent(intentId int64) {
 							txBytes, err := hex.DecodeString(operation.SerializedTxn)
 							if err != nil {
 								logger.Sugar().Errorw("error decoding EVM transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 							tx := new(types.Transaction)
 							if err := rlp.DecodeBytes(txBytes, tx); err != nil {
 								logger.Sugar().Errorw("error deserializing EVM transaction", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 							if tx.To() == nil {
 								logger.Sugar().Errorw("EVM transaction has nil To address")
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 							if len(tx.Data()) >= 4 && bytes.Equal(tx.Data()[:4], []byte{0xa9, 0x05, 0x9c, 0xbb}) {
 								// ERC20 transfer detected, extract recipient from call data
 								if len(tx.Data()) < 36 {
 									logger.Sugar().Errorw("ERC20 transfer data too short to extract destination")
-									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+									db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 									break
 								}
 								destAddress = ethCommon.BytesToAddress(tx.Data()[4:36]).Hex()
@@ -529,14 +530,14 @@ func ProcessIntent(intentId int64) {
 								exists, peggedToken, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, operation.ChainId, tokenAddress)
 								if err != nil {
 									logger.Sugar().Errorw("error checking token existence in bridge", "error", err, "token", tokenAddress)
-									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+									db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 									break
 								}
 								if !exists {
 									logger.Sugar().Errorw("ERC20 token not registered in bridge", "token", tokenAddress, "chain", operation.ChainId)
-									UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-									UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+									db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+									db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 									break
 								}
 								logger.Sugar().Infow("ERC20 token exists in bridge", "token", tokenAddress, "peggedToken", peggedToken)
@@ -557,8 +558,8 @@ func ProcessIntent(intentId int64) {
 
 						if !strings.EqualFold(destAddress, expectedAddress) {
 							logger.Sugar().Errorw("Invalid bridge destination address", "expected", expectedAddress, "got", destAddress)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -587,13 +588,13 @@ func ProcessIntent(intentId int64) {
 							}
 							txnHash, err = dogecoin.SendDogeTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, dogecoinPubkey, signature)
 						default: // EVM chains
-							txnHash, err = sendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err = evm.SendEVMTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						}
 
 						if err != nil {
 							logger.Sugar().Errorw("error sending transaction", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -601,15 +602,15 @@ func ProcessIntent(intentId int64) {
 						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 						if lockMetadata.Lock {
-							err := LockIdentity(lockSchema.Id)
+							err := db.LockIdentity(lockSchema.Id)
 							if err != nil {
 								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_COMPLETED, txnHash)
 						} else {
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, txnHash)
 						}
 					} else if operation.KeyCurve == "eddsa" || operation.KeyCurve == "aptos_eddsa" || operation.KeyCurve == "stellar_eddsa" || operation.KeyCurve == "algorand_eddsa" || operation.KeyCurve == "ripple_eddsa" || operation.KeyCurve == "cardano_eddsa" || operation.KeyCurve == "sui_eddsa" {
 						chain, err := common.GetChain(operation.ChainId)
@@ -631,7 +632,7 @@ func ProcessIntent(intentId int64) {
 								logger.Sugar().Errorw("error decoding Solana transaction", "error", err)
 								break
 							}
-							tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
+							tx, err := solanasdk.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
 							if err != nil || len(tx.Message.Instructions) == 0 {
 								logger.Sugar().Errorw("error deserializing Solana transaction", "error", err)
 								break
@@ -761,8 +762,8 @@ func ProcessIntent(intentId int64) {
 
 						if !validDestination {
 							logger.Sugar().Errorw("Invalid bridge destination address for", "chain", chain.ChainType)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -775,7 +776,7 @@ func ProcessIntent(intentId int64) {
 						var txnHash string
 						switch chain.ChainType {
 						case "solana":
-							txnHash, err = sendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
+							txnHash, err = solana.SendSolanaTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						case "aptos":
 							txnHash, err = aptos.SendAptosTransaction(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						case "stellar":
@@ -786,8 +787,8 @@ func ProcessIntent(intentId int64) {
 
 						if err != nil {
 							logger.Sugar().Errorw("error sending transaction", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -795,30 +796,30 @@ func ProcessIntent(intentId int64) {
 						json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 						if lockMetadata.Lock {
-							err := LockIdentity(lockSchema.Id)
+							err := db.LockIdentity(lockSchema.Id)
 							if err != nil {
 								logger.Sugar().Errorw("error locking identity", "error", err)
 								break
 							}
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_COMPLETED, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_COMPLETED, txnHash)
 						} else {
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, txnHash)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, txnHash)
 						}
 					}
 
-				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
+				} else if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT {
 					depositOperation := intent.Operations[i-1]
 
-					if i == 0 || !(depositOperation.Type == OPERATION_TYPE_SEND_TO_BRIDGE) {
+					if i == 0 || !(depositOperation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE) {
 						logger.Sugar().Errorw("Invalid operation type for bridge deposit")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
 					if depositOperation.KeyCurve == "ecdsa" {
 						// find token transfer events and check if first transfer is a valid token
-						transfers, err := GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
+						transfers, err := evm.GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
 						if err != nil {
 							logger.Sugar().Errorw("error getting transfers", "error", err)
 							break
@@ -826,8 +827,8 @@ func ProcessIntent(intentId int64) {
 
 						if len(transfers) == 0 {
 							logger.Sugar().Errorw("No transfers found", "result", depositOperation.Result, "identity", intent.Identity)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -846,12 +847,12 @@ func ProcessIntent(intentId int64) {
 						if !exists {
 							logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "chainId", depositOperation.ChainId)
 
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
-						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting wallet", "error", err)
 							break
@@ -863,7 +864,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 						intent.Operations[i].SolverDataToSign = dataToSign
 
 						signature, err := getSignature(intent, i)
@@ -879,8 +880,8 @@ func ProcessIntent(intentId int64) {
 
 						if err != nil {
 							logger.Sugar().Errorw("error minting bridge", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -896,9 +897,9 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationSolverOutput(operation.ID, string(mintOutputBytes))
+						db.UpdateOperationSolverOutput(operation.ID, string(mintOutputBytes))
 
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "sui_eddsa" ||
 						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "dogecoin_ecdsa" || depositOperation.KeyCurve == "stellar_eddsa" ||
@@ -912,7 +913,7 @@ func ProcessIntent(intentId int64) {
 						var transfers []common.Transfer
 
 						if chain.ChainType == "solana" {
-							transfers, err = GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
+							transfers, err = solana.GetSolanaTransfers(depositOperation.ChainId, depositOperation.Result, HeliusApiKey)
 							if err != nil {
 								logger.Sugar().Errorw("error getting solana transfers", "error", err)
 								break
@@ -982,8 +983,8 @@ func ProcessIntent(intentId int64) {
 
 						if len(transfers) == 0 {
 							logger.Sugar().Errorw("No transfers found", "result", depositOperation.Result, "identity", intent.Identity)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -1002,12 +1003,12 @@ func ProcessIntent(intentId int64) {
 						if !exists {
 							logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "chainId", depositOperation.ChainId)
 
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
-						wallet, err := GetWallet(intent.Identity, "ecdsa")
+						wallet, err := db.GetWallet(intent.Identity, "ecdsa")
 						if err != nil {
 							logger.Sugar().Errorw("error getting wallet", "error", err)
 							break
@@ -1019,7 +1020,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 						intent.Operations[i].SolverDataToSign = dataToSign
 
 						signature, err := getSignature(intent, i)
@@ -1035,21 +1036,21 @@ func ProcessIntent(intentId int64) {
 
 						if err != nil {
 							logger.Sugar().Errorw("error minting bridge", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 
 					}
-				} else if operation.Type == OPERATION_TYPE_SWAP {
+				} else if operation.Type == db.OPERATION_TYPE_SWAP {
 					bridgeDeposit := intent.Operations[i-1]
 
-					if i == 0 || !(bridgeDeposit.Type == OPERATION_TYPE_BRIDGE_DEPOSIT) {
+					if i == 0 || !(bridgeDeposit.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT) {
 						logger.Sugar().Errorw("Invalid operation type for swap")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1057,18 +1058,18 @@ func ProcessIntent(intentId int64) {
 					depositOperation := intent.Operations[i-2] // The operation before bridge deposit is send-to-bridge
 
 					// Get the actual token used in the deposit from the transfer events
-					transfers, err := GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
+					transfers, err := evm.GetEthereumTransfers(depositOperation.ChainId, depositOperation.Result, intent.Identity)
 					if err != nil {
 						logger.Sugar().Errorw("error getting transfers for swap tokenIn", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
 					if len(transfers) == 0 {
 						logger.Sugar().Errorw("No transfers found for swap tokenIn", "result", depositOperation.Result)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1087,7 +1088,7 @@ func ProcessIntent(intentId int64) {
 					amountIn := bridgeDepositData.Amount
 					deadline := time.Now().Add(time.Hour).Unix()
 
-					wallet, err := GetWallet(intent.Identity, "ecdsa")
+					wallet, err := db.GetWallet(intent.Identity, "ecdsa")
 					if err != nil {
 						logger.Sugar().Errorw("error getting wallet", "error", err)
 						break
@@ -1108,7 +1109,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
 					signature, err := getSignature(intent, i)
@@ -1130,28 +1131,28 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						logger.Sugar().Errorw("error swapping bridge", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 
 					break
-				} else if operation.Type == OPERATION_TYPE_BURN {
+				} else if operation.Type == db.OPERATION_TYPE_BURN {
 					bridgeSwap := intent.Operations[i-1]
 
-					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != OPERATION_TYPE_WITHDRAW {
+					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != db.OPERATION_TYPE_WITHDRAW {
 						fmt.Println("BURN operation must be followed by a WITHDRAW operation")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					if i == 0 || !(bridgeSwap.Type == OPERATION_TYPE_SWAP) {
+					if i == 0 || !(bridgeSwap.Type == db.OPERATION_TYPE_SWAP) {
 						logger.Sugar().Errorw("Invalid operation type for swap")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1162,7 +1163,7 @@ func ProcessIntent(intentId int64) {
 
 					json.Unmarshal([]byte(operation.SolverMetadata), &burnMetadata)
 
-					wallet, err := GetWallet(intent.Identity, "ecdsa")
+					wallet, err := db.GetWallet(intent.Identity, "ecdsa")
 					if err != nil {
 						logger.Sugar().Errorw("error getting wallet", "error", err)
 						break
@@ -1181,7 +1182,7 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
 					signature, err := getSignature(intent, i)
@@ -1201,20 +1202,20 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						logger.Sugar().Errorw("error burning tokens", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 					break
-				} else if operation.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+				} else if operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC {
 					// This operation allows direct burning of ERC20 tokens from the wallet
 					// without requiring a prior swap operation
 					burnSyntheticMetadata := BurnSyntheticMetadata{}
 
 					// Verify that this operation is followed by a withdraw operation
-					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != OPERATION_TYPE_WITHDRAW {
+					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != db.OPERATION_TYPE_WITHDRAW {
 						logger.Sugar().Errorw("BURN_SYNTHETIC validation failed: must be followed by WITHDRAW",
 							"operationId", operation.ID,
 							"intentId", intent.ID,
@@ -1222,8 +1223,8 @@ func ProcessIntent(intentId int64) {
 							"totalOperations", len(intent.Operations),
 							"nextOperationType", getNextOperationType(intent, i))
 						fmt.Println("BURN_SYNTHETIC operation must be followed by a WITHDRAW operation")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1240,8 +1241,8 @@ func ProcessIntent(intentId int64) {
 							"error", err,
 							"rawMetadata", operation.SolverMetadata)
 						fmt.Println("Error unmarshalling burn synthetic metadata:", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1259,12 +1260,12 @@ func ProcessIntent(intentId int64) {
 							"token", burnSyntheticMetadata.Token,
 							"error", tokenErr)
 						fmt.Println("Invalid token address:", tokenErr)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					wallet, err := GetWallet(intent.Identity, "ecdsa")
+					wallet, err := db.GetWallet(intent.Identity, "ecdsa")
 					if err != nil {
 						logger.Sugar().Errorw("BURN_SYNTHETIC wallet retrieval failed",
 							"operationId", operation.ID,
@@ -1272,8 +1273,8 @@ func ProcessIntent(intentId int64) {
 							"identity", intent.Identity,
 							"error", err)
 						fmt.Println("Error getting wallet:", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1291,8 +1292,8 @@ func ProcessIntent(intentId int64) {
 							"account", wallet.ECDSAPublicKey,
 							"error", err)
 						fmt.Println("Error getting token balance:", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1309,8 +1310,8 @@ func ProcessIntent(intentId int64) {
 							"intentId", intent.ID,
 							"balance", balance)
 						fmt.Println("Error parsing balance")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1321,8 +1322,8 @@ func ProcessIntent(intentId int64) {
 							"intentId", intent.ID,
 							"amount", burnSyntheticMetadata.Amount)
 						fmt.Println("Error parsing amount")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1338,8 +1339,8 @@ func ProcessIntent(intentId int64) {
 							"balance", balanceBig.String(),
 							"requiredAmount", amountBig.String())
 						fmt.Println("Insufficient token balance")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1358,8 +1359,8 @@ func ProcessIntent(intentId int64) {
 							"token", burnSyntheticMetadata.Token,
 							"error", err)
 						fmt.Println("Error checking token existence in bridge:", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1370,8 +1371,8 @@ func ProcessIntent(intentId int64) {
 							"token", burnSyntheticMetadata.Token,
 							"peggedToken", destAddress)
 						fmt.Println("Invalid token: token exists on bridge, use BURN instead of BURN_SYNTHETIC")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1397,8 +1398,8 @@ func ProcessIntent(intentId int64) {
 							"bridgeContract", BridgeContractAddress,
 							"error", err)
 						fmt.Println("Error generating burn data to sign:", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1408,7 +1409,7 @@ func ProcessIntent(intentId int64) {
 						"dataToSignPrefix", truncateString(dataToSign, 20))
 
 					// Update operation with data to sign and wait for signature
-					UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
 					logger.Sugar().Infow("BURN_SYNTHETIC operation updated with data to sign",
@@ -1421,8 +1422,8 @@ func ProcessIntent(intentId int64) {
 							"intentId", intent.ID,
 							"error", err)
 						fmt.Println("Error getting signature:", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1465,8 +1466,8 @@ func ProcessIntent(intentId int64) {
 							"account", wallet.ECDSAPublicKey,
 							"error", err)
 						fmt.Println("Error burning tokens:", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1477,10 +1478,10 @@ func ProcessIntent(intentId int64) {
 						"account", wallet.ECDSAPublicKey,
 						"transactionHash", result)
 
-					UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+					db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 
 					// Log integration with next withdraw operation
-					if i+1 < len(intent.Operations) && intent.Operations[i+1].Type == OPERATION_TYPE_WITHDRAW {
+					if i+1 < len(intent.Operations) && intent.Operations[i+1].Type == db.OPERATION_TYPE_WITHDRAW {
 						var withdrawMetadata WithdrawMetadata
 						withdrawErr := json.Unmarshal([]byte(intent.Operations[i+1].SolverMetadata), &withdrawMetadata)
 
@@ -1495,13 +1496,13 @@ func ProcessIntent(intentId int64) {
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
+				} else if operation.Type == db.OPERATION_TYPE_WITHDRAW {
 					burn := intent.Operations[i-1]
 
-					if i == 0 || !(burn.Type == OPERATION_TYPE_BURN || burn.Type == OPERATION_TYPE_BURN_SYNTHETIC) {
+					if i == 0 || !(burn.Type == db.OPERATION_TYPE_BURN || burn.Type == db.OPERATION_TYPE_BURN_SYNTHETIC) {
 						logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1511,12 +1512,12 @@ func ProcessIntent(intentId int64) {
 					// Handle different burn operation types
 					var tokenToWithdraw string
 					var burnTokenAddress string
-					if burn.Type == OPERATION_TYPE_BURN {
+					if burn.Type == db.OPERATION_TYPE_BURN {
 						var burnMetadata BurnMetadata
 						json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
 						tokenToWithdraw = withdrawMetadata.Token
 						burnTokenAddress = burnMetadata.Token
-					} else if burn.Type == OPERATION_TYPE_BURN_SYNTHETIC {
+					} else if burn.Type == db.OPERATION_TYPE_BURN_SYNTHETIC {
 						var burnSyntheticMetadata BurnSyntheticMetadata
 						json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
 						tokenToWithdraw = withdrawMetadata.Token
@@ -1534,16 +1535,16 @@ func ProcessIntent(intentId int64) {
 					if !exists {
 						logger.Sugar().Errorw("Token does not exist", "token", tokenToWithdraw, "chainId", operation.ChainId)
 
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
 					if destAddress != burnTokenAddress {
 						logger.Sugar().Errorw("Token mismatch", "destAddress", destAddress, "token", burnTokenAddress)
 
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
@@ -1554,13 +1555,13 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					bridgeWallet, err := GetWallet(BridgeContractAddress, "ecdsa")
+					bridgeWallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
 					if err != nil {
 						logger.Sugar().Errorw("error getting bridge wallet", "error", err)
 						break
 					}
 
-					user, err := GetWallet(intent.Identity, intent.IdentityCurve)
+					user, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 					if err != nil {
 						logger.Sugar().Errorw("error getting user wallet", "error", err)
 						break
@@ -1582,7 +1583,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 						intent.Operations[i].SolverDataToSign = dataToSign
 
 						signature, err := getSignature(intent, i)
@@ -1600,12 +1601,12 @@ func ProcessIntent(intentId int64) {
 
 						if err != nil {
 							logger.Sugar().Errorw("error withdrawing ERC20", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						break
 					} else if withdrawalChain.KeyCurve == "bitcoin_ecdsa" {
 						bridgeWalletBitcoinAddress, err := readBitcoinAddress(bridgeWallet, withdrawalChain.ChainId)
@@ -1633,7 +1634,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 						intent.Operations[i].SolverDataToSign = dataToSign
 
 						signature, err := getSignature(intent, i)
@@ -1650,12 +1651,12 @@ func ProcessIntent(intentId int64) {
 
 						if err != nil {
 							logger.Sugar().Errorw("error withdrawing bitcoin", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						break
 					} else if withdrawalChain.KeyCurve == "dogecoin_ecdsa" {
 						// handle dogecoin withdrawal
@@ -1701,7 +1702,7 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+						db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 						intent.Operations[i].SolverDataToSign = dataToSign
 
 						signature, err := getSignature(intent, i)
@@ -1720,12 +1721,12 @@ func ProcessIntent(intentId int64) {
 
 						if err != nil {
 							fmt.Println(err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
-						UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						break
 					} else if withdrawalChain.KeyCurve == "eddsa" {
 						if tokenToWithdraw == util.ZERO_ADDRESS {
@@ -1742,7 +1743,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -1759,12 +1760,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing solana native", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 							// implement SPL
 							transaction, dataToSign, err := withdrawSolanaSPLGetSignature(
@@ -1780,7 +1781,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -1797,27 +1798,27 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing solana SPL", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "stellar_eddsa" {
-						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting wallet", "error", err)
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
 						if wallet.StellarPublicKey == "" {
 							logger.Sugar().Errorw("error: no Stellar public key found in wallet")
-							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+							db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 							break
 						}
 
@@ -1834,19 +1835,19 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing native XLM", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
 								logger.Sugar().Errorw("error getting signature", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -1858,12 +1859,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing Stellar", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 							// Handle non-native Stellar asset transfer
 							assetParts := strings.Split(tokenToWithdraw, ":")
@@ -1886,19 +1887,19 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing Stellar asset", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
 								logger.Sugar().Errorw("error getting signature", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -1910,16 +1911,16 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing Stellar", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "aptos_eddsa" {
-						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting public key", "error", err)
 							break
@@ -1937,7 +1938,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -1955,12 +1956,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing aptos", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 							transaction, dataToSign, err := aptos.WithdrawAptosTokenGetSignature(
 								withdrawalChain.ChainUrl,
@@ -1975,7 +1976,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -1993,16 +1994,16 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing aptos", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "sui_eddsa" {
-						wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+						wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 						if err != nil {
 							logger.Sugar().Errorw("error getting public key", "error", err)
 							break
@@ -2022,7 +2023,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -2040,12 +2041,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing sui", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 							// Handle Sui token withdrawal
 							transaction, dataToSign, err := sui.WithdrawSuiTokenGetSignature(
@@ -2061,7 +2062,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -2079,12 +2080,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing sui", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "algorand_eddsa" {
@@ -2099,12 +2100,12 @@ func ProcessIntent(intentId int64) {
 							)
 							if err != nil {
 								logger.Sugar().Errorw("error getting data to sign", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -2121,12 +2122,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing algorand", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 							// handle ASA (Algorand Standard Asset)
 							dataToSign, tx, err := algorand.WithdrawAlgorandASAGetSignature(
@@ -2142,14 +2143,14 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
 							if err != nil {
 								logger.Sugar().Errorw("error getting signature", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
@@ -2161,12 +2162,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing algorand", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
 
@@ -2184,7 +2185,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -2203,12 +2204,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing ripple", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 
 							transaction, dataToSign, err := ripple.WithdrawRippleTokenGetSignature(
@@ -2224,7 +2225,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -2243,12 +2244,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing ripple", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
 					} else if withdrawalChain.KeyCurve == "cardano_eddsa" {
@@ -2267,7 +2268,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -2286,12 +2287,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing cardano", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						} else {
 
 							transaction, dataToSign, err := cardano.WithdrawCardanoTokenGetSignature(
@@ -2307,7 +2308,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 
-							UpdateOperationSolverDataToSign(operation.ID, dataToSign)
+							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
 							signature, err := getSignature(intent, i)
@@ -2326,12 +2327,12 @@ func ProcessIntent(intentId int64) {
 
 							if err != nil {
 								logger.Sugar().Errorw("error withdrawing cardano", "error", err)
-								UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-								UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+								db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+								db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 								break
 							}
 
-							UpdateOperationResult(operation.ID, OPERATION_STATUS_WAITING, result)
+							db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 						}
 						break
 					}
@@ -2340,9 +2341,9 @@ func ProcessIntent(intentId int64) {
 				break
 			}
 
-			if operation.Status == OPERATION_STATUS_WAITING {
+			if operation.Status == db.OPERATION_STATUS_WAITING {
 				// check for confirmations and update the status to completed
-				if operation.Type == OPERATION_TYPE_TRANSACTION {
+				if operation.Type == db.OPERATION_TYPE_TRANSACTION {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
@@ -2364,7 +2365,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						} else {
-							confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = evm.CheckEVMTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								logger.Sugar().Errorw("error checking evm transaction", "error", err)
 								break
@@ -2389,7 +2390,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "solana" {
-							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = solana.CheckSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								logger.Sugar().Errorw("error checking solana transaction", "error", err)
 								break
@@ -2447,15 +2448,15 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_SEND_TO_BRIDGE {
+				} else if operation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE {
 					confirmed := false
 					chain, err := common.GetChain(operation.ChainId)
 					if err != nil {
@@ -2469,7 +2470,7 @@ func ProcessIntent(intentId int64) {
 					case "dogecoin":
 						confirmed, err = dogecoin.CheckDogeTransactionConfirmed(operation.ChainId, operation.Result)
 					case "solana":
-						confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+						confirmed, err = solana.CheckSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 					case "aptos":
 						confirmed, err = aptos.CheckAptosTransactionConfirmed(operation.ChainId, operation.Result)
 					case "stellar":
@@ -2477,7 +2478,7 @@ func ProcessIntent(intentId int64) {
 					case "algorand":
 						confirmed, err = algorand.CheckAlgorandTransactionConfirmed(operation.GenesisHash, operation.Result)
 					default: // EVM chains
-						confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+						confirmed, err = evm.CheckEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					}
 
 					if err != nil {
@@ -2489,15 +2490,15 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_BRIDGE_DEPOSIT {
+				} else if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
@@ -2518,7 +2519,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						} else {
-							confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = evm.CheckEVMTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								logger.Sugar().Errorw("error checking evm transaction", "error", err)
 								break
@@ -2538,7 +2539,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "solana" {
-							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = solana.CheckSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								logger.Sugar().Errorw("error checking solana transaction", "error", err)
 								break
@@ -2597,15 +2598,15 @@ func ProcessIntent(intentId int64) {
 						break
 					}
 
-					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+					db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_SOLVER {
+				} else if operation.Type == db.OPERATION_TYPE_SOLVER {
 					status, err := solver.CheckStatus(
 						operation.Solver, &intentBytes, i,
 					)
@@ -2623,23 +2624,23 @@ func ProcessIntent(intentId int64) {
 							break
 						}
 
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
-						UpdateOperationSolverOutput(operation.ID, output)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
+						db.UpdateOperationSolverOutput(operation.ID, output)
 
 						if i+1 == len(intent.Operations) {
 							// update the intent status to completed
-							UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+							db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 						}
 					}
 
 					if status == solver.SOLVER_OPERATION_STATUS_FAILURE {
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_SWAP {
-					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+				} else if operation.Type == db.OPERATION_TYPE_SWAP {
+					confirmed, err := evm.CheckEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					if err != nil {
 						logger.Sugar().Errorw("error checking evm transaction", "error", err)
 						break
@@ -2656,22 +2657,22 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						logger.Sugar().Errorw("error getting swap output", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
-					UpdateOperationSolverOutput(operation.ID, swapOutput)
+					db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
+					db.UpdateOperationSolverOutput(operation.ID, swapOutput)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_BURN {
-					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+				} else if operation.Type == db.OPERATION_TYPE_BURN {
+					confirmed, err := evm.CheckEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					if err != nil {
 						logger.Sugar().Errorw("error checking evm transaction", "error", err)
 						break
@@ -2688,22 +2689,22 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						logger.Sugar().Errorw("error getting burn output", "error", err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
-					UpdateOperationSolverOutput(operation.ID, swapOutput)
+					db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
+					db.UpdateOperationSolverOutput(operation.ID, swapOutput)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_BURN_SYNTHETIC {
-					confirmed, err := checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+				} else if operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC {
+					confirmed, err := evm.CheckEVMTransactionConfirmed(operation.ChainId, operation.Result)
 					if err != nil {
 						fmt.Println(err)
 						break
@@ -2720,21 +2721,21 @@ func ProcessIntent(intentId int64) {
 
 					if err != nil {
 						fmt.Println(err)
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_FAILED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_FAILED)
 						break
 					}
 
-					UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
-					UpdateOperationSolverOutput(operation.ID, swapOutput)
+					db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
+					db.UpdateOperationSolverOutput(operation.ID, swapOutput)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 					}
 
 					break
-				} else if operation.Type == OPERATION_TYPE_WITHDRAW {
+				} else if operation.Type == db.OPERATION_TYPE_WITHDRAW {
 					confirmed := false
 					if operation.KeyCurve == "ecdsa" || operation.KeyCurve == "bitcoin_ecdsa" || operation.KeyCurve == "dogecoin_ecdsa" {
 						chain, err := common.GetChain(operation.ChainId)
@@ -2755,7 +2756,7 @@ func ProcessIntent(intentId int64) {
 								break
 							}
 						} else {
-							confirmed, err = checkEVMTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = evm.CheckEVMTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								logger.Sugar().Errorw("error checking evm transaction", "error", err)
 								break
@@ -2775,7 +2776,7 @@ func ProcessIntent(intentId int64) {
 						}
 
 						if chain.ChainType == "solana" {
-							confirmed, err = checkSolanaTransactionConfirmed(operation.ChainId, operation.Result)
+							confirmed, err = solana.CheckSolanaTransactionConfirmed(operation.ChainId, operation.Result)
 							if err != nil {
 								logger.Sugar().Errorw("error checking solana transaction", "error", err)
 								break
@@ -2838,7 +2839,7 @@ func ProcessIntent(intentId int64) {
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
 
-					lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+					lockSchema, err := db.GetLock(intent.Identity, intent.IdentityCurve)
 					if err != nil {
 						logger.Sugar().Errorw("error getting lock", "error", err)
 						break
@@ -2864,7 +2865,7 @@ func ProcessIntent(intentId int64) {
 
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -2879,14 +2880,14 @@ func ProcessIntent(intentId int64) {
 
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
 									}
 								}
 							} else {
-								txnConfirmed, err := checkEVMTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := evm.CheckEVMTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									logger.Sugar().Errorw("error checking evm transaction", "error", err)
 									break
@@ -2894,7 +2895,7 @@ func ProcessIntent(intentId int64) {
 
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -2915,7 +2916,7 @@ func ProcessIntent(intentId int64) {
 							}
 
 							if chain.ChainType == "solana" {
-								txnConfirmed, err := checkSolanaTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
+								txnConfirmed, err := solana.CheckSolanaTransactionConfirmed(depositOperation.ChainId, depositOperation.Result)
 								if err != nil {
 									logger.Sugar().Errorw("error checking solana transaction", "error", err)
 									break
@@ -2923,7 +2924,7 @@ func ProcessIntent(intentId int64) {
 
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -2939,7 +2940,7 @@ func ProcessIntent(intentId int64) {
 								}
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -2955,7 +2956,7 @@ func ProcessIntent(intentId int64) {
 								}
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -2970,7 +2971,7 @@ func ProcessIntent(intentId int64) {
 								}
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -2987,7 +2988,7 @@ func ProcessIntent(intentId int64) {
 
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -3004,7 +3005,7 @@ func ProcessIntent(intentId int64) {
 
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -3021,7 +3022,7 @@ func ProcessIntent(intentId int64) {
 
 								if txnConfirmed {
 									confirmed = true
-									err := UnlockIdentity(lockSchema.Id)
+									err := db.UnlockIdentity(lockSchema.Id)
 									if err != nil {
 										logger.Sugar().Errorw("error unlocking identity", "error", err)
 										break
@@ -3033,12 +3034,12 @@ func ProcessIntent(intentId int64) {
 					}
 
 					if confirmed {
-						UpdateOperationStatus(operation.ID, OPERATION_STATUS_COMPLETED)
+						db.UpdateOperationStatus(operation.ID, db.OPERATION_STATUS_COMPLETED)
 					}
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
-						UpdateIntentStatus(intent.ID, INTENT_STATUS_COMPLETED)
+						db.UpdateIntentStatus(intent.ID, db.INTENT_STATUS_COMPLETED)
 					}
 
 					break
@@ -3055,7 +3056,7 @@ type SignatureResponse struct {
 	Address   string `json:"address"`
 }
 
-func getSignature(intent *Intent, operationIndex int) (string, error) {
+func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
 	signature, _, err := getSignatureEx(intent, operationIndex)
 	if err != nil {
 		return "", err
@@ -3063,9 +3064,9 @@ func getSignature(intent *Intent, operationIndex int) (string, error) {
 	return signature, nil
 }
 
-func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) {
+func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, error) {
 	// get wallet
-	wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+	wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 	if err != nil {
 		return "", "", fmt.Errorf("error getting wallet: %v", err)
 	}
@@ -3114,7 +3115,7 @@ func getSignatureEx(intent *Intent, operationIndex int) (string, string, error) 
 		return "", "", fmt.Errorf("validator returned non-OK status: %d", resp.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", "", fmt.Errorf("error reading response body: %v", err)
 	}
@@ -3160,146 +3161,8 @@ func min(a, b int) int {
 	return b
 }
 
-func checkEVMTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return false, err
-	}
-
-	client, err := ethclient.Dial(chain.ChainUrl)
-	if err != nil {
-		return false, fmt.Errorf("failed to dial EVM client: %v", err)
-	}
-
-	_, isPending, err := client.TransactionByHash(context.Background(), ethCommon.HexToHash(txnHash))
-	if err != nil {
-		return false, err
-	}
-
-	return !isPending, nil
-}
-
-func checkSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return false, err
-	}
-
-	c := rpc.New(chain.ChainUrl)
-
-	signature, err := solana.SignatureFromBase58(txnHash)
-	if err != nil {
-		return false, err
-	}
-
-	// Regarding the deprecation of GetConfirmedTransaction in Solana-Core v2, this has been updated to use GetTransaction.
-	// https://spl_governance.crates.io/docs/rpc/deprecated/getconfirmedtransaction
-	_, err = c.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
-		Commitment: rpc.CommitmentConfirmed,
-	})
-
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
-func sendEVMTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureHex string) (string, error) {
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return "", err
-	}
-
-	client, err := ethclient.Dial(chain.ChainUrl)
-	if err != nil {
-		logger.Sugar().Errorw("failed to dial ethclient", "error", err)
-		return "", err
-	}
-
-	serializedTx, err := hex.DecodeString(serializedTxn)
-	if err != nil {
-		return "", err
-	}
-
-	var tx types.Transaction
-	rlp.DecodeBytes(serializedTx, &tx)
-
-	sigData, err := hex.DecodeString(signatureHex)
-
-	if err != nil {
-		return "", err
-	}
-
-	n, _ := new(big.Int).SetString(chainId, 10)
-	_tx, err := tx.WithSignature(types.NewLondonSigner(n), []byte(sigData))
-
-	if err != nil {
-		return "", err
-	}
-
-	err = client.SendTransaction(context.Background(), _tx)
-	if err != nil {
-		return "", err
-	}
-
-	return _tx.Hash().Hex(), nil
-}
-
-// sendSolanaTransaction submits a signed Solana transaction to the network
-func sendSolanaTransaction(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
-	// Get chain configuration for RPC endpoint
-	chain, err := common.GetChain(chainId)
-	if err != nil {
-		return "", err
-	}
-
-	// Initialize Solana RPC client
-	c := rpc.New(chain.ChainUrl)
-
-	// Decode the base58-encoded transaction data
-	// Solana transactions are serialized using a custom binary format and base58-encoded
-	decodedTransactionData, err := base58.Decode(serializedTxn)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode transaction data: %v", err)
-	}
-
-	// Deserialize the binary data into a Solana transaction
-	// This reconstructs the transaction object with all its instructions
-	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
-	if err != nil {
-		return "", fmt.Errorf("failed to deserialize transaction data: %v", err)
-	}
-
-	// Decode the base58-encoded signature and convert it to Solana's signature format
-	// Solana uses 64-byte Ed25519 signatures
-	sig, _ := base58.Decode(signatureBase58)
-	signature := solana.SignatureFromBytes(sig)
-
-	// Add the signature to the transaction
-	// Solana transactions can have multiple signatures for multi-sig transactions
-	_tx.Signatures = append(_tx.Signatures, signature)
-
-	// Verify that all required signatures are present and valid
-	// This checks signatures against the transaction data and account permissions
-	err = _tx.VerifySignatures()
-	if err != nil {
-		return "", fmt.Errorf("failed to verify signatures: %v", err)
-	}
-
-	// Submit the transaction to the Solana network
-	// The returned hash can be used to track the transaction status
-	hash, err := c.SendTransaction(context.Background(), _tx)
-	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %v", err)
-	}
-
-	// Return the transaction hash as a string
-	return hash.String(), nil
-}
-
 // readBitcoinAddress returns the appropriate Bitcoin public key based on the chain configuration
-func readBitcoinAddress(wallet *WalletSchema, chainId string) (string, error) {
+func readBitcoinAddress(wallet *db.WalletSchema, chainId string) (string, error) {
 	if wallet == nil {
 		return "", fmt.Errorf("wallet is nil")
 	}
@@ -3325,7 +3188,7 @@ func readBitcoinAddress(wallet *WalletSchema, chainId string) (string, error) {
 	}
 }
 
-func getNextOperationType(intent *Intent, operationIndex int) string {
+func getNextOperationType(intent *libs.Intent, operationIndex int) string {
 	if operationIndex+1 < len(intent.Operations) {
 		return intent.Operations[operationIndex+1].Type
 	}

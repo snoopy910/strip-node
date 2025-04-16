@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"github.com/StripChain/strip-node/libs"
+	db "github.com/StripChain/strip-node/libs/database"
 )
 
 // TestCreateWalletEndpoint tests the /createWallet endpoint for creating a wallet.
@@ -105,14 +108,14 @@ func TestGetWalletEndpoint(t *testing.T) {
 // It verifies the JSON payload and response status code.
 func TestCreateIntent(t *testing.T) {
 	// Create a test intent
-	testIntent := Intent{
+	testIntent := libs.Intent{
 		Identity:      "testIdentity",
 		IdentityCurve: "ecdsa",
-		Status:        INTENT_STATUS_PROCESSING,
-		Operations: []Operation{
+		Status:        db.INTENT_STATUS_PROCESSING,
+		Operations: []libs.Operation{
 			{
-				Type:     OPERATION_TYPE_TRANSACTION,
-				Status:   OPERATION_STATUS_PENDING,
+				Type:     db.OPERATION_TYPE_TRANSACTION,
+				Status:   db.OPERATION_STATUS_PENDING,
 				ChainId:  "1",
 				KeyCurve: "ecdsa",
 			},
@@ -133,7 +136,7 @@ func TestCreateIntent(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
-		var intent Intent
+		var intent libs.Intent
 		err := json.NewDecoder(r.Body).Decode(&intent)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -177,11 +180,11 @@ func TestGetIntent(t *testing.T) {
 		}
 
 		// Mock response intent
-		intent := Intent{
+		intent := libs.Intent{
 			ID:            1,
 			Identity:      "testIdentity",
 			IdentityCurve: "ecdsa",
-			Status:        INTENT_STATUS_COMPLETED,
+			Status:        db.INTENT_STATUS_COMPLETED,
 		}
 
 		json.NewEncoder(w).Encode(intent)
@@ -194,13 +197,13 @@ func TestGetIntent(t *testing.T) {
 	}
 
 	// Decode response
-	var response Intent
+	var response libs.Intent
 	err := json.NewDecoder(w.Body).Decode(&response)
 	if err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if response.ID != 1 || response.Status != INTENT_STATUS_COMPLETED {
+	if response.ID != 1 || response.Status != db.INTENT_STATUS_COMPLETED {
 		t.Errorf("Got unexpected response: %+v", response)
 	}
 }
@@ -239,7 +242,7 @@ func TestGetIntentsWithPagination(t *testing.T) {
 					return
 				}
 				result := IntentsResult{
-					Intents: []*Intent{},
+					Intents: []*libs.Intent{},
 					Total:   0,
 				}
 				json.NewEncoder(w).Encode(result)

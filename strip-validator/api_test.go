@@ -15,7 +15,8 @@ import (
 	"testing"
 
 	identityVerification "github.com/StripChain/strip-node/identity"
-	"github.com/StripChain/strip-node/sequencer"
+	"github.com/StripChain/strip-node/libs"
+	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/ethereum/go-ethereum/crypto"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
@@ -394,38 +395,38 @@ func TestSignatureEndpoint(t *testing.T) {
 		Data []byte `json:"data"`
 	}
 
-	operationA := sequencer.Operation{
+	operationA := db.Operation{
 		SerializedTxn:  "eb808477359400825208945e721f69f4c3c91befeb94b1e068d2e64a82a7f488016345785d8a000080808080",
 		DataToSign:     "bc0efa2d6c1a0fcb888e82d400a8273e88ee641b7b615e071dafdc0f4b44c91f",
 		ChainId:        "1337",
 		GenesisHash:    "",
 		KeyCurve:       "ecdsa",
-		Type:           sequencer.OPERATION_TYPE_TRANSACTION,
+		Type:           db.OPERATION_TYPE_TRANSACTION,
 		Solver:         "",
 		SolverMetadata: "",
 	}
 
-	operationB := sequencer.Operation{
+	operationB := db.Operation{
 		SerializedTxn: "eb018477359400825208941e79929f2a49c27f820340d83b9d0dec35b2137788016345785d8a000080808080",
 		DataToSign:    "2a007c39f2eb743d9afde9e7043d4a22bd262f324fce1c4afc0eb200483eb959",
 		ChainId:       "1337",
 		GenesisHash:   "",
 		KeyCurve:      "ecdsa",
-		Status:        sequencer.OPERATION_STATUS_PENDING,
-		Type:          sequencer.OPERATION_TYPE_TRANSACTION,
+		Status:        db.OPERATION_STATUS_PENDING,
+		Type:          db.OPERATION_TYPE_TRANSACTION,
 	}
 
-	intentA := sequencer.Intent{
-		Operations:    []sequencer.Operation{operationA},
+	intentA := db.Intent{
+		Operations:    []db.Operation{operationA},
 		Identity:      "0xD99eb497608046d3C97B30E62b872daADF6f7dCF",
 		IdentityCurve: "ecdsa",
 		Signature:     "0xa86c8a070b328afe5d56e340a8b1eebbd58e8948b583718b6138a633e6f066c62c5cc1877afb78d956913d37921015722c5eaf8256bf82da7588442320026b741b",
 		Expiry:        uint64(1741196126),
 	}
 
-	intentB := sequencer.Intent{
+	intentB := db.Intent{
 		ID:            1,
-		Operations:    []sequencer.Operation{operationB},
+		Operations:    []db.Operation{operationB},
 		Signature:     "0x334de74b38aee47bc8e6adc006a6d03cd4a6612b566520027f07423f7dce0f3d52f64cc6fef4ea439f03d1712d802bffbad334d29cbf03c482ac0c224408c5461c",
 		Identity:      "0xD99eb497608046d3C97B30E62b872daADF6f7dCF",
 		IdentityCurve: "ecdsa",
@@ -476,7 +477,7 @@ func TestSignatureEndpoint(t *testing.T) {
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					var intent sequencer.Intent
+					var intent libs.Intent
 
 					err := json.NewDecoder(r.Body).Decode(&intent)
 					if err != nil {
@@ -484,7 +485,7 @@ func TestSignatureEndpoint(t *testing.T) {
 						return
 					}
 
-					if reflect.DeepEqual(intent, sequencer.Intent{}) {
+					if reflect.DeepEqual(intent, db.Intent{}) {
 						http.Error(w, "Invalid intent", http.StatusBadRequest)
 						return
 					}

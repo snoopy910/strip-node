@@ -13,62 +13,14 @@ import (
 	"github.com/StripChain/strip-node/cardano"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
+	"github.com/StripChain/strip-node/evm"
+	"github.com/StripChain/strip-node/libs"
+	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/ripple"
+	"github.com/StripChain/strip-node/solana"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
-)
-
-type Operation struct {
-	ID               int64  `json:"id"`
-	SerializedTxn    string `json:"serializedTxn"`
-	DataToSign       string `json:"dataToSign"`
-	ChainId          string `json:"chainId"`
-	GenesisHash      string `json:"genesisHash"`
-	KeyCurve         string `json:"keyCurve"`
-	Status           string `json:"status"`
-	Result           string `json:"result"`
-	Type             string `json:"type"`
-	Solver           string `json:"solver"`
-	SolverMetadata   string `json:"solverMetadata"`
-	SolverDataToSign string `json:"solverDataToSign"`
-	SolverOutput     string `json:"solverOutput"`
-}
-
-type Intent struct {
-	ID            int64       `json:"id"`
-	Operations    []Operation `json:"operations"`
-	Signature     string      `json:"signature"`
-	Identity      string      `json:"identity"`
-	IdentityCurve string      `json:"identityCurve"`
-	Status        string      `json:"status"`
-	Expiry        uint64      `json:"expiry"`
-	CreatedAt     uint64      `json:"createdAt"`
-}
-
-const (
-	INTENT_STATUS_PROCESSING = "processing"
-	INTENT_STATUS_COMPLETED  = "completed"
-	INTENT_STATUS_FAILED     = "failed"
-	INTENT_STATUS_EXPIRED    = "expired"
-)
-
-const (
-	OPERATION_STATUS_PENDING   = "pending"
-	OPERATION_STATUS_WAITING   = "waiting"
-	OPERATION_STATUS_COMPLETED = "completed"
-	OPERATION_STATUS_FAILED    = "failed"
-)
-
-const (
-	OPERATION_TYPE_TRANSACTION    = "transaction"
-	OPERATION_TYPE_SOLVER         = "solver"
-	OPERATION_TYPE_BRIDGE_DEPOSIT = "bridgeDeposit"
-	OPERATION_TYPE_SWAP           = "swap"
-	OPERATION_TYPE_BURN           = "burn"
-	OPERATION_TYPE_BURN_SYNTHETIC = "burn_synthetic"
-	OPERATION_TYPE_WITHDRAW       = "withdraw"
-	OPERATION_TYPE_SEND_TO_BRIDGE = "sendToBridge"
 )
 
 const (
@@ -108,8 +60,8 @@ type GetDogecoinAddressesResponse struct {
 }
 
 type IntentsResult struct {
-	Intents []*Intent `json:"intents"`
-	Total   int       `json:"total"`
+	Intents []*libs.Intent `json:"intents"`
+	Total   int            `json:"total"`
 }
 
 type SolverStatResult struct {
@@ -130,7 +82,7 @@ type MPCKey struct {
 }
 
 type WalletResponse struct {
-	WalletSchema
+	db.WalletSchema
 	MPCKeys []MPCKey `json:"mpcKeys"`
 }
 
@@ -180,7 +132,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		_, err = GetWallet(identity, string(curve))
+		_, err = db.GetWallet(identity, string(curve))
 		if err != nil {
 
 			if err.Error() == "pg: no rows in result set" {
@@ -233,7 +185,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		wallet, err := GetWallet(identity, string(curve))
+		wallet, err := db.GetWallet(identity, string(curve))
 		if err != nil {
 			if err.Error() == "pg: no rows in result set" {
 				http.Error(w, "wallet not found", http.StatusNotFound)
@@ -295,7 +247,7 @@ func startHTTPServer(port string) {
 	http.HandleFunc("/getBridgeAddress", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
-		wallet, err := GetWallet(BridgeContractAddress, "ecdsa")
+		wallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
 		if err != nil {
 			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
@@ -325,7 +277,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		var intent Intent
+		var intent libs.Intent
 
 		err := json.NewDecoder(r.Body).Decode(&intent)
 		if err != nil {
@@ -333,7 +285,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		id, err := AddIntent(&intent)
+		id, err := db.AddIntent(&intent)
 
 		if err != nil {
 			http.Error(w, ADD_INTENT_ERROR, http.StatusInternalServerError)
@@ -362,7 +314,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		intent, err := GetIntent(i)
+		intent, err := db.GetIntent(i)
 		if err != nil {
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
@@ -392,7 +344,7 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, count, err := GetIntentsWithPagination(l, s)
+		intents, count, err := db.GetIntentsWithPagination(l, s)
 		if err != nil {
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
@@ -429,7 +381,7 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, count, err := GetSolverIntents(solver, l, s)
+		intents, count, err := db.GetSolverIntents(solver, l, s)
 		if err != nil {
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
@@ -466,7 +418,7 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, count, err := GetIntentsOfAddress(address, l, s)
+		intents, count, err := db.GetIntentsOfAddress(address, l, s)
 		if err != nil {
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
@@ -546,7 +498,7 @@ func startHTTPServer(port string) {
 
 		}
 
-		totalIntents, err := GetTotalIntents()
+		totalIntents, err := db.GetTotalIntents()
 
 		if err != nil {
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
@@ -582,32 +534,32 @@ func startHTTPServer(port string) {
 		i, _ := strconv.ParseInt(operationId, 10, 64)
 		j, _ := strconv.ParseInt(intentId, 10, 64)
 
-		operation, err := GetOperation(j, i)
+		operation, err := db.GetOperation(j, i)
 		if err != nil {
 			http.Error(w, GET_OPERATION_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		intent, err := GetIntent(j)
+		intent, err := db.GetIntent(j)
 		if err != nil {
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
+		wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
 
 		if err != nil {
 			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		if operation.Result == "" || operation.Status != OPERATION_STATUS_COMPLETED {
+		if operation.Result == "" || operation.Status != db.OPERATION_STATUS_COMPLETED {
 			http.Error(w, OPERATION_NOT_COMPLETED_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		if operation.KeyCurve == "ecdsa" {
-			transfers, err := GetEthereumTransfers(operation.ChainId, operation.Result, wallet.ECDSAPublicKey)
+			transfers, err := evm.GetEthereumTransfers(operation.ChainId, operation.Result, wallet.ECDSAPublicKey)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
@@ -620,7 +572,7 @@ func startHTTPServer(port string) {
 				return
 			}
 		} else if operation.KeyCurve == "eddsa" {
-			transfers, err := GetSolanaTransfers(operation.ChainId, operation.Result, HeliusApiKey)
+			transfers, err := solana.GetSolanaTransfers(operation.ChainId, operation.Result, HeliusApiKey)
 
 			if err != nil {
 				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)

@@ -812,3 +812,35 @@ func GetActiveSigners() ([]HeartbeatSchema, error) {
 	}
 	return heartbeats, nil
 }
+
+func VerifyIdentityLockSchema(intent *libs.Intent, operation *libs.Operation) (*LockSchema, error) {
+	lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+	if err != nil {
+		if err.Error() == "pg: no rows in result set" {
+			_, err := AddLock(intent.Identity, intent.IdentityCurve)
+
+			if err != nil {
+				logger.Sugar().Errorw("error adding lock", "error", err)
+				return nil, err
+			}
+
+			lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+
+			if err != nil {
+				logger.Sugar().Errorw("error getting lock after adding", "error", err)
+				return nil, err
+			}
+		} else {
+			logger.Sugar().Errorw("error getting lock", "error", err)
+			return nil, err
+		}
+	}
+
+	if lockSchema.Locked {
+		UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+		UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+		return nil, fmt.Errorf("identity is locked")
+	}
+
+	return lockSchema, nil
+}

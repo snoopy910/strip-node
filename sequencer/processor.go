@@ -140,31 +140,9 @@ func ProcessIntent(intentID uuid.UUID) {
 				// sign and send the txn. Change status to waiting
 
 				if operation.Type == libs.OperationTypeTransaction {
-					lockSchema, err := db.GetLock(intent.Identity, intent.IdentityCurve)
-					if err != nil {
-						if err.Error() == "pg: no rows in result set" {
-							_, err := db.AddLock(intent.Identity, intent.IdentityCurve)
-
-							if err != nil {
-								logger.Sugar().Errorw("error adding lock", "error", err)
-								break
-							}
-
-							lockSchema, err = db.GetLock(intent.Identity, intent.IdentityCurve)
-
-							if err != nil {
-								logger.Sugar().Errorw("error getting lock after adding", "error", err)
-								break
-							}
-						} else {
-							logger.Sugar().Errorw("error getting lock", "error", err)
-							break
-						}
-					}
-
-					if lockSchema.Locked {
-						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
-						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
 						break
 					}
 
@@ -370,31 +348,9 @@ func ProcessIntent(intentID uuid.UUID) {
 
 					}
 				} else if operation.Type == libs.OperationTypeSolver {
-					lockSchema, err := db.GetLock(intent.Identity, intent.IdentityCurve)
-					if err != nil {
-						if err.Error() == "pg: no rows in result set" {
-							_, err := db.AddLock(intent.Identity, intent.IdentityCurve)
-
-							if err != nil {
-								logger.Sugar().Errorw("error adding lock", "error", err)
-								break
-							}
-
-							lockSchema, err = db.GetLock(intent.Identity, intent.IdentityCurve)
-
-							if err != nil {
-								logger.Sugar().Errorw("error getting lock after adding", "error", err)
-								break
-							}
-						} else {
-							logger.Sugar().Errorw("error getting lock", "error", err)
-							break
-						}
-					}
-
-					if lockSchema.Locked {
-						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
-						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
 						break
 					}
 
@@ -455,31 +411,9 @@ func ProcessIntent(intentID uuid.UUID) {
 					}
 
 					// Process transaction based on key curve and chain type
-					lockSchema, err := db.GetLock(intent.Identity, intent.IdentityCurve)
-					if err != nil {
-						if err.Error() == "pg: no rows in result set" {
-							_, err := db.AddLock(intent.Identity, intent.IdentityCurve)
-
-							if err != nil {
-								logger.Sugar().Errorw("error adding lock", "error", err)
-								break
-							}
-
-							lockSchema, err = db.GetLock(intent.Identity, intent.IdentityCurve)
-
-							if err != nil {
-								logger.Sugar().Errorw("error getting lock after adding", "error", err)
-								break
-							}
-						} else {
-							logger.Sugar().Errorw("error getting lock", "error", err)
-							break
-						}
-					}
-
-					if lockSchema.Locked {
-						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
-						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
 						break
 					}
 
@@ -824,6 +758,12 @@ func ProcessIntent(intentID uuid.UUID) {
 					}
 
 				} else if operation.Type == libs.OperationTypeBridgeDeposit {
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
+						break
+					}
+
 					depositOperation := intent.Operations[i-1]
 
 					if i == 0 || !(depositOperation.Type == libs.OperationTypeSendToBridge) {
@@ -1056,6 +996,11 @@ func ProcessIntent(intentID uuid.UUID) {
 
 					}
 				} else if operation.Type == libs.OperationTypeSwap {
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
+						break
+					}
 					bridgeDeposit := intent.Operations[i-1]
 
 					if i == 0 || !(bridgeDeposit.Type == libs.OperationTypeBridgeDeposit) {
@@ -1151,6 +1096,12 @@ func ProcessIntent(intentID uuid.UUID) {
 
 					break
 				} else if operation.Type == libs.OperationTypeBurn {
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
+						break
+					}
+
 					bridgeSwap := intent.Operations[i-1]
 
 					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != libs.OperationTypeWithdraw {
@@ -1221,6 +1172,12 @@ func ProcessIntent(intentID uuid.UUID) {
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					break
 				} else if operation.Type == libs.OperationTypeBurnSynthetic {
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
+						break
+					}
+
 					// This operation allows direct burning of ERC20 tokens from the wallet
 					// without requiring a prior swap operation
 					burnSyntheticMetadata := BurnSyntheticMetadata{}
@@ -1244,7 +1201,7 @@ func ProcessIntent(intentID uuid.UUID) {
 						"nextOperationId", intent.Operations[i+1].ID,
 						"nextOperationType", intent.Operations[i+1].Type)
 
-					err := json.Unmarshal([]byte(operation.SolverMetadata), &burnSyntheticMetadata)
+					err = json.Unmarshal([]byte(operation.SolverMetadata), &burnSyntheticMetadata)
 					if err != nil {
 						logger.Sugar().Errorw("BURN_SYNTHETIC metadata parsing failed",
 							"operationId", operation.ID,
@@ -1508,6 +1465,12 @@ func ProcessIntent(intentID uuid.UUID) {
 
 					break
 				} else if operation.Type == libs.OperationTypeWithdraw {
+					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
+					if lockSchema == nil {
+						logger.Sugar().Errorw("error verifying identity lock", "error", err)
+						break
+					}
+
 					burn := intent.Operations[i-1]
 
 					if i == 0 || !(burn.Type == libs.OperationTypeBurn || burn.Type == libs.OperationTypeBurnSynthetic) {

@@ -4,6 +4,7 @@ FROM golang:1.19-alpine AS builder
 WORKDIR /build
 RUN apk add build-base curl
 
+ARG ENV
 ENV ENV=${ENV:-development}
 
 # Copy only necessary files
@@ -15,9 +16,6 @@ RUN go build -o bootnode
 
 # Final stage
 FROM alpine:latest
-
-ENV LISTEN_HOST=${LISTEN_HOST:-0.0.0.0}
-ENV PORT=${PORT:-30303}
 
 WORKDIR /app
 RUN apk add curl

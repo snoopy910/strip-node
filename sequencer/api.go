@@ -21,6 +21,8 @@ import (
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/stellar"
 	"github.com/StripChain/strip-node/sui"
+	"github.com/StripChain/strip-node/util/logger"
+	"github.com/google/uuid"
 )
 
 const (
@@ -34,7 +36,7 @@ const (
 	GET_OPERATION_ERROR           = "failed to get operation"
 	OPERATION_NOT_COMPLETED_ERROR = "operation not completed"
 	GET_TRANSFERS_ERROR           = "failed to get transfers"
-	PARSE_INT_ERROR               = "int parsing error"
+	PARSE_UUID_ID_ERROR           = "failed to parse intent id"
 )
 
 type CreateWalletRequest struct {
@@ -286,15 +288,15 @@ func startHTTPServer(port string) {
 		}
 
 		id, err := db.AddIntent(&intent)
-
 		if err != nil {
+			logger.Sugar().Errorw("failed to add intent", "error", err)
 			http.Error(w, ADD_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		go ProcessIntent(id)
 
-		fmt.Fprintf(w, "{\"id\": %d}", id)
+		fmt.Fprintf(w, "{\"id\": \"%s\"}", id.String())
 	})
 
 	// GetIntent endpoint - Retrieves a specific intent by ID
@@ -308,20 +310,23 @@ func startHTTPServer(port string) {
 		enableCors(&w)
 
 		intentId := r.URL.Query().Get("id")
-		i, err := strconv.ParseInt(intentId, 10, 64)
+		id, err := uuid.Parse(intentId)
 		if err != nil {
-			http.Error(w, PARSE_INT_ERROR, http.StatusInternalServerError)
+			logger.Sugar().Errorw("failed to parse intent id", "error", err)
+			http.Error(w, PARSE_UUID_ID_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		intent, err := db.GetIntent(i)
+		intent, err := db.GetIntent(id)
 		if err != nil {
+			logger.Sugar().Errorw("failed to get intent", "error", err)
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(intent)
 		if err != nil {
+			logger.Sugar().Errorw("failed to encode intent", "error", err)
 			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
@@ -531,16 +536,16 @@ func startHTTPServer(port string) {
 
 		operationId := r.URL.Query().Get("operationId")
 		intentId := r.URL.Query().Get("intentId")
-		i, _ := strconv.ParseInt(operationId, 10, 64)
-		j, _ := strconv.ParseInt(intentId, 10, 64)
+		opID, _ := strconv.ParseInt(operationId, 10, 64)
+		intentID, _ := uuid.Parse(intentId)
 
-		operation, err := db.GetOperation(j, i)
+		operation, err := db.GetOperation(intentID, opID)
 		if err != nil {
 			http.Error(w, GET_OPERATION_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		intent, err := db.GetIntent(j)
+		intent, err := db.GetIntent(intentID)
 		if err != nil {
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
@@ -553,7 +558,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		if operation.Result == "" || operation.Status != db.OPERATION_STATUS_COMPLETED {
+		if operation.Result == "" || operation.Status != libs.OperationStatusCompleted {
 			http.Error(w, OPERATION_NOT_COMPLETED_ERROR, http.StatusInternalServerError)
 			return
 		}

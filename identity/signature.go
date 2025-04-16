@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/libs"
@@ -38,21 +39,21 @@ var (
 )
 
 type OperationForSigning struct {
-	SerializedTxn  string `json:"serializedTxn"`
-	DataToSign     string `json:"dataToSign"`
-	ChainId        string `json:"chainId"`
-	GenesisHash    string `json:"genesisHash"`
-	KeyCurve       string `json:"keyCurve"`
-	Type           string `json:"type"`
-	Solver         string `json:"solver"`
-	SolverMetadata string `json:"solverMetadata"`
+	SerializedTxn  string             `json:"serializedTxn"`
+	DataToSign     string             `json:"dataToSign"`
+	ChainId        string             `json:"chainId"`
+	GenesisHash    string             `json:"genesisHash"`
+	KeyCurve       string             `json:"keyCurve"`
+	Type           libs.OperationType `json:"type"`
+	Solver         string             `json:"solver"`
+	SolverMetadata string             `json:"solverMetadata"`
 }
 
 type IntentForSigning struct {
 	Operations    []OperationForSigning `json:"operations"`
 	Identity      string                `json:"identity"`
 	IdentityCurve string                `json:"identityCurve"`
-	Expiry        uint64                `json:"expiry"`
+	Expiry        time.Time             `json:"expiry"`
 }
 
 func VerifySignature(

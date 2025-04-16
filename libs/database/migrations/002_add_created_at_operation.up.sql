@@ -1,1 +1,0 @@
-ALTER TABLE operations ADD COLUMN created_at timestamptz;

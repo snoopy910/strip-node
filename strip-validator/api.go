@@ -535,7 +535,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		if intent.Expiry < uint64(time.Now().Unix()) {
+		if intent.Expiry.Before(time.Now()) {
 			logger.Sugar().Errorw("Intent has expired", "expiryTime", intent.Expiry, "currentTime", time.Now().Unix())
 			http.Error(w, "{\"error\":\"Intent has expired\"}", http.StatusBadRequest)
 			return
@@ -549,12 +549,12 @@ func startHTTPServer(port string) {
 		msg := ""
 
 		operation := intent.Operations[operationIndexInt]
-		if operation.Type == db.OPERATION_TYPE_TRANSACTION {
+		if operation.Type == libs.OperationTypeTransaction {
 			msg = operation.DataToSign
-		} else if operation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE {
+		} else if operation.Type == libs.OperationTypeSendToBridge {
 			// Verify only operation for bridging
 			// Get bridgewallet by calling /getwallet from sequencer api
-			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
+			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+string(intent.IdentityCurve), nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return
@@ -855,7 +855,7 @@ func startHTTPServer(port string) {
 
 			// Set message
 			msg = operation.DataToSign
-		} else if operation.Type == db.OPERATION_TYPE_SOLVER {
+		} else if operation.Type == libs.OperationTypeSolver {
 			intentBytes, err := json.Marshal(intent)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -869,7 +869,7 @@ func startHTTPServer(port string) {
 			}
 
 			msg = res
-		} else if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT {
+		} else if operation.Type == libs.OperationTypeBridgeDeposit {
 			// For bridgeDeposit operations, extract transaction details from metadata
 			logger.Sugar().Infow("Processing bridgeDeposit operation",
 				"intentID", intent.ID,
@@ -877,7 +877,7 @@ func startHTTPServer(port string) {
 				"solverMetadata", operation.SolverMetadata)
 
 			// Create depositOperation variable at the outer scope
-			var depositOperation db.Operation
+			var depositOperation libs.Operation
 			var needPreviousOp bool
 			var tokenAddress string
 
@@ -914,7 +914,7 @@ func startHTTPServer(port string) {
 					tokenAddress = metadata.Token
 				} else {
 					// Use the transaction result from metadata
-					depositOperation = db.Operation{
+					depositOperation = libs.Operation{
 						ChainId: metadata.ChainId,
 						Result:  metadata.Result,
 					}
@@ -938,7 +938,7 @@ func startHTTPServer(port string) {
 
 				// Get the previous operation which should be sendToBridge
 				prevOp := intent.Operations[operationIndexInt-1]
-				if prevOp.Type != db.OPERATION_TYPE_SEND_TO_BRIDGE {
+				if prevOp.Type != libs.OperationTypeSendToBridge {
 					logger.Sugar().Errorw("Previous operation is not sendToBridge",
 						"prevOpType", prevOp.Type,
 						"prevOpIndex", operationIndexInt-1)
@@ -949,7 +949,7 @@ func startHTTPServer(port string) {
 				}
 
 				// Use transaction details from previous operation
-				depositOperation = db.Operation{
+				depositOperation = libs.Operation{
 					ChainId: prevOp.ChainId,
 					Result:  prevOp.Result,
 				}
@@ -1173,27 +1173,27 @@ func startHTTPServer(port string) {
 				"msgLength", len(msg),
 				"transferToken", transfer.Token,
 				"transferAmount", transfer.Amount)
-		} else if operation.Type == db.OPERATION_TYPE_SWAP {
+		} else if operation.Type == libs.OperationTypeSwap {
 			// Validate previous operation
 			bridgeDeposit := intent.Operations[operationIndexInt-1]
 
-			if operationIndexInt == 0 || !(bridgeDeposit.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT) {
+			if operationIndexInt == 0 || !(bridgeDeposit.Type == libs.OperationTypeBridgeDeposit) {
 				logger.Sugar().Errorw("Invalid operation type for swap")
 				return
 			}
 
 			// Set message
 			msg = operation.SolverDataToSign
-		} else if operation.Type == db.OPERATION_TYPE_BURN {
+		} else if operation.Type == libs.OperationTypeBurn {
 			// Validate nearby operations
 			bridgeSwap := intent.Operations[operationIndex-1]
 
-			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != db.OPERATION_TYPE_WITHDRAW {
+			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != libs.OperationTypeWithdraw {
 				fmt.Println("BURN operation must be followed by a WITHDRAW operation")
 				return
 			}
 
-			if operationIndex == 0 || !(bridgeSwap.Type == db.OPERATION_TYPE_SWAP) {
+			if operationIndex == 0 || !(bridgeSwap.Type == libs.OperationTypeSwap) {
 				logger.Sugar().Errorw("Invalid operation type for swap")
 				return
 			}
@@ -1202,13 +1202,13 @@ func startHTTPServer(port string) {
 
 			// Set message
 			msg = operation.SolverDataToSign
-		} else if operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC {
+		} else if operation.Type == libs.OperationTypeBurnSynthetic {
 			// This operation allows direct burning of ERC20 tokens from the wallet
 			// without requiring a prior swap operation
 			burnSyntheticMetadata := BurnSyntheticMetadata{}
 
 			// Verify that this operation is followed by a withdraw operation
-			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != db.OPERATION_TYPE_WITHDRAW {
+			if operationIndex+1 >= len(intent.Operations) || intent.Operations[operationIndex+1].Type != libs.OperationTypeWithdraw {
 				logger.Sugar().Errorw("BURN_SYNTHETIC operation must be followed by a WITHDRAW operation")
 				return
 			}
@@ -1220,7 +1220,7 @@ func startHTTPServer(port string) {
 			}
 
 			// Get bridgewallet by calling /getwallet from sequencer api
-			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
+			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+string(intent.IdentityCurve), nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return
@@ -1273,11 +1273,11 @@ func startHTTPServer(port string) {
 				return
 			}
 			msg = operation.SolverDataToSign
-		} else if operation.Type == db.OPERATION_TYPE_WITHDRAW {
+		} else if operation.Type == libs.OperationTypeWithdraw {
 			// Verify nearby operations
 			burn := intent.Operations[operationIndex-1]
 
-			if operationIndex == 0 || !(burn.Type == db.OPERATION_TYPE_BURN || burn.Type == db.OPERATION_TYPE_BURN_SYNTHETIC) {
+			if operationIndex == 0 || !(burn.Type == libs.OperationTypeBurn || burn.Type == libs.OperationTypeBurnSynthetic) {
 				logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
 				return
 			}
@@ -1288,12 +1288,12 @@ func startHTTPServer(port string) {
 			// Handle different burn operation types
 			var tokenToWithdraw string
 			var burnTokenAddress string
-			if burn.Type == db.OPERATION_TYPE_BURN {
+			if burn.Type == libs.OperationTypeBurn {
 				var burnMetadata BurnMetadata
 				json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
 				tokenToWithdraw = withdrawMetadata.Token
 				burnTokenAddress = burnMetadata.Token
-			} else if burn.Type == db.OPERATION_TYPE_BURN_SYNTHETIC {
+			} else if burn.Type == libs.OperationTypeBurnSynthetic {
 				var burnSyntheticMetadata BurnSyntheticMetadata
 				json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
 				tokenToWithdraw = withdrawMetadata.Token
@@ -1361,11 +1361,11 @@ func startHTTPServer(port string) {
 			}
 			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
 		} else if keyCurve == ECDSA_CURVE {
-			if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT ||
-				operation.Type == db.OPERATION_TYPE_SWAP ||
-				operation.Type == db.OPERATION_TYPE_BURN ||
-				operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC ||
-				operation.Type == db.OPERATION_TYPE_WITHDRAW {
+			if operation.Type == libs.OperationTypeBridgeDeposit ||
+				operation.Type == libs.OperationTypeSwap ||
+				operation.Type == libs.OperationTypeBurn ||
+				operation.Type == libs.OperationTypeBurnSynthetic ||
+				operation.Type == libs.OperationTypeWithdraw {
 				go generateSignatureMessage(BridgeContractAddress, "ecdsa", "ecdsa", []byte(msg))
 			} else {
 				go generateSignatureMessage(identity, identityCurve, keyCurve, []byte(msg))

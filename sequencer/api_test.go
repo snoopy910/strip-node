@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/StripChain/strip-node/libs"
-	db "github.com/StripChain/strip-node/libs/database"
+	"github.com/google/uuid"
 )
 
 // TestCreateWalletEndpoint tests the /createWallet endpoint for creating a wallet.
@@ -111,11 +111,11 @@ func TestCreateIntent(t *testing.T) {
 	testIntent := libs.Intent{
 		Identity:      "testIdentity",
 		IdentityCurve: "ecdsa",
-		Status:        db.INTENT_STATUS_PROCESSING,
+		Status:        libs.IntentStatusProcessing,
 		Operations: []libs.Operation{
 			{
-				Type:     db.OPERATION_TYPE_TRANSACTION,
-				Status:   db.OPERATION_STATUS_PENDING,
+				Type:     libs.OperationTypeTransaction,
+				Status:   libs.OperationStatusPending,
 				ChainId:  "1",
 				KeyCurve: "ecdsa",
 			},
@@ -181,10 +181,10 @@ func TestGetIntent(t *testing.T) {
 
 		// Mock response intent
 		intent := libs.Intent{
-			ID:            1,
+			ID:            uuid.New(),
 			Identity:      "testIdentity",
 			IdentityCurve: "ecdsa",
-			Status:        db.INTENT_STATUS_COMPLETED,
+			Status:        libs.IntentStatusCompleted,
 		}
 
 		json.NewEncoder(w).Encode(intent)
@@ -203,7 +203,7 @@ func TestGetIntent(t *testing.T) {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if response.ID != 1 || response.Status != db.INTENT_STATUS_COMPLETED {
+	if response.Status != libs.IntentStatusCompleted {
 		t.Errorf("Got unexpected response: %+v", response)
 	}
 }

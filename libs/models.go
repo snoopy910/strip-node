@@ -1,31 +1,78 @@
 package libs
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Operation struct {
-	ID               int64     `json:"id"`
-	SerializedTxn    string    `json:"serializedTxn"`
-	DataToSign       string    `json:"dataToSign"`
-	ChainId          string    `json:"chainId"`
-	GenesisHash      string    `json:"genesisHash"`
-	KeyCurve         string    `json:"keyCurve"`
-	Status           string    `json:"status"`
-	Result           string    `json:"result"`
-	Type             string    `json:"type"`
-	Solver           string    `json:"solver"`
-	SolverMetadata   string    `json:"solverMetadata"`
-	SolverDataToSign string    `json:"solverDataToSign"`
-	SolverOutput     string    `json:"solverOutput"`
-	CreatedAt        time.Time `json:"createdAt"`
+	ID               int64           `json:"id"`
+	SerializedTxn    string          `json:"serializedTxn"`
+	DataToSign       string          `json:"dataToSign"`
+	ChainId          string          `json:"chainId"`
+	GenesisHash      string          `json:"genesisHash"`
+	KeyCurve         string          `json:"keyCurve"`
+	Status           OperationStatus `json:"status"`
+	Result           string          `json:"result"`
+	Type             OperationType   `json:"type"`
+	Solver           string          `json:"solver"`
+	SolverMetadata   string          `json:"solverMetadata"`
+	SolverDataToSign string          `json:"solverDataToSign"`
+	SolverOutput     string          `json:"solverOutput"`
+	CreatedAt        time.Time       `json:"createdAt"`
 }
 
 type Intent struct {
-	ID            int64       `json:"id"`
-	Operations    []Operation `json:"operations"`
-	Signature     string      `json:"signature"`
-	Identity      string      `json:"identity"`
-	IdentityCurve string      `json:"identityCurve"`
-	Status        string      `json:"status"`
-	Expiry        uint64      `json:"expiry"`
-	CreatedAt     uint64      `json:"createdAt"`
+	ID            uuid.UUID    `json:"id"`
+	Operations    []Operation  `json:"operations"`
+	Signature     string       `json:"signature"`
+	Identity      string       `json:"identity"`
+	IdentityCurve string       `json:"identityCurve"`
+	Status        IntentStatus `json:"status"`
+	Expiry        time.Time    `json:"expiry"`
+	CreatedAt     time.Time    `json:"createdAt"`
 }
+
+type OperationType string
+
+const (
+	OperationTypeTransaction   OperationType = "TRANSACTION"
+	OperationTypeSolver        OperationType = "SOLVER"
+	OperationTypeBridgeDeposit OperationType = "BRIDGE_DEPOSIT"
+	OperationTypeSwap          OperationType = "SWAP"
+	OperationTypeBurn          OperationType = "BURN"
+	OperationTypeBurnSynthetic OperationType = "BURN_SYNTHETIC"
+	OperationTypeWithdraw      OperationType = "WITHDRAW"
+	OperationTypeSendToBridge  OperationType = "SEND_TO_BRIDGE"
+)
+
+type IntentStatus string
+
+const (
+	IntentStatusProcessing IntentStatus = "PROCESSING"
+	IntentStatusCompleted  IntentStatus = "COMPLETED"
+	IntentStatusFailed     IntentStatus = "FAILED"
+	IntentStatusExpired    IntentStatus = "EXPIRED"
+)
+
+type OperationStatus string
+
+const (
+	OperationStatusPending   OperationStatus = "PENDING"
+	OperationStatusWaiting   OperationStatus = "WAITING"
+	OperationStatusCompleted OperationStatus = "COMPLETED"
+	OperationStatusFailed    OperationStatus = "FAILED"
+	OperationStatusExpired   OperationStatus = "EXPIRED"
+)
+
+// type Curve string
+
+// const (
+// 	CurveECDSA Curve = "ECDSA"
+// 	CurveEDDSA Curve = "EDDSA"
+// )
+
+// func (c Curve) String() string {
+// 	return string(c)
+// }

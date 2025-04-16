@@ -7,7 +7,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"strings"
 	"time"
 
 	db "github.com/StripChain/strip-node/libs/database"
@@ -519,7 +518,7 @@ func createWallet(identity string, identityCurve string) error {
 	wallet := db.WalletSchema{
 		Identity:                 identity,
 		IdentityCurve:            identityCurve,
-		Signers:                  strings.Join(signersPublicKeyList, ","),
+		Signers:                  signersPublicKeyList,
 		EDDSAPublicKey:           eddsaAddress,
 		AptosEDDSAPublicKey:      aptosEddsaAddress,
 		ECDSAPublicKey:           ecdsaAddress,

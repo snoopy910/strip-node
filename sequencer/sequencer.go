@@ -4,6 +4,7 @@ import (
 	"log"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/libs"
 	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 )
@@ -26,7 +27,7 @@ func StartSequencer(
 
 	HeliusApiKey = heliusApiKey
 
-	intents, err := db.GetIntentsWithStatus(db.INTENT_STATUS_PROCESSING)
+	intents, err := db.GetIntentsWithStatus(libs.IntentStatusProcessing)
 	if err != nil {
 		log.Fatal(err)
 	}

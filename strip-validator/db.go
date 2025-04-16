@@ -58,7 +58,7 @@ func AddKeyShare(identity string, identityCurve string, keyCurve string, key str
 
 func GetKeyShare(identity string, identityCurve string, keyCurve string) (string, error) {
 	var keys []KVStore
-	err := client.Model(&keys).Where("key = ?", identity+"_"+identityCurve+"_"+keyCurve).Select()
+	err := client.Model(&keys).Where("key = ?", identity+"_"+string(identityCurve)+"_"+keyCurve).Select()
 
 	if err != nil {
 		return "", err

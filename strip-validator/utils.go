@@ -32,8 +32,9 @@ func publicKeyToAddress(pubkey []byte) string {
 	return publicAddress
 }
 
+// toHexInt returns a 64-character hexadecimal string of n, padded with leading zeros.
 func toHexInt(n *big.Int) string {
-	return fmt.Sprintf("%x", n) // or %x or upper case
+	return fmt.Sprintf("%064x", n)
 }
 
 func SliceContainsString(s []string, e string) bool {

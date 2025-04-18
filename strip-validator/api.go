@@ -1257,8 +1257,6 @@ func startHTTPServer(port string) {
 			// go generateSignatureMessage(identity, identityCurve, keyCurve, suiMsg)
 			msgBytes, _ := lib.NewBase64Data(msg)
 			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, *msgBytes)
-		case blockchains.Aptos:
-			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
 		case blockchains.Stellar:
 			msgBytes, err := base64.StdEncoding.DecodeString(msg)
 			if err != nil {
@@ -1275,7 +1273,7 @@ func startHTTPServer(port string) {
 				return
 			}
 			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
-		case blockchains.Ripple, blockchains.Cardano:
+		case blockchains.Ripple, blockchains.Cardano, blockchains.Aptos:
 			msgBytes, err := hex.DecodeString(msg)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("{\"error\":\"%s\"}", err.Error()), http.StatusInternalServerError)

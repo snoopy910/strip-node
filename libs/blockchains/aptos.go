@@ -1,21 +1,24 @@
 package blockchains
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
-	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util"
+	"github.com/StripChain/strip-node/util/logger"
 	"github.com/the729/lcs"
 
-	aptosClient "github.com/portto/aptos-go-sdk/client"
+	aptos "github.com/aptos-labs/aptos-go-sdk"
+	aptosApi "github.com/aptos-labs/aptos-go-sdk/api"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
+	"github.com/aptos-labs/aptos-go-sdk/crypto"
 	aptosModels "github.com/portto/aptos-go-sdk/models"
 )
 
@@ -28,24 +31,41 @@ const (
 func NewAptosBlockchain(networkType NetworkType) (IBlockchain, error) {
 	network := Network{
 		networkType: networkType,
-		nodeURL:     "https://fullnode.mainnet.aptoslabs.com",
+		nodeURL:     "https://api.mainnet.aptoslabs.com/v1",
 		networkID:   "mainnet",
 	}
+	chainID := "1"
 
 	if networkType == Testnet {
-		network.nodeURL = "https://fullnode.devnet.aptoslabs.com"
+		network.nodeURL = "https://api.testnet.aptoslabs.com/v1"
 		network.networkID = "testnet"
+		chainID = "2"
 	}
 
-	client := aptosClient.NewAptosClient(network.nodeURL)
+	if networkType == Devnet {
+		network.nodeURL = "https://api.devnet.aptoslabs.com/v1"
+		network.networkID = "devnet"
+		chainID = "178"
+	}
 
+	// Initialize Aptos client
+	chainIDInt, err := strconv.Atoi(chainID)
+	if err != nil {
+		return nil, fmt.Errorf("error converting chainid to int: %v", err)
+	}
+
+	client, err := aptos.NewNodeClient(network.nodeURL, uint8(chainIDInt))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Aptos client: %v", err)
+	}
 	return &AptosBlockchain{
 		BaseBlockchain: BaseBlockchain{
 			chainName:       Aptos,
 			network:         network,
 			keyCurve:        common.CurveEddsa,
-			signingEncoding: "base64",
-			decimals:        7,
+			signingEncoding: "hex",
+			decimals:        8,
+			chainID:         &chainID,
 			opTimeout:       time.Second * 10,
 		},
 		client: client,
@@ -58,104 +78,109 @@ var _ IBlockchain = &AptosBlockchain{}
 // AptosBlockchain implements the IBlockchain interface for Stellar
 type AptosBlockchain struct {
 	BaseBlockchain
-	client aptosClient.AptosClient
+	client *aptos.NodeClient
 }
 
 func (b *AptosBlockchain) BroadcastTransaction(txn string, signatureHex string, publicKey *string) (string, error) {
-	// Initialize transaction containers
-	// Transaction is the outer wrapper that includes both raw transaction and auth data
-	tx := &aptosModels.Transaction{}
-	// RawTransaction contains the unsigned transaction payload
-	rawTxn := &aptosModels.RawTransaction{}
+	// Construct the transaction from serializedTxn
+	rawTxn := &aptos.RawTransaction{}
 
-	// Remove '0x' prefix if present and decode hex-encoded transaction
-	serializedTxn := strings.TrimPrefix(txn, "0x")
-	decodedTransactionData, err := hex.DecodeString(serializedTxn)
+	decodedTransactionData, err := hex.DecodeString(strings.TrimPrefix(txn, "0x"))
 	if err != nil {
 		return "", fmt.Errorf("error decoding transaction data: %v", err)
 	}
 
-	// Deserialize the transaction using Aptos's LCS (Libra Canonical Serialization)
-	// This reconstructs the RawTransaction with sender, payload, gas parameters, etc.
-	err = lcs.Unmarshal(decodedTransactionData, rawTxn)
+	err = bcs.Deserialize(rawTxn, decodedTransactionData)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshall raw transaction: %v", err)
+		// it missing a byte, not sure why but the transaction is still valid
+		logger.Sugar().Warnw("error unmarshalling raw transaction", "error", err, "txn", txn)
+		// return "", fmt.Errorf("error unmarshalling raw transaction: %v", err)
 	}
 
-	// Assign the deserialized raw transaction to our transaction wrapper
-	tx.RawTransaction = *rawTxn
-
-	// Decode the hex-encoded Ed25519 signature
-	// Aptos uses 64-byte Ed25519 signatures
+	// Retrieve signatureHex
 	signature, err := hex.DecodeString(signatureHex)
 	if err != nil {
 		return "", fmt.Errorf("error decoding signature: %v", err)
 	}
 
-	// Decode the hex-encoded Ed25519 public key (32 bytes)
-	// and create the transaction authenticator
+	// Sign transaction with pubKey and signature
 	publicKeyBytes, err := hex.DecodeString(strings.TrimPrefix(*publicKey, "0x"))
 	if err != nil {
 		return "", fmt.Errorf("error decoding public key: %v", err)
 	}
+	authenticator := &aptos.TransactionAuthenticator{
+		Variant: aptos.TransactionAuthenticatorEd25519,
+		Auth: &aptos.Ed25519TransactionAuthenticator{
+			Sender: &crypto.AccountAuthenticator{
+				Variant: crypto.AccountAuthenticatorEd25519,
+				Auth: &crypto.Ed25519Authenticator{
+					PubKey: &crypto.Ed25519PublicKey{
+						Inner: publicKeyBytes,
+					},
+					Sig: &crypto.Ed25519Signature{
+						Inner: [64]byte(signature),
+					},
+				},
+			},
+		},
+	}
 
-	// Create a signed transaction by adding the Ed25519 authenticator
-	// This combines the public key and signature into Aptos's authentication structure
-	signedTx := tx.SetAuthenticator(aptosModels.TransactionAuthenticatorEd25519{
-		PublicKey: publicKeyBytes,
-		Signature: signature,
-	})
+	signedTx := &aptos.SignedTransaction{
+		Transaction:   rawTxn,
+		Authenticator: authenticator,
+	}
 
-	// Submit the signed transaction to the Aptos network
-	// The response includes the transaction hash for tracking
-	response, err := b.client.SubmitTransaction(context.Background(), signedTx.UserTransaction)
+	// Submit transaction
+	response, err := b.client.SubmitTransaction(signedTx)
 	if err != nil {
 		return "", fmt.Errorf("error submitting transaction: %v", err)
 	}
 
-	// Return the transaction hash which can be used to track the transaction status
+	fmt.Println("Submitted aptos transaction with hash:", response.Hash)
+
 	return response.Hash, nil
 }
 
 func (b *AptosBlockchain) GetTransfers(txHash string, address *string) ([]common.Transfer, error) {
-	// Fetch the transaction by its hash
-	// This includes the payload with transfer details and arguments
-	tx, err := b.client.GetTransactionByHash(context.Background(), txHash)
+	txResp, err := b.client.TransactionByHash(txHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transaction receipt: %v", err)
 	}
 
 	var transfers []common.Transfer
 
-	// Switch on the transaction function to handle different transfer types
-	switch tx.Payload.Function {
+	tx, err := txResp.UserTransaction()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user transaction: %v", err)
+	}
 
-	// Case 1: New Fungible Asset Standard Transfer
-	// This is Aptos's newer token standard with enhanced features
+	payload, ok := tx.Payload.Inner.(*aptosApi.TransactionPayloadEntryFunction)
+	if !ok {
+		return nil, fmt.Errorf("invalid payload type: %v", tx.Payload.Type)
+	}
+	sender := tx.Sender.String()
+
+	switch payload.Function {
+
 	case FUNGIBLE_ASSET_TRANSFER:
-		// Extract token address from the nested map structure
-		// The 'inner' field contains the actual token address
-		address := tx.Payload.Arguments[0].(map[string]interface{})["inner"].(string)
 
-		// Fetch token metadata (symbol, decimals) from the contract
+		address := payload.Arguments[0].(map[string]interface{})["inner"].(string)
+
 		metadata, err := b.getMetadata(address)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch token metadata: %v", err)
+			return nil, fmt.Errorf("error fetching token metadata, %w", err)
 		}
 
-		// Get transfer amount (3rd argument in the payload)
-		amount := tx.Payload.Arguments[2].(string)
+		amount := payload.Arguments[2].(string)
 
-		// Format amount according to token decimals
 		formattedAmount, err := getFormattedAmount(amount, metadata.Decimal)
 		if err != nil {
-			return nil, fmt.Errorf("failed to format amount: %v", err)
+			return nil, fmt.Errorf("wrror formatting amount, %w", err)
 		}
 
-		// Create transfer record with token details
 		transfers = append(transfers, common.Transfer{
-			From:         tx.Sender,
-			To:           tx.Payload.Arguments[1].(string),
+			From:         sender,
+			To:           payload.Arguments[1].(string),
 			Amount:       formattedAmount,
 			Token:        metadata.Symbol,
 			IsNative:     false,
@@ -163,21 +188,17 @@ func (b *AptosBlockchain) GetTransfers(txHash string, address *string) ([]common
 			ScaledAmount: amount,
 		})
 
-	// Case 2: Native APT Transfer using account transfer
-	// This is a direct transfer of native APT tokens
 	case ACCOUNT_APT_TRANSFER:
-		// Get transfer amount (2nd argument)
-		amount := tx.Payload.Arguments[1].(string)
-		// APT has 8 decimal places
+
+		amount := payload.Arguments[1].(string)
 		formattedAmount, err := getFormattedAmount(amount, 8)
 		if err != nil {
-			return nil, fmt.Errorf("failed to format amount: %v", err)
+			return nil, fmt.Errorf("error formatting amount, %w", err)
 		}
 
-		// Create transfer record for native APT
 		transfers = append(transfers, common.Transfer{
-			From:         tx.Sender,
-			To:           tx.Payload.Arguments[0].(string),
+			From:         sender,
+			To:           payload.Arguments[0].(string),
 			Amount:       formattedAmount,
 			Token:        b.TokenSymbol(),
 			IsNative:     true,
@@ -185,26 +206,23 @@ func (b *AptosBlockchain) GetTransfers(txHash string, address *string) ([]common
 			ScaledAmount: amount,
 		})
 
-	// Case 3: Generic Coin Transfers
-	// This handles both APT and other token transfers using the coin module
 	case ACCOUNT_COIN_TRANSFER, COIN_TRANSFER:
-		// Get the type arguments which specify which coins are being transferred
-		assetType := tx.Payload.TypeArguments
 
-		// Process each asset type in the transaction
+		assetType := payload.TypeArguments
+
 		for _, asset := range assetType {
-			// Check if it's a native APT transfer
+
 			if asset == APT_COIN_TYPE {
-				// Handle native APT transfer
-				amount := tx.Payload.Arguments[1].(string)
+
+				amount := payload.Arguments[1].(string)
 				formattedAmount, err := getFormattedAmount(amount, 8)
 				if err != nil {
-					return nil, fmt.Errorf("failed to format amount: %v", err)
+					return nil, fmt.Errorf("error formatting amount, %w", err)
 				}
 
 				transfers = append(transfers, common.Transfer{
-					From:         tx.Sender,
-					To:           tx.Payload.Arguments[0].(string),
+					From:         sender,
+					To:           payload.Arguments[0].(string),
 					Amount:       formattedAmount,
 					Token:        b.TokenSymbol(),
 					IsNative:     true,
@@ -213,28 +231,22 @@ func (b *AptosBlockchain) GetTransfers(txHash string, address *string) ([]common
 				})
 
 			} else {
-				// Handle other token transfers
-				// Extract token address from the type argument (format: address::module::type)
 				tokenAddress := strings.Split(asset, "::")[0]
 
-				// Fetch token metadata
 				metadata, err := b.getMetadata(tokenAddress)
 				if err != nil {
-					return nil, fmt.Errorf("failed to fetch token metadata: %v", err)
+					return nil, fmt.Errorf("error fetching token metadata, %w", err)
 				}
 
-				amount := tx.Payload.Arguments[1].(string)
-
-				// Format amount according to token decimals
+				amount := payload.Arguments[1].(string)
 				formattedAmount, err := getFormattedAmount(amount, metadata.Decimal)
 				if err != nil {
-					return nil, fmt.Errorf("failed to format amount: %v", err)
+					return nil, fmt.Errorf("error formatting amount, %w", err)
 				}
 
-				// Create transfer record for the token
 				transfers = append(transfers, common.Transfer{
-					From:         tx.Sender,
-					To:           tx.Payload.Arguments[0].(string),
+					From:         sender,
+					To:           payload.Arguments[0].(string),
 					Amount:       formattedAmount,
 					Token:        metadata.Symbol,
 					IsNative:     false,
@@ -249,12 +261,16 @@ func (b *AptosBlockchain) GetTransfers(txHash string, address *string) ([]common
 }
 
 func (b *AptosBlockchain) IsTransactionBroadcastedAndConfirmed(txnHash string) (bool, error) {
-	tx, err := b.client.GetTransactionByHash(context.Background(), txnHash)
+	tx, err := b.client.TransactionByHash(txnHash)
 	if err != nil {
 		return false, fmt.Errorf("error getting transaction by hash: %v", err)
 	}
 
-	return tx.Success, nil
+	success := tx.Success()
+	if success == nil {
+		return false, nil
+	}
+	return *success, nil
 }
 
 func (b *AptosBlockchain) BuildWithdrawTx(bridgeAddress string,
@@ -283,9 +299,14 @@ func (b *AptosBlockchain) BuildWithdrawTx(bridgeAddress string,
 			return "", "", fmt.Errorf("failed to convert account address: %v", err)
 		}
 
+		decodedBridgeAddress, err := hex.DecodeString(strings.TrimPrefix(bridgeAddress, "0x"))
+		if err != nil {
+			return "", "", fmt.Errorf("failed to decode bridge address: %v", err)
+		}
+
 		// Get sender's account info to retrieve the current sequence number
 		// Sequence number prevents transaction replay and must be incremented for each tx
-		accountInfo, err := b.client.GetAccount(context.Background(), bridgeAddress)
+		accountInfo, err := b.client.Account(aptos.AccountAddress(decodedBridgeAddress))
 		if err != nil {
 			return "", "", fmt.Errorf("failed to get accountInfo: %v", err)
 		}
@@ -369,7 +390,12 @@ func (b *AptosBlockchain) BuildWithdrawTx(bridgeAddress string,
 		return "", "", fmt.Errorf("failed to convert account address: %v", err)
 	}
 
-	accountInfo, err := b.client.GetAccount(context.Background(), bridgeAddress)
+	decodedBridgeAddress, err := hex.DecodeString(strings.TrimPrefix(bridgeAddress, "0x"))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to decode bridge address: %v", err)
+	}
+
+	accountInfo, err := b.client.Account(aptos.AccountAddress(decodedBridgeAddress))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get accountInfo: %v", err)
 	}
@@ -444,26 +470,29 @@ type AssetInfo struct {
 }
 
 func (b *AptosBlockchain) getMetadata(address string) (*AssetData, error) {
-	url := fmt.Sprintf("%s/v1/accounts/%s/resources", b.network.nodeURL, address)
-
-	resp, err := http.Get(url)
+	decodedAddress, err := hex.DecodeString(strings.TrimPrefix(address, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode address: %w", err)
+	}
+	resp, err := b.client.AccountResources(aptos.AccountAddress(decodedAddress))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get coin info: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error: received status code %d", resp.StatusCode)
-	}
-
-	var resources []AssetInfo
-	if err := json.NewDecoder(resp.Body).Decode(&resources); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	for _, info := range resources {
+	for _, info := range resp {
 		if strings.Contains(info.Type, "CoinInfo") || info.Type == FUNGIBLE_ASSET_TYPE {
-			return &info.Data, nil
+			assetData := &AssetData{}
+			for key, data := range info.Data {
+				switch strings.ToLower(key) {
+				case "decimals":
+					assetData.Decimal = int(data.(float64))
+				case "name":
+					assetData.Name = data.(string)
+				case "symbol":
+					assetData.Symbol = data.(string)
+				}
+			}
+			return assetData, nil
 		}
 	}
 	return nil, fmt.Errorf("there is no coin info")

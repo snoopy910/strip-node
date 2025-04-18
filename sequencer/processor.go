@@ -183,6 +183,8 @@ ProcessLoop:
 					txHash, err := opBlockchain.BroadcastTransaction(operation.SerializedTxn, signature, &publicKey)
 					if err != nil {
 						fmt.Printf("error broadcasting transaction: %+v\n", err)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
 

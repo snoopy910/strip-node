@@ -22,7 +22,6 @@ import (
 	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/mr-tron/base58"
-	"github.com/stellar/go/clients/horizonclient"
 )
 
 // NewSolanaBlockchain creates a new Stellar blockchain instance
@@ -31,13 +30,13 @@ func NewSolanaBlockchain(networkType NetworkType) (IBlockchain, error) {
 	heliusURL := "https://api.helius.xyz/v0/transactions?api-key=" + apiKey
 	network := Network{
 		networkType: networkType,
-		nodeURL:     horizonclient.DefaultPublicNetClient.HorizonURL,
+		nodeURL:     "https://api.solana.com",
 		networkID:   "mainnet",
 	}
 
-	if networkType == Testnet {
-		network.nodeURL = horizonclient.DefaultTestNetClient.HorizonURL
-		network.networkID = "testnet"
+	if networkType == Devnet {
+		network.nodeURL = "https://api.devnet.solana.com"
+		network.networkID = "devnet"
 		heliusURL = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
 	}
 

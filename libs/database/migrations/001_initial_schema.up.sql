@@ -51,6 +51,7 @@ CREATE TYPE blockchain_id AS ENUM (
 create type network_type as enum (
     'MAINNET',
     'TESTNET',
+    'DEVNET',
     'REGNET'
 );
 

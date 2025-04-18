@@ -554,7 +554,8 @@ func startHTTPServer(port string) {
 		} else if operation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE {
 			// Verify only operation for bridging
 			// Get bridgewallet by calling /getwallet from sequencer api
-			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
+			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
+			req, err := http.NewRequest("GET", SequencerHost+"/getBridgeAddress", nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return
@@ -1230,6 +1231,7 @@ func startHTTPServer(port string) {
 			}
 
 			// Get bridgewallet by calling /getwallet from sequencer api
+			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
 			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)

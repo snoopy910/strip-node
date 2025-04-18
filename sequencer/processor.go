@@ -124,6 +124,8 @@ func ProcessIntent(intentId int64) {
 
 						var txnHash string
 
+						// if chain.ChainType == "solana" {
+						// 	txnHash, err = sendSolanaTransactionWithValidation(operation.SerializedTxn, operation.ChainId, operation.KeyCurve, operation.DataToSign, signature)
 						if chain.ChainType == "bitcoin" {
 							signature, bitcoinPubkey, err := getSignatureEx(intent, i)
 							if err != nil {

@@ -377,6 +377,7 @@ func ProcessIntent(intentId int64) {
 						db.UpdateOperationResult(operation.ID, db.OPERATION_STATUS_WAITING, result)
 					}
 				} else if operation.Type == db.OPERATION_TYPE_SEND_TO_BRIDGE {
+					logger.Sugar().Infow("Send to bridge", "operation", operation)
 					// Get bridge wallet for the chain
 					bridgeWallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
 					if err != nil {
@@ -744,11 +745,7 @@ func ProcessIntent(intentId int64) {
 					}
 
 				} else if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT {
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
+					logger.Sugar().Infow("Bridge deposit", "operation", operation)
 
 					depositOperation := intent.Operations[i-1]
 
@@ -987,11 +984,8 @@ func ProcessIntent(intentId int64) {
 
 					}
 				} else if operation.Type == db.OPERATION_TYPE_SWAP {
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
+					logger.Sugar().Infow("Swapping bridge", "operation", operation)
+
 					bridgeDeposit := intent.Operations[i-1]
 
 					if i == 0 || !(bridgeDeposit.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT) {

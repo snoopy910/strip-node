@@ -3,35 +3,37 @@ package libs
 import (
 	"time"
 
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/google/uuid"
 )
 
 type Operation struct {
-	ID               int64           `json:"id"`
-	SerializedTxn    string          `json:"serializedTxn"`
-	DataToSign       string          `json:"dataToSign"`
-	ChainId          string          `json:"chainId"`
-	GenesisHash      string          `json:"genesisHash"`
-	KeyCurve         string          `json:"keyCurve"`
-	Status           OperationStatus `json:"status"`
-	Result           string          `json:"result"`
-	Type             OperationType   `json:"type"`
-	Solver           string          `json:"solver"`
-	SolverMetadata   string          `json:"solverMetadata"`
-	SolverDataToSign string          `json:"solverDataToSign"`
-	SolverOutput     string          `json:"solverOutput"`
-	CreatedAt        time.Time       `json:"createdAt"`
+	ID               int64                    `json:"id"`
+	SerializedTxn    string                   `json:"serializedTxn"`
+	DataToSign       string                   `json:"dataToSign"`
+	BlockchainID     blockchains.BlockchainID `json:"blockchainID"`
+	NetworkType      blockchains.NetworkType  `json:"networkType"`
+	GenesisHash      string                   `json:"genesisHash"`
+	Status           OperationStatus          `json:"status"`
+	Result           string                   `json:"result"`
+	Type             OperationType            `json:"type"`
+	Solver           string                   `json:"solver"`
+	SolverMetadata   string                   `json:"solverMetadata"`
+	SolverDataToSign string                   `json:"solverDataToSign"`
+	SolverOutput     string                   `json:"solverOutput"`
+	CreatedAt        time.Time                `json:"createdAt"`
 }
 
 type Intent struct {
-	ID            uuid.UUID    `json:"id"`
-	Operations    []Operation  `json:"operations"`
-	Signature     string       `json:"signature"`
-	Identity      string       `json:"identity"`
-	IdentityCurve string       `json:"identityCurve"`
-	Status        IntentStatus `json:"status"`
-	Expiry        time.Time    `json:"expiry"`
-	CreatedAt     time.Time    `json:"createdAt"`
+	ID           uuid.UUID                `json:"id"`
+	Operations   []Operation              `json:"operations"`
+	Signature    string                   `json:"signature"`
+	Identity     string                   `json:"identity"`
+	BlockchainID blockchains.BlockchainID `json:"blockchainID"`
+	NetworkType  blockchains.NetworkType  `json:"networkType"`
+	Status       IntentStatus             `json:"status"`
+	Expiry       time.Time                `json:"expiry"`
+	CreatedAt    time.Time                `json:"createdAt"`
 }
 
 type OperationType string

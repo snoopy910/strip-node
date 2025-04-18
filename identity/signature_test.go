@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
@@ -40,7 +41,7 @@ func TestVerifySignatureBitcoinSuccess(t *testing.T) {
 	signatureHex := hex.EncodeToString(signature)
 
 	// Verify the signature
-	valid, err := VerifySignature(publicKeyHex, BITCOIN_CURVE, message, signatureHex)
+	valid, err := VerifySignature(publicKeyHex, blockchains.Bitcoin, message, signatureHex)
 	if err != nil {
 		t.Fatalf("Failed to verify signature: %v", err)
 	}
@@ -82,7 +83,7 @@ func TestVerifySignatureBitcoinFail(t *testing.T) {
 	invalidSignatureHex := hex.EncodeToString(invalidSignature)
 
 	// Verify the invalid signature
-	valid, err := VerifySignature(publicKeyHex, BITCOIN_CURVE, message, invalidSignatureHex)
+	valid, err := VerifySignature(publicKeyHex, blockchains.Bitcoin, message, invalidSignatureHex)
 	if err != nil {
 		t.Fatalf("Failed to verify signature: %v", err)
 	}

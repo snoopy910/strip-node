@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/go-pg/pg/v10"
 	"github.com/google/uuid"
@@ -37,26 +38,27 @@ func GetDB() *pg.DB {
 }
 
 type IntentSchema struct {
-	tableName     struct{}          `pg:"intents"` //lint:ignore U1000 ok
-	Id            uuid.UUID         `pg:",type:uuid,notnull,default:gen_random_uuid()"`
-	Signature     string            `pg:",notnull"`
-	Identity      string            `pg:",notnull"`
-	IdentityCurve string            `pg:",notnull"`
-	Status        libs.IntentStatus `pg:",notnull"`
-	Expiry        time.Time         `pg:",notnull"`
-	CreatedAt     time.Time         `pg:",notnull,default:CURRENT_TIMESTAMP"`
+	tableName    struct{}                 `pg:"intents"` //lint:ignore U1000 ok
+	Id           uuid.UUID                `pg:",type:uuid,notnull,default:gen_random_uuid()"`
+	Signature    string                   `pg:",notnull"`
+	Identity     string                   `pg:",notnull"`
+	BlockchainID blockchains.BlockchainID `pg:",notnull"`
+	NetworkType  blockchains.NetworkType  `pg:",notnull"`
+	Status       libs.IntentStatus        `pg:",notnull"`
+	Expiry       time.Time                `pg:",notnull"`
+	CreatedAt    time.Time                `pg:",notnull,default:CURRENT_TIMESTAMP"`
 }
 
 type OperationSchema struct {
 	tableName        struct{} `pg:"operations"` //lint:ignore U1000 ok
 	Id               int64
-	IntentId         uuid.UUID     `pg:",type:uuid,notnull"`
-	Intent           *IntentSchema `pg:"rel:has-one"`
-	SerializedTxn    string        `pg:",notnull"`
-	DataToSign       string        `pg:",notnull"`
-	ChainId          string        `pg:",notnull"`
+	IntentId         uuid.UUID                `pg:",type:uuid,notnull"`
+	Intent           *IntentSchema            `pg:"rel:has-one"`
+	SerializedTxn    string                   `pg:",notnull"`
+	DataToSign       string                   `pg:",notnull"`
+	BlockchainID     blockchains.BlockchainID `pg:",notnull"`
+	NetworkType      blockchains.NetworkType  `pg:",notnull"`
 	GenesisHash      string
-	KeyCurve         string               `pg:",notnull"`
 	Status           libs.OperationStatus `pg:",notnull"`
 	Result           string
 	Type             libs.OperationType `pg:",notnull"`
@@ -68,32 +70,34 @@ type OperationSchema struct {
 }
 
 type WalletSchema struct {
-	tableName                struct{} `pg:"wallets"` //lint:ignore U1000 ok
-	Id                       int64    `json:"id"`
-	Identity                 string   `json:"identity" pg:",notnull"`
-	IdentityCurve            string   `json:"identityCurve" pg:",notnull"`
-	EDDSAPublicKey           string   `json:"eddsaPublicKey"`
-	AptosEDDSAPublicKey      string   `json:"aptosEddsaPublicKey"`
-	ECDSAPublicKey           string   `json:"ecdsaPublicKey"`
-	BitcoinMainnetPublicKey  string   `json:"bitcoinMainnetPublicKey"`
-	BitcoinTestnetPublicKey  string   `json:"bitcoinTestnetPublicKey"`
-	BitcoinRegtestPublicKey  string   `json:"bitcoinRegtestPublicKey"`
-	StellarPublicKey         string   `json:"stellarPublicKey"`
-	DogecoinMainnetPublicKey string   `json:"dogecoinMainnetPublicKey"`
-	DogecoinTestnetPublicKey string   `json:"dogecoinTestnetPublicKey"`
-	SuiPublicKey             string   `json:"suiPublicKey"`
-	AlgorandEDDSAPublicKey   string   `json:"algorandEddsaPublicKey"`
-	RippleEDDSAPublicKey     string   `json:"rippleEddsaPublicKey"`
-	CardanoPublicKey         string   `json:"cardanoPublicKey"`
-	Signers                  []string `json:"signers" pg:",type:jsonb"`
+	tableName                struct{}                 `pg:"wallets"` //lint:ignore U1000 ok
+	Id                       int64                    `json:"id"`
+	Identity                 string                   `json:"identity" pg:",notnull"`
+	BlockchainID             blockchains.BlockchainID `pg:",notnull"`
+	EDDSAPublicKey           string                   `json:"eddsaPublicKey"`
+	ECDSAPublicKey           string                   `json:"ecdsaPublicKey"`
+	AptosEDDSAPublicKey      string                   `json:"aptosEddsaPublicKey"`
+	BitcoinMainnetPublicKey  string                   `json:"bitcoinMainnetPublicKey"`
+	BitcoinTestnetPublicKey  string                   `json:"bitcoinTestnetPublicKey"`
+	BitcoinRegtestPublicKey  string                   `json:"bitcoinRegtestPublicKey"`
+	EthereumPublicKey        string                   `json:"ethereumPublicKey"`
+	SolanaPublicKey          string                   `json:"solanaPublicKey"`
+	StellarPublicKey         string                   `json:"stellarPublicKey"`
+	DogecoinMainnetPublicKey string                   `json:"dogecoinMainnetPublicKey"`
+	DogecoinTestnetPublicKey string                   `json:"dogecoinTestnetPublicKey"`
+	SuiPublicKey             string                   `json:"suiPublicKey"`
+	AlgorandEDDSAPublicKey   string                   `json:"algorandEddsaPublicKey"`
+	RippleEDDSAPublicKey     string                   `json:"rippleEddsaPublicKey"`
+	CardanoPublicKey         string                   `json:"cardanoPublicKey"`
+	Signers                  []string                 `json:"signers" pg:",type:jsonb"`
 }
 
 type LockSchema struct {
-	tableName     struct{} `pg:"locks"` //lint:ignore U1000 ok
-	Id            int64    `json:"id"`
-	Identity      string   `json:"identity" pg:",notnull"`
-	IdentityCurve string   `json:"identityCurve" pg:",notnull"`
-	Locked        bool     `json:"locked" pg:",notnull,default:false"`
+	tableName    struct{}                 `pg:"locks"` //lint:ignore U1000 ok
+	Id           int64                    `json:"id"`
+	Identity     string                   `json:"identity" pg:",notnull"`
+	BlockchainID blockchains.BlockchainID `pg:",notnull"`
+	Locked       bool                     `json:"locked" pg:",notnull,default:false"`
 }
 
 type HeartbeatSchema struct {
@@ -108,26 +112,6 @@ const (
 	maxPoolSize     = 10
 	maxConnIdleTime = 30 * time.Minute
 )
-
-// func createSchemas(db *pg.DB) error {
-// 	models := []interface{}{
-// 		(*IntentSchema)(nil),
-// 		(*OperationSchema)(nil),
-// 		(*WalletSchema)(nil),
-// 		(*LockSchema)(nil),
-// 		(*HeartbeatSchema)(nil),
-// 	}
-
-// 	for _, model := range models {
-// 		err := db.Model(model).CreateTable(&orm.CreateTableOptions{
-// 			IfNotExists: true,
-// 		})
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return nil
-// }
 
 func InitialiseDB(host string, database string, username string, password string) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", username, password, host, database)
@@ -217,11 +201,11 @@ func InitialiseDB(host string, database string, username string, password string
 	logger.Sugar().Info("Database initialised successfully.")
 }
 
-func AddLock(identity string, identityCurve string) (int64, error) {
+func AddLock(identity string, blockchainId blockchains.BlockchainID) (int64, error) {
 	lock := &LockSchema{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		Locked:        false,
+		Identity:     identity,
+		BlockchainID: blockchainId,
+		Locked:       false,
 	}
 
 	_, err := GetDB().Model(lock).Insert()
@@ -246,9 +230,9 @@ func LockIdentity(id int64) error {
 	return nil
 }
 
-func GetLock(identity string, identityCurve string) (*LockSchema, error) {
+func GetLock(identity string, blockchainId blockchains.BlockchainID) (*LockSchema, error) {
 	var lockSchema LockSchema
-	err := GetDB().Model(&lockSchema).Where("identity = ? AND identity_curve = ?", identity, identityCurve).Select()
+	err := GetDB().Model(&lockSchema).Where("identity = ? AND blockchain_id = ?", identity, blockchainId).Select()
 	if err != nil {
 		return nil, err
 	}
@@ -274,11 +258,12 @@ func AddIntent(
 	Intent *libs.Intent,
 ) (uuid.UUID, error) {
 	intentSchema := &IntentSchema{
-		Signature:     Intent.Signature,
-		Identity:      Intent.Identity,
-		IdentityCurve: Intent.IdentityCurve,
-		Status:        libs.IntentStatusProcessing,
-		Expiry:        Intent.Expiry,
+		Signature:    Intent.Signature,
+		Identity:     Intent.Identity,
+		BlockchainID: Intent.BlockchainID,
+		NetworkType:  Intent.NetworkType,
+		Status:       libs.IntentStatusProcessing,
+		Expiry:       Intent.Expiry,
 	}
 
 	_, err := GetDB().Model(intentSchema).Insert()
@@ -291,9 +276,9 @@ func AddIntent(
 			IntentId:         intentSchema.Id,
 			SerializedTxn:    operation.SerializedTxn,
 			DataToSign:       operation.DataToSign,
-			ChainId:          operation.ChainId,
+			BlockchainID:     operation.BlockchainID,
+			NetworkType:      operation.NetworkType,
 			GenesisHash:      operation.GenesisHash,
-			KeyCurve:         operation.KeyCurve,
 			Status:           libs.OperationStatusPending,
 			Result:           "",
 			Type:             operation.Type,
@@ -330,9 +315,9 @@ func GetIntent(id uuid.UUID) (*libs.Intent, error) {
 			ID:               operationSchema.Id,
 			SerializedTxn:    operationSchema.SerializedTxn,
 			DataToSign:       operationSchema.DataToSign,
-			ChainId:          operationSchema.ChainId,
+			BlockchainID:     operationSchema.BlockchainID,
+			NetworkType:      operationSchema.NetworkType,
 			GenesisHash:      operationSchema.GenesisHash,
-			KeyCurve:         operationSchema.KeyCurve,
 			Status:           operationSchema.Status,
 			Result:           operationSchema.Result,
 			Type:             operationSchema.Type,
@@ -351,14 +336,15 @@ func GetIntent(id uuid.UUID) (*libs.Intent, error) {
 	})
 
 	intent := &libs.Intent{
-		ID:            intentSchema.Id,
-		Operations:    operations,
-		Signature:     intentSchema.Signature,
-		Identity:      intentSchema.Identity,
-		IdentityCurve: intentSchema.IdentityCurve,
-		Status:        intentSchema.Status,
-		Expiry:        intentSchema.Expiry,
-		CreatedAt:     intentSchema.CreatedAt,
+		ID:           intentSchema.Id,
+		Operations:   operations,
+		Signature:    intentSchema.Signature,
+		Identity:     intentSchema.Identity,
+		BlockchainID: intentSchema.BlockchainID,
+		NetworkType:  intentSchema.NetworkType,
+		Status:       intentSchema.Status,
+		Expiry:       intentSchema.Expiry,
+		CreatedAt:    intentSchema.CreatedAt,
 	}
 
 	return intent, nil
@@ -383,9 +369,9 @@ func GetOperation(intentId uuid.UUID, operationIndex int64) (*libs.Operation, er
 			ID:               operationSchema.Id,
 			SerializedTxn:    operationSchema.SerializedTxn,
 			DataToSign:       operationSchema.DataToSign,
-			ChainId:          operationSchema.ChainId,
+			BlockchainID:     operationSchema.BlockchainID,
+			NetworkType:      operationSchema.NetworkType,
 			GenesisHash:      operationSchema.GenesisHash,
-			KeyCurve:         operationSchema.KeyCurve,
 			Status:           operationSchema.Status,
 			Result:           operationSchema.Result,
 			Type:             operationSchema.Type,
@@ -425,9 +411,9 @@ func getIntents(intentSchemas *([]IntentSchema)) ([]*libs.Intent, error) {
 			operations[i] = libs.Operation{
 				SerializedTxn:    operationSchema.SerializedTxn,
 				DataToSign:       operationSchema.DataToSign,
-				ChainId:          operationSchema.ChainId,
+				BlockchainID:     operationSchema.BlockchainID,
+				NetworkType:      operationSchema.NetworkType,
 				GenesisHash:      operationSchema.GenesisHash,
-				KeyCurve:         operationSchema.KeyCurve,
 				Status:           operationSchema.Status,
 				Result:           operationSchema.Result,
 				Type:             operationSchema.Type,
@@ -684,9 +670,9 @@ func UpdateIntentStatus(id uuid.UUID, status libs.IntentStatus) error {
 	return nil
 }
 
-func GetWallet(identity string, identityCurve string) (*WalletSchema, error) {
+func GetWallet(identity string, blockchainId blockchains.BlockchainID) (*WalletSchema, error) {
 	var walletSchema WalletSchema
-	err := GetDB().Model(&walletSchema).Where("identity = ? AND identity_curve = ?", identity, identityCurve).Select()
+	err := GetDB().Model(&walletSchema).Where("identity = ? AND blockchain_id = ?", identity, blockchainId).Select()
 	if err != nil {
 		return nil, err
 	}
@@ -790,17 +776,17 @@ func GetActiveSigners() ([]HeartbeatSchema, error) {
 }
 
 func VerifyIdentityLockSchema(intent *libs.Intent, operation *libs.Operation) (*LockSchema, error) {
-	lockSchema, err := GetLock(intent.Identity, intent.IdentityCurve)
+	lockSchema, err := GetLock(intent.Identity, intent.BlockchainID)
 	if err != nil {
 		if err.Error() == "pg: no rows in result set" {
-			_, err := AddLock(intent.Identity, intent.IdentityCurve)
+			_, err := AddLock(intent.Identity, intent.BlockchainID)
 
 			if err != nil {
 				logger.Sugar().Errorw("error adding lock", "error", err)
 				return nil, err
 			}
 
-			lockSchema, err = GetLock(intent.Identity, intent.IdentityCurve)
+			lockSchema, err = GetLock(intent.Identity, intent.BlockchainID)
 
 			if err != nil {
 				logger.Sugar().Errorw("error getting lock after adding", "error", err)

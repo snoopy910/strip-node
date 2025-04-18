@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/stretchr/testify/require"
 )
@@ -110,35 +111,35 @@ func TestCreateWallet(t *testing.T) {
 
 	// Test cases
 	tests := []struct {
-		name          string
-		identity      string
-		identityCurve string
-		wantErr       bool
+		name         string
+		identity     string
+		blockchainID blockchains.BlockchainID
+		wantErr      bool
 	}{
 		{
-			name:          "Success case",
-			identity:      "testIdentity",
-			identityCurve: "testCurve",
-			wantErr:       false,
+			name:         "Success case",
+			identity:     "testIdentity",
+			blockchainID: blockchains.Ethereum,
+			wantErr:      false,
 		},
 		{
-			name:          "Empty identity",
-			identity:      "",
-			identityCurve: "testCurve",
-			wantErr:       true,
+			name:         "Empty identity",
+			identity:     "",
+			blockchainID: blockchains.Ethereum,
+			wantErr:      true,
 		},
 		{
-			name:          "Empty curve",
-			identity:      "testIdentity",
-			identityCurve: "",
-			wantErr:       true,
+			name:         "Empty curve",
+			identity:     "testIdentity",
+			blockchainID: "",
+			wantErr:      true,
 		},
 	}
 
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := createWallet(tt.identity, tt.identityCurve)
+			err := createWallet(tt.identity, tt.blockchainID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("createWallet() error = %v, wantErr %v", err, tt.wantErr)
 				return

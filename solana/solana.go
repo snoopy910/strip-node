@@ -231,7 +231,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	}
 
 	if len(heliusResponse) == 0 {
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(1 * time.Second)
 		timeout := time.After(3 * time.Second)
 		defer ticker.Stop()
 	request:

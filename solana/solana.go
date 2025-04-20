@@ -202,7 +202,7 @@ func SendSolanaTransactionWithValidation(serializedTxn string, chainId string, k
 func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common.Transfer, error) {
 	fmt.Printf("Getting Solana transfers for transaction - chainId: %s, txnHash: %s\n", chainId, txnHash)
 
-	time.Sleep(10 * time.Second)
+	// time.Sleep(10 * time.Second)
 
 	// Configure Helius API URL based on chain ID
 	// Currently only supports devnet (chainId 901)
@@ -224,60 +224,85 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	fmt.Printf("Using RPC endpoint: %s\n", chain.ChainUrl)
 
 	// Prepare request body with transaction hash
-	requestBody := HeliusRequest{
-		Transactions: []string{txnHash},
-	}
+	// requestBody := HeliusRequest{
+	// 	Transactions: []string{txnHash},
+	// }
 
-	// Marshal request to JSON
-	requestBodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		fmt.Printf("Error marshaling request body: %v\n", err)
-		return nil, err
-	}
-	fmt.Printf("Sending request to Helius API with transaction: %s\n", txnHash)
+	// // Marshal request to JSON
+	// requestBodyBytes, err := json.Marshal(requestBody)
+	// if err != nil {
+	// 	fmt.Printf("Error marshaling request body: %v\n", err)
+	// 	return nil, err
+	// }
+	// fmt.Printf("Sending request to Helius API with transaction: %s\n", txnHash)
 
-	// Create HTTP request to Helius API
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBodyBytes))
-	if err != nil {
-		fmt.Printf("Error creating HTTP request: %v\n", err)
-		return nil, err
-	}
+	// // Create HTTP request to Helius API
+	// req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBodyBytes))
+	// if err != nil {
+	// 	fmt.Printf("Error creating HTTP request: %v\n", err)
+	// 	return nil, err
+	// }
 
-	// Set content type for JSON request
-	req.Header.Set("Content-Type", "application/json")
+	// // Set content type for JSON request
+	// req.Header.Set("Content-Type", "application/json")
 
-	// Send request to Helius API
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("Error sending request to Helius API: %v\n", err)
-		return nil, err
-	}
-	defer resp.Body.Close()
+	// // Send request to Helius API
+	// client := &http.Client{}
+	// resp, err := client.Do(req)
+	// if err != nil {
+	// 	fmt.Printf("Error sending request to Helius API: %v\n", err)
+	// 	return nil, err
+	// }
+	// defer resp.Body.Close()
 
-	fmt.Printf("Helius API response status: %s\n", resp.Status)
+	// fmt.Printf("Helius API response status: %s\n", resp.Status)
 
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Failed to read response body: %v\n", err)
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
+	// // Read response body
+	// body, err := io.ReadAll(resp.Body)
+	// if err != nil {
+	// 	fmt.Printf("Failed to read response body: %v\n", err)
+	// 	return nil, fmt.Errorf("failed to read response body: %v", err)
+	// }
 
-	// Log response body for debugging
-	bodyStr := string(body)
-	if len(bodyStr) > 500 {
-		fmt.Printf("Helius API response (truncated): %s...\n", bodyStr[:500])
-	} else {
-		fmt.Printf("Helius API response: %s\n", bodyStr)
-	}
+	// // Log response body for debugging
+	// bodyStr := string(body)
+	// if len(bodyStr) > 500 {
+	// 	fmt.Printf("Helius API response (truncated): %s...\n", bodyStr[:500])
+	// } else {
+	// 	fmt.Printf("Helius API response: %s\n", bodyStr)
+	// }
 
 	// Parse Helius API response
 	var heliusResponse []HeliusResponse
-	err = json.Unmarshal(body, &heliusResponse)
+
+	heliusResponse, err = requestHeliusTransactionDetails(chainId, url, txnHash)
 	if err != nil {
-		fmt.Printf("Failed to parse JSON response: %v\n", err)
-		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+		fmt.Printf("Error getting transaction details from Helius: %v\n", err)
+		return nil, err
+	}
+
+	if len(heliusResponse) == 0 {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		timeout := time.After(3 * time.Second)
+		defer ticker.Stop()
+	request:
+		for {
+			select {
+			case <-ticker.C:
+				heliusResponse, err = requestHeliusTransactionDetails(chainId, url, txnHash)
+				if err != nil {
+					fmt.Printf("Error getting transaction details from Helius: %v\n", err)
+					return nil, err
+				}
+				if len(heliusResponse) > 0 {
+					fmt.Printf(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Got transaction details from Helius\n")
+					break request
+				}
+			case <-timeout:
+				fmt.Printf("Timeout waiting for transaction details from Helius\n")
+				break request
+			}
+		}
 	}
 
 	fmt.Printf("Parsed Helius response - got %d transaction(s)\n", len(heliusResponse))
@@ -380,6 +405,68 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	}
 
 	return transfers, nil
+}
+
+func requestHeliusTransactionDetails(chainId string, heliusTransactionUrl string, txnHash string) ([]HeliusResponse, error) {
+
+	// Prepare request body with transaction hash
+	requestBody := HeliusRequest{
+		Transactions: []string{txnHash},
+	}
+
+	// Marshal request to JSON
+	requestBodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Printf("Error marshaling request body: %v\n", err)
+		return nil, err
+	}
+	fmt.Printf("Sending request to Helius API with transaction: %s\n", txnHash)
+
+	// Create HTTP request to Helius API
+	req, err := http.NewRequest("POST", heliusTransactionUrl, bytes.NewBuffer(requestBodyBytes))
+	if err != nil {
+		fmt.Printf("Error creating HTTP request: %v\n", err)
+		return nil, err
+	}
+
+	// Set content type for JSON request
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request to Helius API
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending request to Helius API: %v\n", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	fmt.Printf("Helius API response status: %s\n", resp.Status)
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Failed to read response body: %v\n", err)
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Log response body for debugging
+	bodyStr := string(body)
+	if len(bodyStr) > 500 {
+		fmt.Printf("Helius API response (truncated): %s...\n", bodyStr[:500])
+	} else {
+		fmt.Printf("Helius API response: %s\n", bodyStr)
+	}
+
+	// Parse Helius API response
+	var heliusResponse []HeliusResponse
+	err = json.Unmarshal(body, &heliusResponse)
+	if err != nil {
+		fmt.Printf("Failed to parse JSON response: %v\n", err)
+		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+	}
+
+	return heliusResponse, nil
 }
 
 func CheckSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {

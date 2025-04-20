@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"time"
 
 	"github.com/StripChain/strip-node/common"
 
@@ -200,7 +201,9 @@ func SendSolanaTransactionWithValidation(serializedTxn string, chainId string, k
 
 func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common.Transfer, error) {
 	fmt.Printf("Getting Solana transfers for transaction - chainId: %s, txnHash: %s\n", chainId, txnHash)
-	
+
+	time.Sleep(10 * time.Second)
+
 	// Configure Helius API URL based on chain ID
 	// Currently only supports devnet (chainId 901)
 	var url string
@@ -253,7 +256,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	defer resp.Body.Close()
 
 	fmt.Printf("Helius API response status: %s\n", resp.Status)
-	
+
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -287,16 +290,16 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 
 	// Process each transaction in the response
 	for i, response := range heliusResponse {
-		fmt.Printf("Processing transaction %d - Native transfers: %d, Token transfers: %d\n", 
+		fmt.Printf("Processing transaction %d - Native transfers: %d, Token transfers: %d\n",
 			i+1, len(response.NativeTransfers), len(response.TokenTransfers))
-		
+
 		// Handle native SOL transfers
 		for j, nativeTransfer := range response.NativeTransfers {
 			// Convert amount to big.Int and format with 9 decimals (SOL decimal places)
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", nativeTransfer.Amount), 10)
 			formattedAmount, _ := util.FormatUnits(num, 9)
-			
-			fmt.Printf("Native transfer %d: %s SOL from %s to %s\n", 
+
+			fmt.Printf("Native transfer %d: %s SOL from %s to %s\n",
 				j+1, formattedAmount, nativeTransfer.FromUserAccount, nativeTransfer.ToUserAccount)
 
 			// Create transfer record for native SOL
@@ -313,9 +316,9 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 
 		// Handle SPL token transfers
 		for j, tokenTransfer := range response.TokenTransfers {
-			fmt.Printf("Token transfer %d: Mint: %s, Standard: %s\n", 
+			fmt.Printf("Token transfer %d: Mint: %s, Standard: %s\n",
 				j+1, tokenTransfer.Mint, tokenTransfer.TokenStandard)
-			
+
 			// Skip non-fungible token transfers (e.g., NFTs)
 			if tokenTransfer.TokenStandard != "Fungible" {
 				fmt.Printf("Skipping non-fungible token transfer (standard: %s)\n", tokenTransfer.TokenStandard)
@@ -328,7 +331,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 			// Get token mint account address
 			accountAddress := solana.MustPublicKeyFromBase58(tokenTransfer.Mint)
 			fmt.Printf("Getting token metadata for mint: %s\n", accountAddress)
-			
+
 			// Fetch token mint account data for decimals
 			accountInfo, err := c.GetAccountInfo(context.Background(), accountAddress)
 
@@ -355,7 +358,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 				return nil, err
 			}
 
-			fmt.Printf("Token transfer: %s tokens from %s to %s\n", 
+			fmt.Printf("Token transfer: %s tokens from %s to %s\n",
 				formattedAmount, tokenTransfer.FromUserAccount, tokenTransfer.ToUserAccount)
 
 			// Create transfer record for SPL token
@@ -375,13 +378,13 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 	if len(transfers) == 0 {
 		fmt.Printf("WARNING: No transfers found in transaction %s - this might indicate an issue with the transaction type or API parsing\n", txnHash)
 	}
-	
+
 	return transfers, nil
 }
 
 func CheckSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {
 	fmt.Printf("Checking Solana transaction confirmation - chainId: %s, txnHash: %s\n", chainId, txnHash)
-	
+
 	chain, err := common.GetChain(chainId)
 	if err != nil {
 		fmt.Printf("Error getting chain for ID %s: %v\n", chainId, err)
@@ -414,11 +417,11 @@ func CheckSolanaTransactionConfirmed(chainId string, txnHash string) (bool, erro
 	}
 
 	// Log transaction details
-	fmt.Printf("Transaction found! BlockTime: %v, Slot: %d, Confirmations: %d\n", 
-		txResp.BlockTime, 
+	fmt.Printf("Transaction found! BlockTime: %v, Slot: %d, Confirmations: %d\n",
+		txResp.BlockTime,
 		txResp.Slot,
 		txResp.Meta.Err)
-	
+
 	return true, nil
 }
 

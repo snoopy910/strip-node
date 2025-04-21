@@ -1694,7 +1694,7 @@ func ProcessIntent(intentId int64) {
 								withdrawalChain.ChainUrl,
 								bridgeWallet.EDDSAPublicKey,
 								burn.SolverOutput,
-								user.ECDSAPublicKey,
+								user.EDDSAPublicKey,
 							)
 
 							if err != nil {

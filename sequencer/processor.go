@@ -843,7 +843,7 @@ func ProcessIntent(intentId int64) {
 					} else if depositOperation.KeyCurve == "eddsa" || depositOperation.KeyCurve == "aptos_eddsa" || depositOperation.KeyCurve == "sui_eddsa" ||
 						depositOperation.KeyCurve == "bitcoin_ecdsa" || depositOperation.KeyCurve == "dogecoin_ecdsa" || depositOperation.KeyCurve == "stellar_eddsa" ||
 						depositOperation.KeyCurve == "algorand_eddsa" || depositOperation.KeyCurve == "ripple_eddsa" || depositOperation.KeyCurve == "cardano_eddsa" {
-						chain, err := common.GetChain(operation.ChainId)
+						chain, err := common.GetChain(depositOperation.ChainId)
 						if err != nil {
 							logger.Sugar().Errorw("error getting chain", "error", err)
 							break

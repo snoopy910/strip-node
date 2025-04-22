@@ -11,28 +11,18 @@ import (
 	"net/http"
 
 	"github.com/StripChain/strip-node/common"
+
 	"github.com/StripChain/strip-node/util"
 	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/programs/token"
-	"github.com/mr-tron/base58"
-
 	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/mr-tron/base58"
 )
 
 func TestBuildSolana() {
-	// pubKeyByte, _ := base58.Decode("4dEgqPG9FtjCiwW1HUdReraBozwq6qUCcDFXD8BnUn9Z")
-
-	// c := rpc.New("https://api.devnet.solana.com")
-	// recentHash, err := c.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// fmt.Println(recentHash.Value.Blockhash.String())
-
 	accountFrom := solana.MustPublicKeyFromBase58("DpZqkyDKkVv2S7Lhbd5dUVcVCPJz2Lypr4W5Cru2sHr7")
 	accountTo := solana.MustPublicKeyFromBase58("5oNDL3swdJJF1g9DzJiZ4ynHXgszjAEpUkxVYejchzrY")
 	amount := uint64(1)
@@ -53,15 +43,6 @@ func TestBuildSolana() {
 		panic(err)
 	}
 
-	// msg, err := tx.Message.MarshalBinary()
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// fmt.Println("Input to sign: ", base58.Encode(msg))
-
-	// fmt.Println("Input to sign: ", base58.Encode(msg))
-
 	sig, _ := base58.Decode("5jLFtNTCAnHA9uurWhyNNqzwHLwWCaSNrZBWG48AANMGkreX1DYGbkHL2VWNNt2Kz327QwzzsAacJj2YFdSsfkwN")
 	signature := solana.SignatureFromBytes(sig)
 
@@ -79,16 +60,14 @@ func TestBuildSolana() {
 		return
 	}
 
-	// // signature
 	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
 	if err != nil {
 		panic(err)
 	}
 
-	_tx.Signatures = append(_tx.Signatures, signature)
+	_tx.Signatures = []solana.Signature{signature} // Reset signatures array with fee payer signature
 
 	err = _tx.VerifySignatures()
-
 	if err != nil {
 		fmt.Println("error during verification")
 		fmt.Println(err)
@@ -122,9 +101,104 @@ type HeliusRequest struct {
 	Transactions []string `json:"transactions"`
 }
 
-// GetSolanaTransfers retrieves and parses transfer information from a Solana transaction
-// Uses Helius API for transaction data and native RPC for token metadata
-// Handles both native SOL transfers and SPL token transfers
+func validateAndOrderSignatures(tx *solana.Transaction) error {
+	// -> check signature count in tests
+	if len(tx.Signatures) != int(tx.Message.Header.NumRequiredSignatures) {
+		return fmt.Errorf("signature count mismatch: got %d, want %d",
+			len(tx.Signatures), tx.Message.Header.NumRequiredSignatures)
+	}
+
+	return nil
+}
+
+// SendSolanaTransactionWithValidation submits a signed Solana transaction with thorough validation and detailed logging.
+// It prints all input parameters, decodes and unmarshals the transaction, verifies the signature, and provides verbose error context upon failure.
+// Intended for debugging and development; for a leaner production path use SendSolanaTransaction.
+func SendSolanaTransactionWithValidation(serializedTxn string, chainId string, keyCurve string, dataToSign string, signatureBase58 string) (string, error) {
+	fmt.Printf("Solana Transaction Params:\n"+
+		"  serializedTxn: %s\n"+
+		"  chainId: %s\n"+
+		"  keyCurve: %s\n"+
+		"  dataToSign: %s\n"+
+		"  signatureBase58: %s\n",
+		serializedTxn, chainId, keyCurve, dataToSign, signatureBase58)
+
+	chain, err := common.GetChain(chainId)
+	if err != nil {
+		return "", err
+	}
+
+	c := rpc.New(chain.ChainUrl)
+
+	// Decode the message data
+	messageData, err := base58.Decode(serializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode message data: %v", err)
+	}
+
+	// Create a message decoder and decode the message
+	decoder := bin.NewBinDecoder(messageData)
+	message := new(solana.Message)
+	err = message.UnmarshalWithDecoder(decoder)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode message: %v", err)
+	}
+
+	// Debug logging for message details
+	fmt.Printf("Message Details:\n"+
+		"  Header: %+v\n"+
+		"  AccountKeys: %v\n"+
+		"  RecentBlockhash: %s\n"+
+		"  Instructions Count: %d\n",
+		message.Header, message.AccountKeys, message.RecentBlockhash, len(message.Instructions))
+
+	// Create a new transaction with the decoded message
+	tx := &solana.Transaction{
+		Message: *message,
+	}
+
+	// Decode and add the signature
+	sig, err := base58.Decode(signatureBase58)
+	if err != nil {
+		return "", fmt.Errorf("error decoding signature: %v", err)
+	}
+
+	// The first account (fee payer) must sign
+	signature := solana.SignatureFromBytes(sig)
+	tx.Signatures = []solana.Signature{signature}
+
+	// Verify the transaction is well-formed
+	if err := tx.VerifySignatures(); err != nil {
+		// Get the message bytes that were signed
+		msgBytes, mErr := message.MarshalBinary()
+		if mErr != nil {
+			return "", fmt.Errorf("failed to marshal message: %v (original error: %v)", mErr, err)
+		}
+
+		// Add more detailed error information
+		feePayer := "no fee payer"
+		if len(message.AccountKeys) > 0 {
+			feePayer = message.AccountKeys[0].String()
+		}
+
+		fmt.Printf("Signature Verification Details:\n"+
+			"  Fee Payer: %s\n"+
+			"  Signature: %s\n"+
+			"  Message (base58): %s\n",
+			feePayer, signature, base58.Encode(msgBytes))
+		return "", fmt.Errorf("signature verification failed: %v", err)
+	}
+
+	// Send the transaction
+	hash, err := c.SendTransaction(context.Background(), tx)
+	if err != nil {
+		fmt.Println("error during sending transaction:", err)
+		return "", err
+	}
+
+	return hash.String(), nil
+}
+
 func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common.Transfer, error) {
 	// Configure Helius API URL based on chain ID
 	// Currently only supports devnet (chainId 901)
@@ -227,8 +301,6 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 
 			// Decode mint account data to get token decimals
 			var mint token.Mint
-			// Account{}.Data.GetBinary() returns the *decoded* binary data
-			// regardless the original encoding (it can handle them all).
 			err = bin.NewBinDecoder(accountInfo.GetBinary()).Decode(&mint)
 			if err != nil {
 				panic(err)
@@ -256,6 +328,7 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 		}
 	}
 
+	fmt.Println(transfers)
 	return transfers, nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -540,5 +541,23 @@ func TestSignatureEndpoint(t *testing.T) {
 				t.Errorf("Signature returned wrong status code: got %v want %v", w.Code, tt.statusCode)
 			}
 		})
+	}
+}
+
+func TestToHexInt(t *testing.T) {
+	n := big.NewInt(1234567890)
+	hexStr := toHexInt(n)
+	if len(hexStr) != 64 {
+		t.Errorf("Expected length 64, got %d", len(hexStr))
+	}
+	expectedSuffix := "499602d2" // hex of 1234567890
+	if hexStr[56:] != expectedSuffix {
+		t.Errorf("Expected hex string to end with %s, got %s", expectedSuffix, hexStr[56:])
+	}
+	for i := 0; i < 56; i++ {
+		if hexStr[i] != '0' {
+			t.Errorf("Expected leading zeros, got non-zero at position %d", i)
+			break
+		}
 	}
 }

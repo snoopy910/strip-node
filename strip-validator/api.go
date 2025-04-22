@@ -820,6 +820,7 @@ func startHTTPServer(port string) {
 			// 	}
 			// }
 
+
 			// Set message
 			msg = operation.DataToSign
 		case libs.OperationTypeSolver:
@@ -1018,7 +1019,7 @@ func startHTTPServer(port string) {
 			// Set message for signing - first try SolverDataToSign
 			msg = operation.SolverDataToSign
 
-			// Log detailed information about the message being signed
+			// Log detailed info about the message being signed
 			logger.Sugar().Infow("Processing bridge deposit signature",
 				"solverDataLength", len(operation.SolverDataToSign),
 				"dataToSignLength", len(operation.DataToSign))

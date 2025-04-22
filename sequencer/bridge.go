@@ -656,7 +656,7 @@ func withdrawSolanaNativeGetSignature(
 	amountUint64 := _amount.Uint64()
 
 	c := rpc.New(rpcURL)
-	recentHash, err := c.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
+	recentHash, err := c.GetLatestBlockhash(context.Background(), rpc.CommitmentFinalized)
 	if err != nil {
 		return "", "", err
 	}

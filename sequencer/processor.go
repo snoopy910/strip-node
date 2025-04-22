@@ -127,11 +127,10 @@ ProcessLoop:
 				fmt.Printf("error getting wallet: %+v\n", err)
 				return
 			}
+
 			switch operation.BlockchainID {
 			case blockchains.Cardano:
 				publicKey = wallet.CardanoPublicKey
-			case blockchains.Ethereum:
-				publicKey = wallet.EthereumPublicKey
 			case blockchains.Bitcoin:
 				if operation.NetworkType == blockchains.Mainnet {
 					publicKey = wallet.BitcoinMainnetPublicKey
@@ -159,8 +158,12 @@ ProcessLoop:
 			case blockchains.Solana:
 				publicKey = wallet.SolanaPublicKey
 			default:
-				logger.Sugar().Errorw("blockchain ID Not supported", "blockchainID", operation.BlockchainID)
-				continue
+				if blockchains.IsEVMBlockchain(operation.BlockchainID) {
+					publicKey = wallet.EthereumPublicKey
+				} else {
+					logger.Sugar().Errorw("blockchain ID Not supported", "blockchainID", operation.BlockchainID)
+					continue
+				}
 			}
 
 			switch operation.Status {

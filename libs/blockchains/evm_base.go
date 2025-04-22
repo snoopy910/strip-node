@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/StripChain/strip-node/common"
@@ -22,6 +23,47 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+var (
+	evmRegistry   = make(map[BlockchainID]bool)
+	evmRegistryMu sync.RWMutex
+)
+
+// RegisterEVMBlockchain adds a new EVM blockchain ID to the registry.
+// It returns an error if a blockchain with the same ID is already registered.
+func RegisterEVMBlockchain(chainName BlockchainID) error {
+	evmRegistryMu.Lock()
+	defer evmRegistryMu.Unlock()
+
+	if _, exists := evmRegistry[chainName]; exists {
+		return fmt.Errorf("blockchain with ID %s already registered", chainName)
+	}
+
+	// Store a pointer to the chain instance
+	evmRegistry[chainName] = true
+	return nil
+}
+
+// IsEVMBlockchain checks if a blockchain is an EVM blockchain by its ID.
+// It returns true if the blockchain is an EVM blockchain, otherwise false.
+func IsEVMBlockchain(id BlockchainID) bool {
+	evmRegistryMu.RLock()
+	defer evmRegistryMu.RUnlock()
+
+	return evmRegistry[id]
+}
+
+// GetAllEVMBlockchainIDs returns a slice of all registered EVM blockchain IDs.
+func GetAllEVMBlockchainIDs() []BlockchainID {
+	evmRegistryMu.RLock()
+	defer evmRegistryMu.RUnlock()
+
+	chains := make([]BlockchainID, 0, len(evmRegistry))
+	for id := range evmRegistry {
+		chains = append(chains, id)
+	}
+	return chains
+}
 
 // NewEVMBlockchain initializes a new EVMBlockchain
 func NewEVMBlockchain(
@@ -38,6 +80,8 @@ func NewEVMBlockchain(
 		logger.Sugar().Errorw("failed to create ethclient", "error", err)
 		return EVMBlockchain{}, err
 	}
+
+	RegisterEVMBlockchain(chainName)
 
 	return EVMBlockchain{
 		BaseBlockchain: BaseBlockchain{

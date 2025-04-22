@@ -424,18 +424,20 @@ func startHTTPServer(port string) {
 					publicKeyStr := hex.EncodeToString(pk.Serialize())
 
 					addressesResponse.Addresses[blockchainID][blockchains.Mainnet] = publicKeyStr
-				case blockchains.Ethereum:
-					json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
-
-					x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
-					y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
-
-					publicKeyStr := "04" + x + y
-					publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
-					address := publicKeyToAddress(publicKeyBytes)
-
-					addressesResponse.Addresses[blockchainID][blockchains.Mainnet] = address
 				default:
+					if blockchains.IsEVMBlockchain(blockchainID) {
+						json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+
+						x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
+						y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
+
+						publicKeyStr := "04" + x + y
+						publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+						address := publicKeyToAddress(publicKeyBytes)
+
+						addressesResponse.Addresses[blockchainID][blockchains.Mainnet] = address
+					}
+
 					logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
 					http.Error(w, "unsupported blockchain ID", http.StatusBadRequest)
 					return
@@ -819,7 +821,6 @@ func startHTTPServer(port string) {
 			// 		return
 			// 	}
 			// }
-
 
 			// Set message
 			msg = operation.DataToSign
@@ -1237,16 +1238,6 @@ func startHTTPServer(port string) {
 				return
 			}
 			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
-		case blockchains.Ethereum:
-			if operation.Type == libs.OperationTypeBridgeDeposit ||
-				operation.Type == libs.OperationTypeSwap ||
-				operation.Type == libs.OperationTypeBurn ||
-				operation.Type == libs.OperationTypeBurnSynthetic ||
-				operation.Type == libs.OperationTypeWithdraw {
-				go generateSignatureMessage(BridgeContractAddress, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
-			} else {
-				go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
-			}
 		case blockchains.Bitcoin:
 			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
 		case blockchains.Dogecoin:
@@ -1282,8 +1273,20 @@ func startHTTPServer(port string) {
 			}
 			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
 		default:
-			http.Error(w, "{\"error\":\"Invalid key curve for signature\"}", http.StatusBadRequest)
-			return
+			if blockchains.IsEVMBlockchain(operation.BlockchainID) {
+				if operation.Type == libs.OperationTypeBridgeDeposit ||
+					operation.Type == libs.OperationTypeSwap ||
+					operation.Type == libs.OperationTypeBurn ||
+					operation.Type == libs.OperationTypeBurnSynthetic ||
+					operation.Type == libs.OperationTypeWithdraw {
+					go generateSignatureMessage(BridgeContractAddress, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
+				} else {
+					go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
+				}
+			} else {
+				http.Error(w, "{\"error\":\"Invalid key curve for signature\"}", http.StatusBadRequest)
+				return
+			}
 		}
 
 		// Create a channel using the message as the key. The key format varies by chain:
@@ -1301,9 +1304,6 @@ func startHTTPServer(port string) {
 		signatureResponse := SignatureResponse{}
 
 		switch operation.BlockchainID {
-		case blockchains.Ethereum:
-			signatureResponse.Signature = string(sig.Message)
-			signatureResponse.Address = sig.Address
 		case blockchains.Bitcoin:
 			signatureResponse.Signature = string(sig.Message)
 			signatureResponse.Address = sig.Address
@@ -1340,9 +1340,18 @@ func startHTTPServer(port string) {
 			if !v {
 				logger.Sugar().Errorf("invalid signature %s, err %v", signatureResponse.Signature, err)
 			}
-		default:
+		case blockchains.Solana:
 			signatureResponse.Signature = base58.Encode(sig.Message)
 			signatureResponse.Address = sig.Address
+		default:
+			if blockchains.IsEVMBlockchain(operation.BlockchainID) {
+				signatureResponse.Signature = string(sig.Message)
+				signatureResponse.Address = sig.Address
+			} else {
+				logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", operation.BlockchainID)
+				http.Error(w, "unsupported blockchain ID", http.StatusBadRequest)
+				return
+			}
 		}
 
 		// Validate we have a signature before responding

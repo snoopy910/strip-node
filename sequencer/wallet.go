@@ -163,9 +163,10 @@ func createWallet(identity string, blockchainID blockchains.BlockchainID) error 
 			if blockchains.IsEVMBlockchain(blockchainID) {
 				logger.Sugar().Infof("%s address: %s", blockchainID, addresses[blockchains.Mainnet])
 				wallet.EthereumPublicKey = addresses[blockchains.Mainnet]
+			} else {
+				logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
+				return fmt.Errorf("unsupported blockchain ID: %s", blockchainID)
 			}
-			logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
-			return fmt.Errorf("unsupported blockchain ID: %s", blockchainID)
 		}
 	}
 

@@ -252,9 +252,12 @@ func startHTTPServer(port string) {
 			for _, blockchainID := range blockchains.GetRegisteredBlockchains() {
 				opBlockchain, err := blockchains.GetBlockchain(blockchainID, blockchains.NetworkType(blockchains.Mainnet))
 				if err != nil {
-					logger.Sugar().Errorw("error getting blockchain", "error", err)
-					http.Error(w, "invalid blockchain ID", http.StatusBadRequest)
-					return
+					opBlockchain, err = blockchains.GetBlockchain(blockchainID, blockchains.NetworkType(blockchains.Testnet))
+					if err != nil {
+						logger.Sugar().Errorw("error getting blockchain", "error", err)
+						http.Error(w, "invalid blockchain ID", http.StatusBadRequest)
+						return
+					}
 				}
 				if opBlockchain.KeyCurve() != keyCurve {
 					continue
@@ -436,11 +439,12 @@ func startHTTPServer(port string) {
 						address := publicKeyToAddress(publicKeyBytes)
 
 						addressesResponse.Addresses[blockchainID][blockchains.Mainnet] = address
-					}
+					} else {
 
-					logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
-					http.Error(w, "unsupported blockchain ID", http.StatusBadRequest)
-					return
+						logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
+						http.Error(w, "unsupported blockchain ID", http.StatusBadRequest)
+						return
+					}
 				}
 			}
 		}
@@ -455,7 +459,9 @@ func startHTTPServer(port string) {
 
 		x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 		y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
-		addressesResponse.ECDSAAddress = "04" + x + y
+		publicKeyStr := "04" + x + y
+		publicKeyBytes, _ := hex.DecodeString(publicKeyStr)
+		addressesResponse.ECDSAAddress = publicKeyToAddress(publicKeyBytes)
 		err = json.NewEncoder(w).Encode(addressesResponse)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)

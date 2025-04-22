@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/StripChain/strip-node/common"
@@ -24,46 +23,53 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var (
-	evmRegistry   = make(map[BlockchainID]bool)
-	evmRegistryMu sync.RWMutex
-)
+var EVMRegistry = map[BlockchainID]bool{
+	Ethereum:   true,
+	Arbitrum:   true,
+	StripChain: true,
+}
 
 // RegisterEVMBlockchain adds a new EVM blockchain ID to the registry.
 // It returns an error if a blockchain with the same ID is already registered.
-func RegisterEVMBlockchain(chainName BlockchainID) error {
-	evmRegistryMu.Lock()
-	defer evmRegistryMu.Unlock()
+// func RegisterEVMBlockchain(chainName BlockchainID) error {
+// 	evmRegistryMu.Lock()
+// 	defer evmRegistryMu.Unlock()
 
-	if _, exists := evmRegistry[chainName]; exists {
-		return fmt.Errorf("blockchain with ID %s already registered", chainName)
-	}
+// 	fmt.Printf("evmRegistry[chainName]: %+v\n", evmRegistry[chainName])
+// 	if _, exists := evmRegistry[chainName]; exists {
+// 		return fmt.Errorf("blockchain with ID %s already registered", chainName)
+// 	}
 
-	// Store a pointer to the chain instance
-	evmRegistry[chainName] = true
-	return nil
-}
+// 	fmt.Printf("added evmRegistry[chainName]: %+v\n", evmRegistry[chainName])
+// 	evmRegistry[chainName] = true
+// 	return nil
+// }
 
 // IsEVMBlockchain checks if a blockchain is an EVM blockchain by its ID.
 // It returns true if the blockchain is an EVM blockchain, otherwise false.
 func IsEVMBlockchain(id BlockchainID) bool {
-	evmRegistryMu.RLock()
-	defer evmRegistryMu.RUnlock()
+	// evmRegistryMu.RLock()
+	// defer evmRegistryMu.RUnlock()
 
-	return evmRegistry[id]
+	// fmt.Printf("evmRegistry: %+v\n", evmRegistry)
+	// fmt.Printf("evmRegistry[id]: %+v\n", evmRegistry[id])
+	// fmt.Printf("id: %+v\n", id)
+
+	// return evmRegistry[id]
+	return EVMRegistry[id]
 }
 
-// GetAllEVMBlockchainIDs returns a slice of all registered EVM blockchain IDs.
-func GetAllEVMBlockchainIDs() []BlockchainID {
-	evmRegistryMu.RLock()
-	defer evmRegistryMu.RUnlock()
+// // GetAllEVMBlockchainIDs returns a slice of all registered EVM blockchain IDs.
+// func GetAllEVMBlockchainIDs() []BlockchainID {
+// 	evmRegistryMu.RLock()
+// 	defer evmRegistryMu.RUnlock()
 
-	chains := make([]BlockchainID, 0, len(evmRegistry))
-	for id := range evmRegistry {
-		chains = append(chains, id)
-	}
-	return chains
-}
+// 	chains := make([]BlockchainID, 0, len(evmRegistry))
+// 	for id := range evmRegistry {
+// 		chains = append(chains, id)
+// 	}
+// 	return chains
+// }
 
 // NewEVMBlockchain initializes a new EVMBlockchain
 func NewEVMBlockchain(
@@ -81,7 +87,7 @@ func NewEVMBlockchain(
 		return EVMBlockchain{}, err
 	}
 
-	RegisterEVMBlockchain(chainName)
+	// RegisterEVMBlockchain(chainName)
 
 	return EVMBlockchain{
 		BaseBlockchain: BaseBlockchain{

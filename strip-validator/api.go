@@ -1371,7 +1371,15 @@ func startHTTPServer(port string) {
 				http.Error(w, fmt.Sprintf("{\"error\":\"%s\"}", err.Error()), http.StatusInternalServerError)
 				return
 			}
-			go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
+			if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT ||
+				operation.Type == db.OPERATION_TYPE_SWAP ||
+				operation.Type == db.OPERATION_TYPE_BURN ||
+				operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC ||
+				operation.Type == db.OPERATION_TYPE_WITHDRAW {
+				go generateSignatureMessage(BridgeContractAddress, "ecdsa", EDDSA_CURVE, msgBytes)
+			} else {
+				go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
+			}
 		} else if keyCurve == ECDSA_CURVE {
 			if operation.Type == db.OPERATION_TYPE_BRIDGE_DEPOSIT ||
 				operation.Type == db.OPERATION_TYPE_SWAP ||

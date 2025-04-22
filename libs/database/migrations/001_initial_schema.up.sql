@@ -27,6 +27,7 @@ CREATE TYPE operation_type AS ENUM (
 
 CREATE TYPE blockchain_id AS ENUM (
     'ALGORAND',
+    'ARBITRUM',
     'APTOS',
     'BITCOIN',
     'CARDANO',
@@ -35,8 +36,8 @@ CREATE TYPE blockchain_id AS ENUM (
     'RIPPLE',
     'SOLANA',
     'STELLAR',
-    'SUI',
     'STRIPCHAIN',
+    'SUI',
 );
 
 create type network_type as enum (

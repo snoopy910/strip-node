@@ -38,6 +38,31 @@ func NewEthereumBlockchain(networkType NetworkType) (IBlockchain, error) {
 	return &newEVMBlockchain, nil
 }
 
+// NewArbitrumBlockchain creates a new Arbitrum blockchain instance
+func NewArbitrumBlockchain(networkType NetworkType) (IBlockchain, error) {
+	var nodeURL, networkID, chainID string
+	switch networkType {
+	case Testnet:
+		nodeURL = "https://arbitrum-sepolia-rpc.publicnode.com"
+		networkID = "testnet"
+		chainID = "421614"
+	default:
+		return nil, fmt.Errorf("network type not supported: %s", networkType)
+	}
+	network := Network{
+		networkType: networkType,
+		nodeURL:     nodeURL,
+		networkID:   networkID,
+	}
+
+	newEVMBlockchain, err := NewEVMBlockchain(Arbitrum, network, "hex", 18, time.Second*10, &chainID, "ETH")
+	if err != nil {
+		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
+		return nil, fmt.Errorf("failed to create new EVMBlockchain: %w", err)
+	}
+	return &newEVMBlockchain, nil
+}
+
 // NewStripChainBlockchain creates a new Ethereum blockchain instance
 func NewStripChainBlockchain(networkType NetworkType) (IBlockchain, error) {
 	var nodeURL, networkID, chainID string

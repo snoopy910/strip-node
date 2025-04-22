@@ -79,6 +79,7 @@ const (
 	Bitcoin    BlockchainID = "BITCOIN"
 	Aptos      BlockchainID = "APTOS"
 	StripChain BlockchainID = "STRIPCHAIN"
+	Arbitrum   BlockchainID = "ARBITRUM"
 )
 
 // BlockchainFactory creates blockchain instances for specific networks
@@ -237,18 +238,23 @@ func ParseNetworkType(networkType string) (NetworkType, error) {
 func InitBlockchainRegistry() *Registry {
 	registry := GetRegistry()
 
-	// Register all blockchain implementations
-	registry.Register(Cardano, NewCardanoBlockchain)
-	registry.Register(Ethereum, NewEthereumBlockchain)
-	registry.Register(Stellar, NewStellarBlockchain)
-	registry.Register(Algorand, NewAlgorandBlockchain)
-	registry.Register(Ripple, NewRippleBlockchain)
-	registry.Register(Sui, NewSuiBlockchain)
-	registry.Register(Solana, NewSolanaBlockchain)
-	registry.Register(Bitcoin, NewBitcoinBlockchain)
-	registry.Register(Aptos, NewAptosBlockchain)
-	registry.Register(Dogecoin, NewDogecoinBlockchain)
-	registry.Register(StripChain, NewStripChainBlockchain)
+	chains := map[BlockchainID]BlockchainFactory{
+		Algorand:   NewAlgorandBlockchain,
+		Arbitrum:   NewArbitrumBlockchain,
+		Cardano:    NewCardanoBlockchain,
+		Ethereum:   NewEthereumBlockchain,
+		Stellar:    NewStellarBlockchain,
+		Ripple:     NewRippleBlockchain,
+		Sui:        NewSuiBlockchain,
+		Solana:     NewSolanaBlockchain,
+		Bitcoin:    NewBitcoinBlockchain,
+		Aptos:      NewAptosBlockchain,
+		Dogecoin:   NewDogecoinBlockchain,
+		StripChain: NewStripChainBlockchain,
+	}
+	for chain, factory := range chains {
+		registry.Register(chain, factory)
+	}
 
 	return registry
 }

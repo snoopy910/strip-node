@@ -16,6 +16,7 @@ import (
 
 	"github.com/StripChain/strip-node/algorand"
 	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -39,34 +40,36 @@ var (
 )
 
 type OperationForSigning struct {
-	SerializedTxn  string             `json:"serializedTxn"`
-	DataToSign     string             `json:"dataToSign"`
-	ChainId        string             `json:"chainId"`
-	GenesisHash    string             `json:"genesisHash"`
-	KeyCurve       string             `json:"keyCurve"`
-	Type           libs.OperationType `json:"type"`
-	Solver         string             `json:"solver"`
-	SolverMetadata string             `json:"solverMetadata"`
+	SerializedTxn  string                   `json:"serializedTxn"`
+	DataToSign     string                   `json:"dataToSign"`
+	BlockchainID   blockchains.BlockchainID `json:"blockchainID"`
+	NetworkType    blockchains.NetworkType  `json:"networkType"`
+	GenesisHash    string                   `json:"genesisHash"`
+	Type           libs.OperationType       `json:"type"`
+	Solver         string                   `json:"solver"`
+	SolverMetadata string                   `json:"solverMetadata"`
 }
 
 type IntentForSigning struct {
-	Operations    []OperationForSigning `json:"operations"`
-	Identity      string                `json:"identity"`
-	IdentityCurve string                `json:"identityCurve"`
-	Expiry        time.Time             `json:"expiry"`
+	Operations   []OperationForSigning    `json:"operations"`
+	Identity     string                   `json:"identity"`
+	BlockchainID blockchains.BlockchainID `json:"blockchainID"`
+	NetworkType  blockchains.NetworkType  `json:"networkType"`
+	Expiry       time.Time                `json:"expiry"`
 }
 
 func VerifySignature(
 	identity string,
-	identityCurve string,
+	blockchainID blockchains.BlockchainID,
 	message string,
 	signature string,
 ) (bool, error) {
 
-	fmt.Printf("[VERIFY] Starting signature verification for identity: %s with curve: %s\n", identity, identityCurve)
+	fmt.Printf("[VERIFY] Starting signature verification for identity: %s with blockchain: %s\n", identity, blockchainID)
 	fmt.Println(message, signature)
 
-	if identityCurve == ECDSA_CURVE {
+	switch blockchainID {
+	case blockchains.Ethereum:
 		fmt.Println("[VERIFY ECDSA] Verifying ECDSA signature")
 		// Hash the unsigned message using EIP-191
 		hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(message)) + message)
@@ -108,7 +111,7 @@ func VerifySignature(
 
 		return false, nil
 
-	} else if identityCurve == EDDSA_CURVE {
+	case blockchains.Solana:
 		fmt.Println("[VERIFY EDDSA] Verifying EdDSA signature")
 		publicKeyBytes, _ := base58.Decode(identity)
 		signatureBytes, _ := base58.Decode(signature)
@@ -122,7 +125,8 @@ func VerifySignature(
 
 		fmt.Println("[VERIFY EDDSA] Signature is invalid")
 		return false, nil
-	} else if identityCurve == BITCOIN_CURVE {
+
+	case blockchains.Bitcoin:
 		fmt.Println("[VERIFY BITCOIN] Verifying bitcoin signature")
 		// Parse the public key
 		pubKeyBytes, err := hex.DecodeString(identity)
@@ -220,7 +224,7 @@ func VerifySignature(
 			return "in"
 		}())
 		return valid, nil
-	} else if identityCurve == DOGECOIN_CURVE {
+	case blockchains.Dogecoin:
 		fmt.Println("[VERIFY DOGECOIN] Verifying dogecoin signature")
 		// Parse the public key
 		pubKeyBytes, err := hex.DecodeString(identity)
@@ -310,7 +314,7 @@ func VerifySignature(
 			return "in"
 		}())
 		return valid, nil
-	} else if identityCurve == SUI_EDDSA_CURVE {
+	case blockchains.Sui:
 		fmt.Println("[VERIFY SUI_EDDSA] Verifying Sui EdDSA signature")
 
 		// Remove 0x prefix from public key
@@ -353,7 +357,7 @@ func VerifySignature(
 		fmt.Printf("[VERIFY SUI_EDDSA] Verification result: %v\n", verified)
 		return verified, nil
 
-	} else if identityCurve == ALGORAND_CURVE {
+	case blockchains.Algorand:
 		// First decode the signature
 		decoded, err := algorand.DecodeSignature(signature)
 		if err != nil {
@@ -371,7 +375,7 @@ func VerifySignature(
 
 		// Try to verify as a dummy transaction
 		return algorand.VerifyDummyTransaction(identity, message, decoded)
-	} else if identityCurve == APTOS_EDDSA_CURVE || identityCurve == RIPPLE_CURVE || identityCurve == CARDANO_CURVE {
+	case blockchains.Aptos, blockchains.Ripple, blockchains.Cardano:
 		fmt.Println("[VERIFY APTOS_EDDSA] Verifying Aptos EdDSA signature")
 
 		// Remove 0x prefix from public key
@@ -411,7 +415,7 @@ func VerifySignature(
 
 		fmt.Printf("[VERIFY APTOS_EDDSA] Verification result: %v\n", verified)
 		return verified, nil
-	} else if identityCurve == STELLAR_CURVE {
+	case blockchains.Stellar:
 		fmt.Println("[VERIFY STELLAR] Verifying Stellar EdDSA signature")
 
 		// Decode the signature from base64
@@ -447,27 +451,28 @@ func VerifySignature(
 		// If verification failed, return false with error
 		fmt.Printf("[VERIFY STELLAR] Verification failed: %v\n", err)
 		return false, nil
-	} else {
-		logger.Sugar().Errorf("unsupported curve: %s", identityCurve)
-		return false, fmt.Errorf("unsupported curve: %s", identityCurve)
+	default:
+		logger.Sugar().Errorf("unsupported blockchain: %s", blockchainID)
+		return false, fmt.Errorf("unsupported blockchain: %s", blockchainID)
 	}
 }
 
 func SanitiseIntent(intent libs.Intent) (string, error) {
 	intentForSigning := IntentForSigning{
-		Identity:      intent.Identity,
-		IdentityCurve: intent.IdentityCurve,
-		Operations:    []OperationForSigning{},
-		Expiry:        intent.Expiry,
+		Identity:     intent.Identity,
+		BlockchainID: intent.BlockchainID,
+		NetworkType:  intent.NetworkType,
+		Operations:   []OperationForSigning{},
+		Expiry:       intent.Expiry,
 	}
 
 	for _, operation := range intent.Operations {
 		intentForSigning.Operations = append(intentForSigning.Operations, OperationForSigning{
 			SerializedTxn:  operation.SerializedTxn,
 			DataToSign:     operation.DataToSign,
-			ChainId:        operation.ChainId,
+			BlockchainID:   operation.BlockchainID,
+			NetworkType:    operation.NetworkType,
 			GenesisHash:    operation.GenesisHash,
-			KeyCurve:       operation.KeyCurve,
 			Type:           operation.Type,
 			Solver:         operation.Solver,
 			SolverMetadata: operation.SolverMetadata,

@@ -5,6 +5,7 @@ import (
 	"log"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/StripChain/strip-node/util"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -80,6 +81,7 @@ func main() {
 
 	InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
 
+	blockchains.InitBlockchainRegistry()
 	// Initialize host first
 	var addr multiaddr.Multiaddr
 	h, addr, err = createHost(*listenHost, *port, *bootnodeURL)

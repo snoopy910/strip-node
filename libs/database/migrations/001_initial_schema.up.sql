@@ -25,12 +25,43 @@ CREATE TYPE operation_type AS ENUM (
     'SEND_TO_BRIDGE'
 );
 
+CREATE TYPE blockchain_id AS ENUM (
+    'ALGORAND',
+    'ALGORAND_TESTNET',
+    'APTOS',
+    'APTOS_TESTNET',
+    'BITCOIN',
+    'BITCOIN_TESTNET',
+    'CARDANO',
+    'CARDANO_TESTNET',
+    'DOGECOIN',
+    'DOGECOIN_TESTNET',
+    'ETHEREUM',
+    'ETHEREUM_SEPOLIA',
+    'RIPPLE',
+    'RIPPLE_TESTNET',
+    'SOLANA',
+    'SOLANA_TESTNET',
+    'STELLAR',
+    'STELLAR_TESTNET',
+    'SUI',
+    'SUI_TESTNET'
+);
+
+create type network_type as enum (
+    'MAINNET',
+    'TESTNET',
+    'DEVNET',
+    'REGNET'
+);
+
 -- IntentSchema
 CREATE TABLE IF NOT EXISTS intents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     signature TEXT NOT NULL,
     identity TEXT NOT NULL,
-    identity_curve TEXT NOT NULL,
+    blockchain_id blockchain_id NOT NULL,
+    network_type network_type NOT NULL,
     status intent_status NOT NULL,
     expiry TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -42,9 +73,9 @@ CREATE TABLE IF NOT EXISTS operations (
     intent_id UUID REFERENCES intents(id) NOT NULL,
     serialized_txn TEXT NOT NULL,
     data_to_sign TEXT NOT NULL,
-    chain_id TEXT NOT NULL,
+    blockchain_id blockchain_id NOT NULL,
+    network_type network_type NOT NULL,
     genesis_hash TEXT,
-    key_curve TEXT NOT NULL,
     status operation_status NOT NULL,
     result TEXT,
     type operation_type NOT NULL,
@@ -59,10 +90,12 @@ CREATE TABLE IF NOT EXISTS operations (
 CREATE TABLE IF NOT EXISTS wallets (
     id BIGSERIAL PRIMARY KEY,
     identity TEXT NOT NULL,
-    identity_curve TEXT NOT NULL,
+    blockchain_id blockchain_id NOT NULL,
     eddsa_public_key TEXT,
-    aptos_eddsa_public_key TEXT,
     ecdsa_public_key TEXT,
+    aptos_eddsa_public_key TEXT,
+    ethereum_public_key TEXT,
+    solana_public_key TEXT,
     bitcoin_mainnet_public_key TEXT,
     bitcoin_testnet_public_key TEXT,
     bitcoin_regtest_public_key TEXT,
@@ -80,7 +113,7 @@ CREATE TABLE IF NOT EXISTS wallets (
 CREATE TABLE IF NOT EXISTS locks (
     id BIGSERIAL PRIMARY KEY,
     identity TEXT NOT NULL,
-    identity_curve TEXT NOT NULL,
+    blockchain_id blockchain_id NOT NULL,
     locked BOOLEAN NOT NULL DEFAULT FALSE
 );
 

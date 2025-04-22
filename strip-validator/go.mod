@@ -4,15 +4,10 @@ go 1.24.2
 
 require (
 	github.com/StripChain/strip-node v0.0.0-00010101000000-000000000000
-	github.com/algorand/go-algorand-sdk v1.24.0
 	github.com/bnb-chain/tss-lib/v2 v2.0.2
-	github.com/btcsuite/btcd v0.24.2
 	github.com/coming-chat/go-sui/v2 v2.0.1
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.3
-	github.com/echovl/cardano-go v0.1.14
 	github.com/ethereum/go-ethereum v1.15.8
-	github.com/gagliardetto/binary v0.8.0
-	github.com/gagliardetto/solana-go v1.12.0
 	github.com/go-pg/pg/v10 v10.14.0
 	github.com/google/uuid v1.6.0
 	github.com/insight-chain/inb-go v1.1.2
@@ -21,7 +16,6 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.13.1
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.15.0
-	github.com/rubblelabs/ripple v0.0.0-20240324121851-6816ca31ba51
 	github.com/stellar/go v0.0.0-20250409153303-3b29eb9ebb4c
 	golang.org/x/crypto v0.37.0
 )
@@ -31,17 +25,22 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/agl/ed25519 v0.0.0-20200225211852-fd4d107ace12 // indirect
 	github.com/algorand/avm-abi v0.2.0 // indirect
+	github.com/algorand/go-algorand-sdk v1.24.0 // indirect
 	github.com/algorand/go-codec/codec v1.1.10 // indirect
+	github.com/aptos-labs/aptos-go-sdk v1.6.2 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/blockfrost/blockfrost-go v0.3.0 // indirect
+	github.com/btcsuite/btcd v0.24.2 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.6 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/btcsuite/btclog v1.0.0 // indirect
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
+	github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd // indirect
+	github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coder/websocket v1.8.13 // indirect
 	github.com/consensys/bavard v0.1.30 // indirect
@@ -56,6 +55,7 @@ require (
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
+	github.com/echovl/cardano-go v0.1.14 // indirect
 	github.com/echovl/ed25519 v0.2.0 // indirect
 	github.com/elastic/gosigar v0.14.3 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.3 // indirect
@@ -66,6 +66,8 @@ require (
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
+	github.com/gagliardetto/binary v0.8.0 // indirect
+	github.com/gagliardetto/solana-go v1.12.0 // indirect
 	github.com/gagliardetto/treeout v0.1.4 // indirect
 	github.com/go-chi/chi v4.1.2+incompatible // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
@@ -90,6 +92,7 @@ require (
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hasura/go-graphql-client v0.13.1 // indirect
+	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/boxo v0.29.1 // indirect
@@ -178,6 +181,7 @@ require (
 	github.com/quic-go/quic-go v0.50.1 // indirect
 	github.com/quic-go/webtransport-go v0.8.1-0.20241018022711-4ac2c9250e66 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
+	github.com/rubblelabs/ripple v0.0.0-20240324121851-6816ca31ba51 // indirect
 	github.com/segmentio/go-loggly v0.5.1-0.20171222203950-eb91657e62b2 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect

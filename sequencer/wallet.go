@@ -9,7 +9,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
+	"github.com/StripChain/strip-node/util/logger"
 )
 
 // createWallet creates a new wallet with the specified identity and identity curve.
@@ -27,7 +31,7 @@ import (
 //
 // Returns:
 // - error: An error if any step in the wallet creation process fails.
-func createWallet(identity string, identityCurve string) error {
+func createWallet(identity string, blockchainID blockchains.BlockchainID) error {
 	// select a list of nodes.
 	// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
 	// If length of selected nodes is less than maximum nodes then use all nodes as signers.
@@ -49,494 +53,125 @@ func createWallet(identity string, identityCurve string) error {
 		signersPublicKeyList[i] = signer.PublicKey
 	}
 
+	blockchain, err := blockchains.GetBlockchain(blockchainID, blockchains.NetworkType(blockchains.Mainnet))
+	if err != nil {
+		return fmt.Errorf("failed to get blockchain: %w", err)
+	}
+
 	// create the wallet whose keycurve is eddsa here
-	createWalletRequest := CreateWalletRequest{
+	createWalletRequest := libs.CreateWalletRequest{
 		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "eddsa",
+		IdentityCurve: blockchain.KeyCurve(),
+		KeyCurve:      common.CurveEcdsa,
 		Signers:       signersPublicKeyList,
 	}
 
 	marshalled, err := json.Marshal(createWalletRequest)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal create wallet request: %w", err)
 	}
 
 	req, err := http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	client := http.Client{Timeout: 3 * time.Minute}
 	_, err = client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to do request: %w", err)
 	}
 
 	// create the wallet whose keycurve is sui_eddsa here
-	createWalletRequest = CreateWalletRequest{
+	createWalletRequest = libs.CreateWalletRequest{
 		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "sui_eddsa",
+		IdentityCurve: blockchain.KeyCurve(),
+		KeyCurve:      common.CurveEddsa,
 		Signers:       signersPublicKeyList,
 	}
 
 	marshalled, err = json.Marshal(createWalletRequest)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal create wallet request: %w", err)
 	}
 
 	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	client = http.Client{Timeout: 3 * time.Minute}
 	_, err = client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to create sui wallet: %v", err)
-	}
-
-	// create the wallet whose keycurve is aptos_eddsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "aptos_eddsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// create the wallet whose keycurve is ecdsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "ecdsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// create the wallet whose keycurve is dogecoin_ecdsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "dogecoin_ecdsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// create the wallet whose keycurve is bitcoin_ecdsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "bitcoin_ecdsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// create the wallet whose keycurve is algorand_eddsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "algorand_eddsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to create sui wallet: %w", err)
 	}
 
 	// get the address of the wallet whose keycurve is eddsa here
-	resp, err := http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=eddsa")
+	resp, err := http.Get(fmt.Sprintf("%s/address?identity=%s&identityCurve=%s", signers[0].URL, identity, blockchain.KeyCurve()))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get address: %w", err)
 	}
 
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read body: %w", err)
 	}
 
-	var getAddressResponse GetAddressResponse
-	err = json.Unmarshal(body, &getAddressResponse)
+	var addressesResponse libs.AddressesResponse
+	logger.Sugar().Infof("addresses response: %s", string(body))
+	err = json.Unmarshal(body, &addressesResponse)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal addresses response: %w", err)
 	}
 
-	eddsaAddress := getAddressResponse.Address
-
-	// get the address of the wallet whose keycurve is sui_eddsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=sui_eddsa")
-	if err != nil {
-		return err
+	wallet := db.WalletSchema{
+		Identity:       identity,
+		BlockchainID:   blockchainID,
+		Signers:        signersPublicKeyList,
+		EDDSAPublicKey: addressesResponse.EDDSAAddress,
+		ECDSAPublicKey: addressesResponse.ECDSAAddress,
 	}
 
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
+	for blockchainID, addresses := range addressesResponse.Addresses {
+		switch blockchainID {
+		case blockchains.Ethereum:
+			logger.Sugar().Infof("ethereum address: %s", addresses[blockchains.Mainnet])
+			wallet.EthereumPublicKey = addresses[blockchains.Mainnet]
+		case blockchains.Sui:
+			wallet.SuiPublicKey = addresses[blockchains.Mainnet]
+		case blockchains.Algorand:
+			wallet.AlgorandEDDSAPublicKey = addresses[blockchains.Mainnet]
+		case blockchains.Bitcoin:
+			wallet.BitcoinMainnetPublicKey = addresses[blockchains.Mainnet]
+			wallet.BitcoinTestnetPublicKey = addresses[blockchains.Testnet]
+			wallet.BitcoinRegtestPublicKey = addresses[blockchains.Regnet]
+		case blockchains.Dogecoin:
+			wallet.DogecoinMainnetPublicKey = addresses[blockchains.Mainnet]
+			wallet.DogecoinTestnetPublicKey = addresses[blockchains.Testnet]
+		case blockchains.Stellar:
+			wallet.StellarPublicKey = addresses[blockchains.Mainnet]
+		case blockchains.Ripple:
+			wallet.RippleEDDSAPublicKey = addresses[blockchains.Mainnet]
+		case blockchains.Cardano:
+			wallet.CardanoPublicKey = addresses[blockchains.Mainnet]
+		case blockchains.Aptos:
+			wallet.AptosEDDSAPublicKey = addresses[blockchains.Mainnet]
+		case blockchains.Solana:
+			wallet.SolanaPublicKey = addresses[blockchains.Mainnet]
+		default:
+			logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
+			return fmt.Errorf("unsupported blockchain ID: %s", blockchainID)
+		}
 	}
-
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	suiAddress := getAddressResponse.Address
-
-	// get the address of the wallet whose keycurve is aptos_eddsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=aptos_eddsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	aptosEddsaAddress := getAddressResponse.Address
-
-	// get the address of the wallet whose keycurve is ecdsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=ecdsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-
-	}
-
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	ecdsaAddress := getAddressResponse.Address
-
-	// get the address of the wallet whose keycurve is bitcoin_ecdsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=bitcoin_ecdsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	var getBitcoinAddressesResponse GetBitcoinAddressesResponse
-
-	err = json.Unmarshal(body, &getBitcoinAddressesResponse)
-	if err != nil {
-		return err
-	}
-
-	bitcoinMainnetAddress := getBitcoinAddressesResponse.MainnetAddress
-	bitcoinTestnetAddress := getBitcoinAddressesResponse.TestnetAddress
-	bitcoinRegtestAddress := getBitcoinAddressesResponse.RegtestAddress
-
-	// get the address of the wallet whose keycurve is dogecoin_ecdsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=dogecoin_ecdsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	var getDogecoinAddressesResponse GetDogecoinAddressesResponse
-
-	err = json.Unmarshal(body, &getDogecoinAddressesResponse)
-	if err != nil {
-		return err
-	}
-
-	dogecoinMainnetAddress := getDogecoinAddressesResponse.MainnetAddress
-	dogecoinTestnetAddress := getDogecoinAddressesResponse.TestnetAddress
-
-	// get the address of the wallet whose keycurve is algorand_eddsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=algorand_eddsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	algorandEddsaAddress := getAddressResponse.Address
-
-	// create the wallet whose keycurve is stellar_eddsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "stellar_eddsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// get the address of the wallet whose keycurve is stellar_eddsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=stellar_eddsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	stellarAddress := getAddressResponse.Address
-
-	// create the wallet whose keycurve is ripple_eddsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "ripple_eddsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// get the address of the wallet whose keycurve is stellar_eddsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=ripple_eddsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	rippleAddress := getAddressResponse.Address
-
-	// create the wallet whose keycurve is cardano_eddsa here
-	createWalletRequest = CreateWalletRequest{
-		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "cardano_eddsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
-	if err != nil {
-		return err
-	}
-
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// get the address of the wallet whose keycurve is cardano_eddsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=cardano_eddsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	var getCardanoAddressesResponse GetAddressResponse
-
-	err = json.Unmarshal(body, &getCardanoAddressesResponse)
-	if err != nil {
-		return err
-	}
-
-	cardanoAddress := getCardanoAddressesResponse.Address
 
 	// add created wallet to the store
-	wallet := db.WalletSchema{
-		Identity:                 identity,
-		IdentityCurve:            identityCurve,
-		Signers:                  signersPublicKeyList,
-		EDDSAPublicKey:           eddsaAddress,
-		AptosEDDSAPublicKey:      aptosEddsaAddress,
-		ECDSAPublicKey:           ecdsaAddress,
-		BitcoinMainnetPublicKey:  bitcoinMainnetAddress,
-		BitcoinTestnetPublicKey:  bitcoinTestnetAddress,
-		BitcoinRegtestPublicKey:  bitcoinRegtestAddress,
-		DogecoinMainnetPublicKey: dogecoinMainnetAddress,
-		DogecoinTestnetPublicKey: dogecoinTestnetAddress,
-		SuiPublicKey:             suiAddress,
-		StellarPublicKey:         stellarAddress,
-		AlgorandEDDSAPublicKey:   algorandEddsaAddress,
-		RippleEDDSAPublicKey:     rippleAddress,
-		CardanoPublicKey:         cardanoAddress,
-	}
-
 	_, err = db.AddWallet(&wallet)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to add wallet to store: %w", err)
 	}
 
 	return nil

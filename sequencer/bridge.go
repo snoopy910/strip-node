@@ -12,6 +12,7 @@ import (
 
 	"github.com/StripChain/strip-node/bridge"
 	tssCommon "github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -38,13 +39,13 @@ func initialiseBridge() {
 	// intents won't be signed using this identity for bridge operations
 	// this identity is just used to identity the bridge accounts
 	identity := BridgeContractAddress
-	identityCurve := "ecdsa"
+	blockchainID := blockchains.Ethereum
 
 	_createWallet := false
 
-	logger.Sugar().Infow("Creating bridge wallet", "identity", identity, "identityCurve", identityCurve)
+	logger.Sugar().Infow("Creating bridge wallet", "identity", identity, "blockchainID", blockchainID)
 
-	_, err := db.GetWallet(identity, identityCurve)
+	_, err := db.GetWallet(identity, blockchainID)
 	if err != nil {
 		if err.Error() == "pg: no rows in result set" {
 			_createWallet = true
@@ -59,34 +60,39 @@ func initialiseBridge() {
 		return
 	}
 
-	err = createWallet(identity, identityCurve)
+	err = createWallet(identity, blockchainID)
 	if err != nil {
+		logger.Sugar().Errorw("failed to create wallet", "error", err)
 		panic(err)
 	}
 
 	logger.Sugar().Info("Bridge wallet created")
 
-	wallet, err := db.GetWallet(identity, identityCurve)
+	wallet, err := db.GetWallet(identity, blockchainID)
 	if err != nil {
+		logger.Sugar().Errorw("failed to get wallet", "error", err)
 		panic(err)
 	}
 
-	logger.Sugar().Infow("Bridge authority is: ", "authority", wallet.ECDSAPublicKey)
+	logger.Sugar().Infow("Bridge authority is: ", "authority", wallet.EthereumPublicKey)
 
 	client, err := ethclient.Dial(RPC_URL)
 	if err != nil {
-		log.Fatal(err)
+		logger.Sugar().Errorw("failed to dial ethclient", "error", err)
+		panic(err)
 	}
 
 	privateKey, err := crypto.HexToECDSA(PrivateKey)
 	if err != nil {
-		log.Fatal(err)
+		logger.Sugar().Errorw("failed to convert private key to ECDSA", "error", err)
+		panic(err)
 	}
 
 	publicKey := privateKey.Public()
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
 	if !ok {
-		log.Fatal("error casting public key to ECDSA")
+		logger.Sugar().Errorw("error casting public key to ECDSA")
+		panic("error casting public key to ECDSA")
 	}
 
 	toAddress := common.HexToAddress(BridgeContractAddress)
@@ -113,7 +119,7 @@ func initialiseBridge() {
 		log.Fatal(err)
 	}
 
-	data, err := abi.Pack("setAuthority", common.HexToAddress(wallet.ECDSAPublicKey))
+	data, err := abi.Pack("setAuthority", common.HexToAddress(wallet.EthereumPublicKey))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -138,7 +144,7 @@ func initialiseBridge() {
 
 	auth.Nonce = big.NewInt(int64(nonce))
 
-	tx, err := instance.SetAuthority(auth, common.HexToAddress(wallet.ECDSAPublicKey))
+	tx, err := instance.SetAuthority(auth, common.HexToAddress(wallet.EthereumPublicKey))
 	if err != nil {
 		log.Fatal(err)
 	}

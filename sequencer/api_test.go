@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/google/uuid"
 )
 
@@ -109,15 +110,14 @@ func TestGetWalletEndpoint(t *testing.T) {
 func TestCreateIntent(t *testing.T) {
 	// Create a test intent
 	testIntent := libs.Intent{
-		Identity:      "testIdentity",
-		IdentityCurve: "ecdsa",
-		Status:        libs.IntentStatusProcessing,
+		Identity:     "testIdentity",
+		BlockchainID: blockchains.Ethereum,
+		Status:       libs.IntentStatusProcessing,
 		Operations: []libs.Operation{
 			{
-				Type:     libs.OperationTypeTransaction,
-				Status:   libs.OperationStatusPending,
-				ChainId:  "1",
-				KeyCurve: "ecdsa",
+				Type:         libs.OperationTypeTransaction,
+				Status:       libs.OperationStatusPending,
+				BlockchainID: blockchains.Ethereum,
 			},
 		},
 	}
@@ -181,10 +181,10 @@ func TestGetIntent(t *testing.T) {
 
 		// Mock response intent
 		intent := libs.Intent{
-			ID:            uuid.New(),
-			Identity:      "testIdentity",
-			IdentityCurve: "ecdsa",
-			Status:        libs.IntentStatusCompleted,
+			ID:           uuid.New(),
+			Identity:     "testIdentity",
+			BlockchainID: blockchains.Ethereum,
+			Status:       libs.IntentStatusCompleted,
 		}
 
 		json.NewEncoder(w).Encode(intent)

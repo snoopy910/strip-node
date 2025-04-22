@@ -10,6 +10,7 @@ import (
 
 	"github.com/StripChain/strip-node/common"
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -29,20 +30,21 @@ const (
 )
 
 type Message struct {
-	Identity           string      `json:"identity"`
-	IdentityCurve      string      `json:"identityCurve"`
-	KeyCurve           string      `json:"keyCurve"`
-	From               int         `json:"from"`
-	To                 int         `json:"to"`
-	Message            []byte      `json:"message"`
-	Type               MessageType `json:"type"`
-	IsToNewCommittee   bool        `json:"isToNewCommittee"`
-	IsFromNewCommittee bool        `json:"isFromNewCommittee"`
-	IsBroadcast        bool        `json:"isBroadcast"`
-	Hash               []byte      `json:"hash"`
-	Address            string      `json:"address"`
-	Signature          []byte      `json:"signature"`
-	Signers            []string    `json:"signers"`
+	Identity           string                   `json:"identity"`
+	BlockchainID       blockchains.BlockchainID `json:"blockchainID"`
+	IdentityCurve      common.Curve             `json:"identityCurve"`
+	KeyCurve           common.Curve             `json:"keyCurve"`
+	From               int                      `json:"from"`
+	To                 int                      `json:"to"`
+	Message            []byte                   `json:"message"`
+	Type               MessageType              `json:"type"`
+	IsToNewCommittee   bool                     `json:"isToNewCommittee"`
+	IsFromNewCommittee bool                     `json:"isFromNewCommittee"`
+	IsBroadcast        bool                     `json:"isBroadcast"`
+	Hash               []byte                   `json:"hash"`
+	Address            string                   `json:"address"`
+	Signature          []byte                   `json:"signature"`
+	Signers            []string                 `json:"signers"`
 	AlgorandFlags      *struct {
 		IsRealTransaction bool `json:"isRealTransaction"`
 	} `json:"algorandFlags,omitempty"`
@@ -103,7 +105,7 @@ func handleIncomingMessage(message []byte) {
 	} else if msg.Type == MESSAGE_TYPE_GENERATE_KEYGEN {
 		go updateKeygen(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To, msg.Signers)
 	} else if msg.Type == MESSAGE_TYPE_START_SIGN {
-		go generateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.Hash)
+		go generateSignature(msg.Identity, msg.BlockchainID, msg.IdentityCurve, msg.KeyCurve, msg.Hash)
 	} else if msg.Type == MESSAGE_TYPE_SIGN {
 		go updateSignature(msg.Identity, msg.IdentityCurve, msg.KeyCurve, msg.From, msg.Message, msg.IsBroadcast, msg.To)
 	} else if msg.Type == MESSAGE_TYPE_SIGNATURE {
@@ -112,8 +114,8 @@ func handleIncomingMessage(message []byte) {
 		// This ensures we find the correct channel for each chain's message format.
 
 		sendMsg := make(chan bool)
-		switch msg.KeyCurve {
-		case EDDSA_CURVE:
+		switch msg.BlockchainID {
+		case blockchains.Solana:
 			// Solana: Client sends base58 string -> decode -> process -> encode back to base58
 			// Channel key must match the original base58 format from client
 			if val, ok := messageChan[base58.Encode(msg.Hash)]; ok {
@@ -122,7 +124,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case BITCOIN_CURVE:
+		case blockchains.Bitcoin:
 			// Bitcoin: Client sends string -> hash -> process -> encode to hex
 			// Channel key must match the hex encoded hash
 			if val, ok := messageChan[string(msg.Hash)]; ok {
@@ -131,7 +133,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case DOGECOIN_CURVE:
+		case blockchains.Dogecoin:
 			// Dogecoin: Client sends string -> hash -> process -> encode to hex
 			// Channel key must match the hex encoded hash
 			// if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
@@ -141,7 +143,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case APTOS_EDDSA_CURVE, CARDANO_CURVE:
+		case blockchains.Aptos, blockchains.Cardano:
 			// Aptos: Client sends string -> process -> encode to hex
 			// Channel key must match the hex encoded format
 			if val, ok := messageChan[hex.EncodeToString(msg.Hash)]; ok {
@@ -150,7 +152,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case RIPPLE_CURVE:
+		case blockchains.Ripple:
 			// Ripple: Client sends string -> process -> encode to hex
 			// Channel key must match the hex encoded format
 			if val, ok := messageChan[strings.ToUpper(hex.EncodeToString(msg.Hash))]; ok {
@@ -159,7 +161,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case STELLAR_CURVE:
+		case blockchains.Stellar:
 			// Stellar: Client sends base64 string -> decode -> process -> encode back to base64
 			// Channel key must match the original base64 format from client, using StrKey encoding
 			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
@@ -168,7 +170,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case SUI_EDDSA_CURVE:
+		case blockchains.Sui:
 			// Sui: Client sends base64 string -> decode -> process -> encode back to base64
 			// Channel key must match the original base32 format from client
 			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {
@@ -177,7 +179,7 @@ func handleIncomingMessage(message []byte) {
 					sendMsg <- true
 				}()
 			}
-		case ALGORAND_CURVE:
+		case blockchains.Algorand:
 			// Algorand: Client sends base64 string -> decode -> process -> encode back to base64
 			// Channel key must match the original base32 format from client
 			if val, ok := messageChan[base64.StdEncoding.EncodeToString(msg.Hash)]; ok {

@@ -7,20 +7,12 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/StripChain/strip-node/algorand"
-	"github.com/StripChain/strip-node/aptos"
-	"github.com/StripChain/strip-node/bitcoin"
-	"github.com/StripChain/strip-node/cardano"
-	"github.com/StripChain/strip-node/common"
-	"github.com/StripChain/strip-node/dogecoin"
-	"github.com/StripChain/strip-node/evm"
 	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
-	"github.com/StripChain/strip-node/ripple"
-	"github.com/StripChain/strip-node/solana"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
-	"github.com/StripChain/strip-node/stellar"
-	"github.com/StripChain/strip-node/sui"
+	"github.com/StripChain/strip-node/util/logger"
+	"github.com/google/uuid"
 )
 
 const (
@@ -34,15 +26,9 @@ const (
 	GET_OPERATION_ERROR           = "failed to get operation"
 	OPERATION_NOT_COMPLETED_ERROR = "operation not completed"
 	GET_TRANSFERS_ERROR           = "failed to get transfers"
-	PARSE_INT_ERROR               = "int parsing error"
+	GET_BLOCKCHAIN_ERROR          = "failed to get blockchain"
+	PARSE_UUID_ID_ERROR           = "failed to parse intent id"
 )
-
-type CreateWalletRequest struct {
-	Identity      string   `json:"identity"`
-	IdentityCurve string   `json:"identityCurve"`
-	KeyCurve      string   `json:"keyCurve"`
-	Signers       []string `json:"signers"`
-}
 
 type GetAddressResponse struct {
 	Address string `json:"address"`
@@ -117,7 +103,7 @@ func startHTTPServer(port string) {
 
 		// then store the wallet and it's list of signers in the db
 		identity := r.URL.Query().Get("identity")
-		identityCurve := r.URL.Query().Get("identityCurve")
+		blockchainIDStr := r.URL.Query().Get("blockchain")
 
 		_createWallet := false
 
@@ -126,13 +112,13 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		curve, err := common.ParseCurve(identityCurve)
+		blockchainID, err := blockchains.ParseBlockchainID(blockchainIDStr)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		_, err = db.GetWallet(identity, string(curve))
+		_, err = db.GetWallet(identity, blockchainID)
 		if err != nil {
 
 			if err.Error() == "pg: no rows in result set" {
@@ -149,7 +135,7 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		err = createWallet(identity, identityCurve)
+		err = createWallet(identity, blockchainID)
 		if err != nil {
 			http.Error(w, CREATE_WALLET_ERROR, http.StatusInternalServerError)
 			return
@@ -172,20 +158,19 @@ func startHTTPServer(port string) {
 		enableCors(&w)
 
 		identity := r.URL.Query().Get("identity")
-		identityCurve := r.URL.Query().Get("identityCurve")
-
+		blockchainIDStr := r.URL.Query().Get("blockchain")
 		if identity == "" {
 			http.Error(w, "identity required", http.StatusBadRequest)
 			return
 		}
 
-		curve, err := common.ParseCurve(identityCurve)
+		blockchainID, err := blockchains.ParseBlockchainID(blockchainIDStr)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		wallet, err := db.GetWallet(identity, string(curve))
+		wallet, err := db.GetWallet(identity, blockchainID)
 		if err != nil {
 			if err.Error() == "pg: no rows in result set" {
 				http.Error(w, "wallet not found", http.StatusNotFound)
@@ -228,6 +213,8 @@ func startHTTPServer(port string) {
 		addKey("Algorand", "testnet", wallet.AlgorandEDDSAPublicKey)
 		addKey("Cardano", "testnet", wallet.CardanoPublicKey)
 		addKey("Aptos", "testnet", wallet.AptosEDDSAPublicKey)
+		addKey("Ethereum", "testnet", wallet.EthereumPublicKey)
+		addKey("Solana", "testnet", wallet.SolanaPublicKey)
 
 		// Add general cryptographic keys
 		addKey("EDDSA", "testnet", wallet.EDDSAPublicKey)
@@ -247,7 +234,7 @@ func startHTTPServer(port string) {
 	http.HandleFunc("/getBridgeAddress", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
-		wallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
+		wallet, err := db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
 		if err != nil {
 			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
@@ -286,15 +273,15 @@ func startHTTPServer(port string) {
 		}
 
 		id, err := db.AddIntent(&intent)
-
 		if err != nil {
+			logger.Sugar().Errorw("failed to add intent", "error", err)
 			http.Error(w, ADD_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		go ProcessIntent(id)
 
-		fmt.Fprintf(w, "{\"id\": %d}", id)
+		fmt.Fprintf(w, "{\"id\": \"%s\"}", id.String())
 	})
 
 	// GetIntent endpoint - Retrieves a specific intent by ID
@@ -308,20 +295,23 @@ func startHTTPServer(port string) {
 		enableCors(&w)
 
 		intentId := r.URL.Query().Get("id")
-		i, err := strconv.ParseInt(intentId, 10, 64)
+		id, err := uuid.Parse(intentId)
 		if err != nil {
-			http.Error(w, PARSE_INT_ERROR, http.StatusInternalServerError)
+			logger.Sugar().Errorw("failed to parse intent id", "error", err)
+			http.Error(w, PARSE_UUID_ID_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		intent, err := db.GetIntent(i)
+		intent, err := db.GetIntent(id)
 		if err != nil {
+			logger.Sugar().Errorw("failed to get intent", "error", err)
 			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(intent)
 		if err != nil {
+			logger.Sugar().Errorw("failed to encode intent", "error", err)
 			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
@@ -531,175 +521,42 @@ func startHTTPServer(port string) {
 
 		operationId := r.URL.Query().Get("operationId")
 		intentId := r.URL.Query().Get("intentId")
-		i, _ := strconv.ParseInt(operationId, 10, 64)
-		j, _ := strconv.ParseInt(intentId, 10, 64)
+		opID, _ := strconv.ParseInt(operationId, 10, 64)
+		intentID, _ := uuid.Parse(intentId)
 
-		operation, err := db.GetOperation(j, i)
+		operation, err := db.GetOperation(intentID, opID)
 		if err != nil {
 			http.Error(w, GET_OPERATION_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		intent, err := db.GetIntent(j)
-		if err != nil {
-			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
+		if operation.Result == "" || operation.Status != libs.OperationStatusCompleted {
+			http.Error(w, OPERATION_NOT_COMPLETED_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
-
+		wallet, err := db.GetWallet(BridgeContractAddress, operation.BlockchainID)
 		if err != nil {
 			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		if operation.Result == "" || operation.Status != db.OPERATION_STATUS_COMPLETED {
-			http.Error(w, OPERATION_NOT_COMPLETED_ERROR, http.StatusInternalServerError)
+		opBlockchain, err := blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
+		if err != nil {
+			http.Error(w, GET_BLOCKCHAIN_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		if operation.KeyCurve == "ecdsa" {
-			transfers, err := evm.GetEthereumTransfers(operation.ChainId, operation.Result, wallet.ECDSAPublicKey)
+		transfers, err := opBlockchain.GetTransfers(operation.Result, &wallet.EthereumPublicKey)
+		if err != nil {
+			http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
+			return
+		}
 
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "eddsa" {
-			transfers, err := solana.GetSolanaTransfers(operation.ChainId, operation.Result, HeliusApiKey)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "aptos_eddsa" {
-			transfers, err := aptos.GetAptosTransfers(operation.ChainId, operation.Result)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "bitcoin_ecdsa" {
-			transfers, _, err := bitcoin.GetBitcoinTransfers(operation.ChainId, operation.Result)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "sui_eddsa" {
-			transfers, err := sui.GetSuiTransfers(operation.ChainId, operation.Result)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "dogecoin_ecdsa" {
-			// Get chain information
-			chain, err := common.GetChain(operation.ChainId)
-			if err != nil {
-				http.Error(w, "Chain not found", http.StatusInternalServerError)
-				return
-			}
-
-			var transfers []common.Transfer
-			switch chain.ChainType {
-			case "dogecoin":
-				transfers, err = dogecoin.GetDogeTransfers(operation.ChainId, operation.Result)
-			default:
-				http.Error(w, "Unsupported chain type", http.StatusInternalServerError)
-				return
-			}
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "stellar_eddsa" {
-			transfers, err := stellar.GetStellarTransfers(operation.ChainId, operation.Result)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "algorand_eddsa" {
-			transfers, err := algorand.GetAlgorandTransfers(operation.GenesisHash, operation.Result)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "ripple_eddsa" {
-			transfers, err := ripple.GetRippleTransfers(operation.ChainId, operation.Result)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
-		} else if operation.KeyCurve == "cardano_eddsa" {
-			transfers, err := cardano.GetCardanoTransfers(operation.ChainId, operation.Result)
-
-			if err != nil {
-				http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
-				return
-			}
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
-				return
-			}
+		err = json.NewEncoder(w).Encode(transfers)
+		if err != nil {
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+			return
 		}
 	})
 

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/bitcoin"
+	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/StripChain/strip-node/ripple"
 	"github.com/StripChain/strip-node/util/logger"
 	cmn "github.com/bnb-chain/tss-lib/v2/common"
@@ -30,7 +32,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-func updateSignature(identity string, identityCurve string, keyCurve string, from int, bz []byte, isBroadcast bool, to int) {
+func updateSignature(identity string, identityCurve common.Curve, keyCurve common.Curve, from int, bz []byte, isBroadcast bool, to int) {
 	signersString, err := GetSignersForKeyShare(identity, identityCurve, keyCurve)
 	if err != nil {
 		logger.Sugar().Errorw("error from postgres", "error", err)
@@ -50,18 +52,18 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 
 	//wait for 1 minute for party to be ready
 	for i := 0; i < 6; i++ {
-		if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Exists {
+		if !partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)].Exists {
 			time.Sleep(10 * time.Second)
 		} else {
 			break
 		}
 	}
 
-	if !partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Exists {
+	if !partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)].Exists {
 		return
 	}
 
-	party := *partyProcesses[identity+"_"+identityCurve+"_"+keyCurve].Party
+	party := *partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)].Party
 
 	if to != -1 && to != party.PartyID().Index {
 		return
@@ -84,7 +86,7 @@ func updateSignature(identity string, identityCurve string, keyCurve string, fro
 	logger.Sugar().Infof("processed signature generation message with status: %v", ok)
 }
 
-func generateSignature(identity string, identityCurve string, keyCurve string, hash []byte) {
+func generateSignature(identity string, blockchainID blockchains.BlockchainID, identityCurve common.Curve, keyCurve common.Curve, hash []byte) {
 	keyShare, err := GetKeyShare(identity, identityCurve, keyCurve)
 
 	if err != nil {
@@ -121,7 +123,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 
 	Index := SliceIndexOfString(signers, NodePublicKey)
 
-	delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+	delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 	TotalSigners := len(signers)
 
@@ -135,83 +137,36 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 	var rawKeyEddsa *eddsaKeygen.LocalPartySaveData
 	var rawKeyEcdsa *ecdsaKeygen.LocalPartySaveData
 
-	if keyCurve == EDDSA_CURVE {
+	switch keyCurve {
+	case common.CurveEddsa:
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		msg := (&big.Int{}).SetBytes(hash)
 
-		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		err = json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
+		if err != nil {
+			logger.Sugar().Errorw("error unmarshalling key share", "error", err)
+			return
+		}
 		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
-
-	} else if keyCurve == BITCOIN_CURVE {
+	case common.CurveEcdsa:
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		// msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
 		msg, _ := new(big.Int).SetString(string(hash), 16)
-		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+		err = json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
+		if err != nil {
+			logger.Sugar().Errorw("error unmarshalling key share", "error", err)
+			return
+		}
 		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
+		partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)] = PartyProcess{&localParty, true}
 
 		go localParty.Start()
-
-	} else if keyCurve == SUI_EDDSA_CURVE {
-		// Sui uses Ed25519 for transaction signing
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-
-		msg := (&big.Int{}).SetBytes(hash)
-
-		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
-		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
-
-	} else if keyCurve == DOGECOIN_CURVE {
-		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		// msg := new(big.Int).SetBytes(crypto.Keccak256(hash))
-		msg, _ := new(big.Int).SetString(string(hash), 16)
-		fmt.Println("Message to create dogecoin signature: ", msg)
-		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
-		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
-	} else if keyCurve == APTOS_EDDSA_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		msg, _ := new(big.Int).SetString(string(hash), 16)
-
-		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
-		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
-	} else if keyCurve == STELLAR_CURVE || keyCurve == RIPPLE_CURVE || keyCurve == CARDANO_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		msg := new(big.Int).SetBytes(hash)
-
-		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
-		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
-	} else if keyCurve == ALGORAND_CURVE {
-		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		msg := new(big.Int).SetBytes(hash)
-
-		json.Unmarshal([]byte(keyShare), &rawKeyEddsa)
-		localParty := eddsaSigning.NewLocalParty(msg, params, *rawKeyEddsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
-	} else {
-		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
-		msg, _ := new(big.Int).SetString(string(hash), 16)
-		json.Unmarshal([]byte(keyShare), &rawKeyEcdsa)
-		localParty := ecdsaSigning.NewLocalParty(msg, params, *rawKeyEcdsa, outChanKeygen, saveChan)
-		partyProcesses[identity+"_"+identityCurve+"_"+keyCurve] = PartyProcess{&localParty, true}
-
-		go localParty.Start()
+	default:
+		logger.Sugar().Errorw("invalid key curve", "keyCurve", keyCurve)
+		return
 	}
 
 	completed := false
@@ -230,6 +185,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 			message := Message{
 				Type:          MESSAGE_TYPE_SIGN,
 				From:          msg.GetFrom().Index,
+				BlockchainID:  blockchainID,
 				To:            to,
 				Message:       bytes,
 				IsBroadcast:   msg.IsBroadcast(),
@@ -245,7 +201,8 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 		case save := <-saveChan:
 			completed = true
 
-			if keyCurve == EDDSA_CURVE {
+			switch blockchainID {
+			case blockchains.Solana:
 				pk := edwards.PublicKey{
 					Curve: rawKeyEddsa.EDDSAPub.Curve(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
@@ -262,12 +219,13 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 				go broadcast(message)
-			} else if keyCurve == BITCOIN_CURVE {
+			case blockchains.Bitcoin:
 				xStr := fmt.Sprintf("%064x", rawKeyEcdsa.ECDSAPub.X())
 				prefix := "02"
 				if rawKeyEcdsa.ECDSAPub.Y().Bit(0) == 1 {
@@ -291,13 +249,14 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Address:       compressedPubKeyStr, // we pass the public key in string format, hex string with length 130 starts with 04
 					Identity:      identity,
 					IdentityCurve: identityCurve,
+					BlockchainID:  blockchainID,
 					KeyCurve:      keyCurve,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 				go broadcast(message)
-			} else if keyCurve == DOGECOIN_CURVE {
+			case blockchains.Dogecoin:
 				x := toHexInt(rawKeyEcdsa.ECDSAPub.X())
 				y := toHexInt(rawKeyEcdsa.ECDSAPub.Y())
 				publicKeyStr := "04" + x + y
@@ -318,12 +277,13 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 				go broadcast(message)
-			} else if keyCurve == SUI_EDDSA_CURVE {
+			case blockchains.Sui:
 				// Get the Ed25519 public key
 				pk := edwards.PublicKey{
 					Curve: tss.Edwards(),
@@ -362,12 +322,13 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 				go broadcast(message)
-			} else if keyCurve == APTOS_EDDSA_CURVE {
+			case blockchains.Aptos:
 				pk := edwards.PublicKey{
 					Curve: tss.Edwards(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
@@ -384,12 +345,13 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 				go broadcast(message)
-			} else if keyCurve == STELLAR_CURVE {
+			case blockchains.Stellar:
 				pk := edwards.PublicKey{
 					Curve: tss.Edwards(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
@@ -421,12 +383,13 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 				go broadcast(message)
-			} else if keyCurve == ALGORAND_CURVE {
+			case blockchains.Algorand:
 				pk := edwards.PublicKey{
 					Curve: tss.Edwards(),
 					X:     rawKeyEddsa.EDDSAPub.X(),
@@ -455,6 +418,7 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 					AlgorandFlags: &struct {
 						IsRealTransaction bool `json:"isRealTransaction"`
 					}{
@@ -462,9 +426,9 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					},
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 				go broadcast(message)
-			} else if keyCurve == RIPPLE_CURVE {
+			case blockchains.Ripple:
 				message := Message{
 					Type:          MESSAGE_TYPE_SIGNATURE,
 					Hash:          hash,
@@ -473,11 +437,12 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 				go broadcast(message)
-			} else if keyCurve == CARDANO_CURVE {
+			case blockchains.Cardano:
 
 				pk := edwards.PublicKey{
 					Curve: rawKeyEddsa.EDDSAPub.Curve(),
@@ -495,11 +460,12 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 				go broadcast(message)
-			} else {
+			default:
 				final := hex.EncodeToString(save.Signature) + hex.EncodeToString(save.SignatureRecovery)
 
 				data, err := hex.DecodeString(string(hash))
@@ -524,11 +490,12 @@ func generateSignature(identity string, identityCurve string, keyCurve string, h
 					Identity:      identity,
 					IdentityCurve: identityCurve,
 					KeyCurve:      keyCurve,
+					BlockchainID:  blockchainID,
 				}
 
 				logger.Sugar().Infof("Address of the generated signature: %s", publicKeyToAddress(pubkey))
 
-				delete(partyProcesses, identity+"_"+identityCurve+"_"+keyCurve)
+				delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
 
 				go broadcast(message)
 			}

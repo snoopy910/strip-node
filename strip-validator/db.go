@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
@@ -45,10 +46,10 @@ func InitialiseDB(host string, database string, username string, password string
 	}
 }
 
-func AddKeyShare(identity string, identityCurve string, keyCurve string, key string) error {
+func AddKeyShare(identity string, identityCurve common.Curve, keyCurve common.Curve, key string) error {
 	logger.Sugar().Infof("Adding key share to postgres %s_%s_%s", identity, identityCurve, keyCurve)
 	kvStore := &KVStore{
-		Key:   identity + "_" + identityCurve + "_" + keyCurve,
+		Key:   identity + "_" + string(identityCurve) + "_" + string(keyCurve),
 		Value: key,
 	}
 
@@ -56,9 +57,9 @@ func AddKeyShare(identity string, identityCurve string, keyCurve string, key str
 	return err
 }
 
-func GetKeyShare(identity string, identityCurve string, keyCurve string) (string, error) {
+func GetKeyShare(identity string, identityCurve common.Curve, keyCurve common.Curve) (string, error) {
 	var keys []KVStore
-	err := client.Model(&keys).Where("key = ?", identity+"_"+identityCurve+"_"+keyCurve).Select()
+	err := client.Model(&keys).Where("key = ?", identity+"_"+string(identityCurve)+"_"+string(keyCurve)).Select()
 
 	if err != nil {
 		return "", err
@@ -71,10 +72,10 @@ func GetKeyShare(identity string, identityCurve string, keyCurve string) (string
 	return keys[0].Value, nil
 }
 
-func AddSignersForKeyShare(identity string, identityCurve string, keyCurve string, signers string) error {
+func AddSignersForKeyShare(identity string, identityCurve common.Curve, keyCurve common.Curve, signers string) error {
 	logger.Sugar().Infof("Adding signers to postgres %s_%s_%s", identity, identityCurve, keyCurve)
 	kvStore := &KVStore{
-		Key:   identity + "_" + identityCurve + "_" + keyCurve + "_" + "signers",
+		Key:   identity + "_" + string(identityCurve) + "_" + string(keyCurve) + "_" + "signers",
 		Value: signers,
 	}
 
@@ -82,9 +83,9 @@ func AddSignersForKeyShare(identity string, identityCurve string, keyCurve strin
 	return err
 }
 
-func GetSignersForKeyShare(identity string, identityCurve string, keyCurve string) (string, error) {
+func GetSignersForKeyShare(identity string, identityCurve common.Curve, keyCurve common.Curve) (string, error) {
 	var keys []KVStore
-	err := client.Model(&keys).Where("key = ?", identity+"_"+identityCurve+"_"+keyCurve+"_signers").Select()
+	err := client.Model(&keys).Where("key = ?", identity+"_"+string(identityCurve)+"_"+string(keyCurve)+"_signers").Select()
 
 	if err != nil {
 		return "", err

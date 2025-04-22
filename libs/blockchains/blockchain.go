@@ -68,16 +68,17 @@ const (
 type BlockchainID string
 
 const (
-	Ethereum BlockchainID = "ETHEREUM"
-	Dogecoin BlockchainID = "DOGECOIN"
-	Stellar  BlockchainID = "STELLAR"
-	Cardano  BlockchainID = "CARDANO"
-	Algorand BlockchainID = "ALGORAND"
-	Ripple   BlockchainID = "RIPPLE"
-	Sui      BlockchainID = "SUI"
-	Solana   BlockchainID = "SOLANA"
-	Bitcoin  BlockchainID = "BITCOIN"
-	Aptos    BlockchainID = "APTOS"
+	Ethereum   BlockchainID = "ETHEREUM"
+	Dogecoin   BlockchainID = "DOGECOIN"
+	Stellar    BlockchainID = "STELLAR"
+	Cardano    BlockchainID = "CARDANO"
+	Algorand   BlockchainID = "ALGORAND"
+	Ripple     BlockchainID = "RIPPLE"
+	Sui        BlockchainID = "SUI"
+	Solana     BlockchainID = "SOLANA"
+	Bitcoin    BlockchainID = "BITCOIN"
+	Aptos      BlockchainID = "APTOS"
+	StripChain BlockchainID = "STRIPCHAIN"
 )
 
 // BlockchainFactory creates blockchain instances for specific networks
@@ -247,6 +248,7 @@ func InitBlockchainRegistry() *Registry {
 	registry.Register(Bitcoin, NewBitcoinBlockchain)
 	registry.Register(Aptos, NewAptosBlockchain)
 	registry.Register(Dogecoin, NewDogecoinBlockchain)
+	registry.Register(StripChain, NewStripChainBlockchain)
 
 	return registry
 }

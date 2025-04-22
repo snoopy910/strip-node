@@ -27,25 +27,16 @@ CREATE TYPE operation_type AS ENUM (
 
 CREATE TYPE blockchain_id AS ENUM (
     'ALGORAND',
-    'ALGORAND_TESTNET',
     'APTOS',
-    'APTOS_TESTNET',
     'BITCOIN',
-    'BITCOIN_TESTNET',
     'CARDANO',
-    'CARDANO_TESTNET',
     'DOGECOIN',
-    'DOGECOIN_TESTNET',
     'ETHEREUM',
-    'ETHEREUM_SEPOLIA',
     'RIPPLE',
-    'RIPPLE_TESTNET',
     'SOLANA',
-    'SOLANA_TESTNET',
     'STELLAR',
-    'STELLAR_TESTNET',
     'SUI',
-    'SUI_TESTNET'
+    'STRIPCHAIN',
 );
 
 create type network_type as enum (

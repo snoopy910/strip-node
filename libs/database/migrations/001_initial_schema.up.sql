@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS intents (
 CREATE TABLE IF NOT EXISTS operations (
     id BIGSERIAL PRIMARY KEY,
     intent_id UUID REFERENCES intents(id) NOT NULL,
-    serialized_txn TEXT NOT NULL,
-    data_to_sign TEXT NOT NULL,
+    serialized_txn TEXT,
+    data_to_sign TEXT,
     blockchain_id blockchain_id NOT NULL,
     network_type network_type NOT NULL,
     genesis_hash TEXT,

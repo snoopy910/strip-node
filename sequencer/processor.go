@@ -182,8 +182,14 @@ ProcessLoop:
 						fmt.Printf("error getting signature: %+v\n", err)
 						break
 					}
+					if operation.SerializedTxn == nil {
+						logger.Sugar().Errorw("serialized txn is nil", "operation", operation)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
 
-					txHash, err := opBlockchain.BroadcastTransaction(operation.SerializedTxn, signature, &publicKey)
+					txHash, err := opBlockchain.BroadcastTransaction(*operation.SerializedTxn, signature, &publicKey)
 					if err != nil {
 						fmt.Printf("error broadcasting transaction: %+v\n", err)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)

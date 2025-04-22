@@ -525,7 +525,10 @@ func startHTTPServer(port string) {
 		operation := intent.Operations[operationIndexInt]
 		switch operation.Type {
 		case libs.OperationTypeTransaction:
-			msg = operation.DataToSign
+			msg = ""
+			if operation.DataToSign != nil {
+				msg = *operation.DataToSign
+			}
 		case libs.OperationTypeSendToBridge:
 			// Verify only operation for bridging
 			// Get bridgewallet by calling /getwallet from sequencer api
@@ -829,7 +832,10 @@ func startHTTPServer(port string) {
 			// }
 
 			// Set message
-			msg = operation.DataToSign
+			msg = ""
+			if operation.DataToSign != nil {
+				msg = *operation.DataToSign
+			}
 		case libs.OperationTypeSolver:
 			intentBytes, err := json.Marshal(intent)
 			if err != nil {
@@ -1026,15 +1032,19 @@ func startHTTPServer(port string) {
 			// Set message for signing - first try SolverDataToSign
 			msg = operation.SolverDataToSign
 
+			dataToSign := ""
+			if operation.DataToSign != nil {
+				dataToSign = *operation.DataToSign
+			}
 			// Log detailed info about the message being signed
 			logger.Sugar().Infow("Processing bridge deposit signature",
 				"solverDataLength", len(operation.SolverDataToSign),
-				"dataToSignLength", len(operation.DataToSign))
+				"dataToSignLength", len(dataToSign))
 
 			// If no SolverDataToSign is provided, use DataToSign as fallback
 			if len(msg) == 0 {
-				logger.Sugar().Infow("Using DataToSign for bridge deposit operation", "length", len(operation.DataToSign))
-				msg = operation.DataToSign
+				logger.Sugar().Infow("Using DataToSign for bridge deposit operation", "length", len(dataToSign))
+				msg = dataToSign
 			}
 
 			if len(msg) == 0 {

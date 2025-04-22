@@ -52,10 +52,10 @@ type IntentSchema struct {
 type OperationSchema struct {
 	tableName        struct{} `pg:"operations"` //lint:ignore U1000 ok
 	Id               int64
-	IntentId         uuid.UUID                `pg:",type:uuid,notnull"`
-	Intent           *IntentSchema            `pg:"rel:has-one"`
-	SerializedTxn    string                   `pg:",notnull"`
-	DataToSign       string                   `pg:",notnull"`
+	IntentId         uuid.UUID     `pg:",type:uuid,notnull"`
+	Intent           *IntentSchema `pg:"rel:has-one"`
+	SerializedTxn    *string
+	DataToSign       *string
 	BlockchainID     blockchains.BlockchainID `pg:",notnull"`
 	NetworkType      blockchains.NetworkType  `pg:",notnull"`
 	GenesisHash      string
@@ -274,8 +274,6 @@ func AddIntent(
 	for _, operation := range Intent.Operations {
 		operationSchema := &OperationSchema{
 			IntentId:         intentSchema.Id,
-			SerializedTxn:    operation.SerializedTxn,
-			DataToSign:       operation.DataToSign,
 			BlockchainID:     operation.BlockchainID,
 			NetworkType:      operation.NetworkType,
 			GenesisHash:      operation.GenesisHash,
@@ -285,6 +283,14 @@ func AddIntent(
 			Solver:           operation.Solver,
 			SolverMetadata:   operation.SolverMetadata,
 			SolverDataToSign: operation.SolverDataToSign,
+		}
+
+		if operation.SerializedTxn != nil {
+			operationSchema.SerializedTxn = operation.SerializedTxn
+		}
+
+		if operation.DataToSign != nil {
+			operationSchema.DataToSign = operation.DataToSign
 		}
 
 		_, err := GetDB().Model(operationSchema).Insert()

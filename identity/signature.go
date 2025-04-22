@@ -467,16 +467,22 @@ func SanitiseIntent(intent libs.Intent) (string, error) {
 	}
 
 	for _, operation := range intent.Operations {
-		intentForSigning.Operations = append(intentForSigning.Operations, OperationForSigning{
-			SerializedTxn:  operation.SerializedTxn,
-			DataToSign:     operation.DataToSign,
+
+		opSigning := OperationForSigning{
 			BlockchainID:   operation.BlockchainID,
 			NetworkType:    operation.NetworkType,
 			GenesisHash:    operation.GenesisHash,
 			Type:           operation.Type,
 			Solver:         operation.Solver,
 			SolverMetadata: operation.SolverMetadata,
-		})
+		}
+		if operation.SerializedTxn != nil {
+			opSigning.SerializedTxn = *operation.SerializedTxn
+		}
+		if operation.DataToSign != nil {
+			opSigning.DataToSign = *operation.DataToSign
+		}
+		intentForSigning.Operations = append(intentForSigning.Operations, opSigning)
 	}
 
 	data, err := json.Marshal(intentForSigning)

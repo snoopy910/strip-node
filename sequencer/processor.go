@@ -1705,6 +1705,7 @@ func ProcessIntent(intentId int64) {
 							db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 							intent.Operations[i].SolverDataToSign = dataToSign
 
+							fmt.Println("intent ", intent)
 							signature, err := getSignature(intent, i)
 							if err != nil {
 								logger.Sugar().Errorw("error getting signature", "error", err)
@@ -3025,9 +3026,19 @@ func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
 
 func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, error) {
 	// get wallet
-	wallet, err := db.GetWallet(intent.Identity, intent.IdentityCurve)
-	if err != nil {
-		return "", "", fmt.Errorf("error getting wallet: %v", err)
+	transactionType := intent.Operations[operationIndex].Type
+	var wallet *db.WalletSchema
+	var err error
+	if transactionType == db.OPERATION_TYPE_WITHDRAW {
+		wallet, err = db.GetWallet(BridgeContractAddress, "ecdsa")
+		if err != nil {
+			return "", "", fmt.Errorf("error getting wallet: %v", err)
+		}
+	} else {
+		wallet, err = db.GetWallet(intent.Identity, intent.IdentityCurve)
+		if err != nil {
+			return "", "", fmt.Errorf("error getting wallet: %v", err)
+		}
 	}
 
 	// get the signer

@@ -27,25 +27,17 @@ CREATE TYPE operation_type AS ENUM (
 
 CREATE TYPE blockchain_id AS ENUM (
     'ALGORAND',
-    'ALGORAND_TESTNET',
+    'ARBITRUM',
     'APTOS',
-    'APTOS_TESTNET',
     'BITCOIN',
-    'BITCOIN_TESTNET',
     'CARDANO',
-    'CARDANO_TESTNET',
     'DOGECOIN',
-    'DOGECOIN_TESTNET',
     'ETHEREUM',
-    'ETHEREUM_SEPOLIA',
     'RIPPLE',
-    'RIPPLE_TESTNET',
     'SOLANA',
-    'SOLANA_TESTNET',
     'STELLAR',
-    'STELLAR_TESTNET',
-    'SUI',
-    'SUI_TESTNET'
+    'STRIPCHAIN',
+    'SUI'
 );
 
 create type network_type as enum (
@@ -71,8 +63,8 @@ CREATE TABLE IF NOT EXISTS intents (
 CREATE TABLE IF NOT EXISTS operations (
     id BIGSERIAL PRIMARY KEY,
     intent_id UUID REFERENCES intents(id) NOT NULL,
-    serialized_txn TEXT NOT NULL,
-    data_to_sign TEXT NOT NULL,
+    serialized_txn TEXT,
+    data_to_sign TEXT,
     blockchain_id blockchain_id NOT NULL,
     network_type network_type NOT NULL,
     genesis_hash TEXT,

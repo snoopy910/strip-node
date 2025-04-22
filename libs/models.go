@@ -9,8 +9,8 @@ import (
 
 type Operation struct {
 	ID               int64                    `json:"id"`
-	SerializedTxn    string                   `json:"serializedTxn"`
-	DataToSign       string                   `json:"dataToSign"`
+	SerializedTxn    *string                  `json:"serializedTxn"`
+	DataToSign       *string                  `json:"dataToSign"`
 	BlockchainID     blockchains.BlockchainID `json:"blockchainID"`
 	NetworkType      blockchains.NetworkType  `json:"networkType"`
 	GenesisHash      string                   `json:"genesisHash"`

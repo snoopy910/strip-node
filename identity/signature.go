@@ -68,8 +68,7 @@ func VerifySignature(
 	fmt.Printf("[VERIFY] Starting signature verification for identity: %s with blockchain: %s\n", identity, blockchainID)
 	fmt.Println(message, signature)
 
-	switch blockchainID {
-	case blockchains.Ethereum:
+	if blockchains.IsEVMBlockchain(blockchainID) {
 		fmt.Println("[VERIFY ECDSA] Verifying ECDSA signature")
 		// Hash the unsigned message using EIP-191
 		hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(message)) + message)
@@ -110,7 +109,8 @@ func VerifySignature(
 		fmt.Println("[VERIFY ECDSA] Signature is invalid")
 
 		return false, nil
-
+	}
+	switch blockchainID {
 	case blockchains.Solana:
 		fmt.Println("[VERIFY EDDSA] Verifying EdDSA signature")
 		publicKeyBytes, _ := base58.Decode(identity)
@@ -467,16 +467,22 @@ func SanitiseIntent(intent libs.Intent) (string, error) {
 	}
 
 	for _, operation := range intent.Operations {
-		intentForSigning.Operations = append(intentForSigning.Operations, OperationForSigning{
-			SerializedTxn:  operation.SerializedTxn,
-			DataToSign:     operation.DataToSign,
+
+		opSigning := OperationForSigning{
 			BlockchainID:   operation.BlockchainID,
 			NetworkType:    operation.NetworkType,
 			GenesisHash:    operation.GenesisHash,
 			Type:           operation.Type,
 			Solver:         operation.Solver,
 			SolverMetadata: operation.SolverMetadata,
-		})
+		}
+		if operation.SerializedTxn != nil {
+			opSigning.SerializedTxn = *operation.SerializedTxn
+		}
+		if operation.DataToSign != nil {
+			opSigning.DataToSign = *operation.DataToSign
+		}
+		intentForSigning.Operations = append(intentForSigning.Operations, opSigning)
 	}
 
 	data, err := json.Marshal(intentForSigning)

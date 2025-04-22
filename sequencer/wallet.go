@@ -138,9 +138,6 @@ func createWallet(identity string, blockchainID blockchains.BlockchainID) error 
 
 	for blockchainID, addresses := range addressesResponse.Addresses {
 		switch blockchainID {
-		case blockchains.Ethereum:
-			logger.Sugar().Infof("ethereum address: %s", addresses[blockchains.Mainnet])
-			wallet.EthereumPublicKey = addresses[blockchains.Mainnet]
 		case blockchains.Sui:
 			wallet.SuiPublicKey = addresses[blockchains.Mainnet]
 		case blockchains.Algorand:
@@ -163,8 +160,13 @@ func createWallet(identity string, blockchainID blockchains.BlockchainID) error 
 		case blockchains.Solana:
 			wallet.SolanaPublicKey = addresses[blockchains.Mainnet]
 		default:
-			logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
-			return fmt.Errorf("unsupported blockchain ID: %s", blockchainID)
+			if blockchains.IsEVMBlockchain(blockchainID) {
+				logger.Sugar().Infof("%s address: %s", blockchainID, addresses[blockchains.Mainnet])
+				wallet.EthereumPublicKey = addresses[blockchains.Mainnet]
+			} else {
+				logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
+				return fmt.Errorf("unsupported blockchain ID: %s", blockchainID)
+			}
 		}
 	}
 

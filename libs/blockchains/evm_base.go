@@ -23,60 +23,97 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// NewEthereumBlockchain creates a new Ethereum blockchain instance
-func NewEthereumBlockchain(networkType NetworkType) (IBlockchain, error) {
-	var nodeURL, networkID, chainID string
-	switch networkType {
-	case Mainnet:
-		nodeURL = "https://ethereum-rpc.publicnode.com"
-		networkID = "mainnet"
-		chainID = "1"
-	case Testnet:
-		nodeURL = "https://ethereum-sepolia-rpc.publicnode.com"
-		networkID = "testnet"
-		chainID = "11155111"
-	case Regnet:
-		nodeURL = "http://ganache:8545"
-		networkID = "regnet"
-		chainID = "1337"
-	}
-	network := Network{
-		networkType: networkType,
-		nodeURL:     nodeURL,
-		networkID:   networkID,
-	}
+var EVMRegistry = map[BlockchainID]bool{
+	Ethereum:   true,
+	Arbitrum:   true,
+	StripChain: true,
+}
 
-	client, err := ethclient.Dial(nodeURL)
+// RegisterEVMBlockchain adds a new EVM blockchain ID to the registry.
+// It returns an error if a blockchain with the same ID is already registered.
+// func RegisterEVMBlockchain(chainName BlockchainID) error {
+// 	evmRegistryMu.Lock()
+// 	defer evmRegistryMu.Unlock()
+
+// 	fmt.Printf("evmRegistry[chainName]: %+v\n", evmRegistry[chainName])
+// 	if _, exists := evmRegistry[chainName]; exists {
+// 		return fmt.Errorf("blockchain with ID %s already registered", chainName)
+// 	}
+
+// 	fmt.Printf("added evmRegistry[chainName]: %+v\n", evmRegistry[chainName])
+// 	evmRegistry[chainName] = true
+// 	return nil
+// }
+
+// IsEVMBlockchain checks if a blockchain is an EVM blockchain by its ID.
+// It returns true if the blockchain is an EVM blockchain, otherwise false.
+func IsEVMBlockchain(id BlockchainID) bool {
+	// evmRegistryMu.RLock()
+	// defer evmRegistryMu.RUnlock()
+
+	// fmt.Printf("evmRegistry: %+v\n", evmRegistry)
+	// fmt.Printf("evmRegistry[id]: %+v\n", evmRegistry[id])
+	// fmt.Printf("id: %+v\n", id)
+
+	// return evmRegistry[id]
+	return EVMRegistry[id]
+}
+
+// // GetAllEVMBlockchainIDs returns a slice of all registered EVM blockchain IDs.
+// func GetAllEVMBlockchainIDs() []BlockchainID {
+// 	evmRegistryMu.RLock()
+// 	defer evmRegistryMu.RUnlock()
+
+// 	chains := make([]BlockchainID, 0, len(evmRegistry))
+// 	for id := range evmRegistry {
+// 		chains = append(chains, id)
+// 	}
+// 	return chains
+// }
+
+// NewEVMBlockchain initializes a new EVMBlockchain
+func NewEVMBlockchain(
+	chainName BlockchainID,
+	network Network,
+	signingEncoding string,
+	decimals uint,
+	opTimeout time.Duration,
+	chainID *string,
+	tokenSymbol string,
+) (EVMBlockchain, error) {
+	client, err := ethclient.Dial(network.nodeURL)
 	if err != nil {
-		logger.Sugar().Errorw("failed to dial ethclient", "error", err)
-		return nil, err
+		logger.Sugar().Errorw("failed to create ethclient", "error", err)
+		return EVMBlockchain{}, err
 	}
 
-	return &EthereumBlockchain{
+	// RegisterEVMBlockchain(chainName)
+
+	return EVMBlockchain{
 		BaseBlockchain: BaseBlockchain{
-			chainName:       Ethereum,
+			chainName:       chainName,
 			network:         network,
 			keyCurve:        common.CurveEcdsa,
-			signingEncoding: "hex",
-			decimals:        18,
-			opTimeout:       time.Second * 10,
-			chainID:         &chainID,
-			tokenSymbol:     "ETH",
+			signingEncoding: signingEncoding,
+			decimals:        decimals,
+			opTimeout:       opTimeout,
+			chainID:         chainID,
+			tokenSymbol:     tokenSymbol,
 		},
 		client: client,
 	}, nil
 }
 
-// This is a type assertion to ensure that the EthereumBlockchain implements the IBlockchain interface
-var _ IBlockchain = &EthereumBlockchain{}
+// This is a type assertion to ensure that the EVMBlockchain implements the IBlockchain interface
+var _ IBlockchain = &EVMBlockchain{}
 
-// EthereumBlockchain implements the IBlockchain interface for Ethereum
-type EthereumBlockchain struct {
+// EVMBlockchain implements the IBlockchain interface for Ethereum
+type EVMBlockchain struct {
 	BaseBlockchain
 	client *ethclient.Client
 }
 
-func (b *EthereumBlockchain) BroadcastTransaction(txn string, signatureHex string, publicKey *string) (string, error) {
+func (b *EVMBlockchain) BroadcastTransaction(txn string, signatureHex string, publicKey *string) (string, error) {
 	serializedTx, err := hex.DecodeString(txn)
 	if err != nil {
 		return "", err
@@ -106,7 +143,7 @@ func (b *EthereumBlockchain) BroadcastTransaction(txn string, signatureHex strin
 	return _tx.Hash().Hex(), nil
 }
 
-func (b *EthereumBlockchain) GetTransfers(txnHash string, ecdsaAddr *string) ([]common.Transfer, error) {
+func (b *EVMBlockchain) GetTransfers(txnHash string, ecdsaAddr *string) ([]common.Transfer, error) {
 	logger.Sugar().Infow("Processing Ethereum transaction", "txHash", txnHash, "chainID", *b.chainID)
 
 	// Get the full transaction to examine content and data
@@ -382,7 +419,7 @@ func getERC20Details(client *ethclient.Client, tokenAddress ethCommon.Address) (
 	return decimals, symbol, nil
 }
 
-func (b *EthereumBlockchain) IsTransactionBroadcastedAndConfirmed(txHash string) (bool, error) {
+func (b *EVMBlockchain) IsTransactionBroadcastedAndConfirmed(txHash string) (bool, error) {
 	_, isPending, err := b.client.TransactionByHash(context.Background(), ethCommon.HexToHash(txHash))
 	if err != nil {
 		return false, err
@@ -391,7 +428,7 @@ func (b *EthereumBlockchain) IsTransactionBroadcastedAndConfirmed(txHash string)
 	return !isPending, nil
 }
 
-func (b *EthereumBlockchain) BuildWithdrawTx(bridgeAddress string,
+func (b *EVMBlockchain) BuildWithdrawTx(bridgeAddress string,
 	solverOutput string,
 	userAddress string,
 	tokenAddress *string,
@@ -499,11 +536,11 @@ func (b *EthereumBlockchain) BuildWithdrawTx(bridgeAddress string,
 	return serializedTxn, dataToSign, nil
 }
 
-func (b *EthereumBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkType NetworkType) (string, error) {
+func (b *EVMBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkType NetworkType) (string, error) {
 	return "", errors.New("RawPublicKeyBytesToAddress not implemented")
 }
 
-func (b *EthereumBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
+func (b *EVMBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
 }
 

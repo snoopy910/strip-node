@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
-	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/util"
 	"github.com/blockfrost/blockfrost-go"
 	"github.com/echovl/cardano-go"
@@ -393,16 +392,16 @@ func (b *CardanoBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, 
 	return "", nil
 }
 
-func (b *CardanoBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+func (b *CardanoBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
 	var tx cardano.Tx
-	txBytes, err := hex.DecodeString(*operation.SerializedTxn)
+	txBytes, err := hex.DecodeString(serializedTxn)
 	destAddress := ""
 	if err != nil {
-		return "", fmt.Errorf("error decoding Cardano transaction", err)
+		return "", "", fmt.Errorf("error decoding Cardano transaction", err)
 	}
 	if err := json.Unmarshal(txBytes, &tx); err != nil {
-		return "", fmt.Errorf("error parsing Cardano transaction", err)
+		return "", "", fmt.Errorf("error parsing Cardano transaction", err)
 	}
 	destAddress = tx.Body.Outputs[0].Address.String()
-	return destAddress, nil
+	return destAddress, "", nil
 }

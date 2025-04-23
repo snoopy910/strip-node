@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
-	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/util"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/the729/lcs"
@@ -515,19 +514,19 @@ func getFormattedAmount(amount string, decimal int) (string, error) {
 	return formattedAmount, nil
 }
 
-func (b *AptosBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+func (b *AptosBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
 	// For Aptos, the destination is in the transaction payload
 	var aptosPayload struct {
 		Function string   `json:"function"`
 		Args     []string `json:"arguments"`
 	}
 	destAddress := ""
-	if err := json.Unmarshal([]byte(*operation.SerializedTxn), &aptosPayload); err != nil {
+	if err := json.Unmarshal([]byte(serializedTxn), &aptosPayload); err != nil {
 		logger.Sugar().Errorw("error parsing Aptos transaction", "error", err)
-		return "", fmt.Errorf("error parsing Aptos transaction", err)
+		return "", "", fmt.Errorf("error parsing Aptos transaction", err)
 	}
 	if len(aptosPayload.Args) > 0 {
 		destAddress = aptosPayload.Args[0] // First arg is typically the recipient
 	}
-	return destAddress, nil
+	return destAddress, "", nil
 }

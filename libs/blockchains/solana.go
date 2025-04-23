@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
-	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/util"
 	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
@@ -340,7 +339,7 @@ func (b *SolanaBlockchain) BuildWithdrawTx(account string,
 		_amount, _ := big.NewInt(0).SetString(amount, 10)
 		amountUint64 := _amount.Uint64()
 
-		recentHash, err := b.client.GetRecentBlockhash(context.Background(), rpc.CommitmentFinalized)
+		recentHash, err := b.client.GetLatestBlockhash(context.Background(), rpc.CommitmentFinalized)
 		if err != nil {
 			return "", "", err
 		}
@@ -444,21 +443,21 @@ func (b *SolanaBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, e
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
 }
 
-func (b *SolanaBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+func (b *SolanaBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
 	// Decode base58 transaction and extract destination
-	decodedTxn, err := base58.Decode(*operation.SerializedTxn)
+	decodedTxn, err := base58.Decode(serializedTxn)
 	destAddress := ""
 	if err != nil {
-		return "", fmt.Errorf("error decoding Solana transaction", err)
+		return "", "", fmt.Errorf("error decoding Solana transaction", err)
 	}
 	tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
 	if err != nil || len(tx.Message.Instructions) == 0 {
-		return "", fmt.Errorf("error deserializing Solana transaction", err)
+		return "", "", fmt.Errorf("error deserializing Solana transaction", err)
 	}
 	// Get the first instruction's destination account index
 	destAccountIndex := tx.Message.Instructions[0].Accounts[1]
 	// Get the actual account address from the message accounts
 	destAddress = tx.Message.AccountKeys[destAccountIndex].String()
 
-	return destAddress, nil
+	return destAddress, "", nil
 }

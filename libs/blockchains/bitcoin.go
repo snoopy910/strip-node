@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
-	"github.com/StripChain/strip-node/libs"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -364,23 +363,23 @@ func (b *BitcoinBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, 
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented yet")
 }
 
-func (b *BitcoinBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+func (b *BitcoinBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
 	// For Bitcoin, decode the serialized transaction to get output address
 	var tx wire.MsgTx
-	txBytes, err := hex.DecodeString(*operation.SerializedTxn)
+	txBytes, err := hex.DecodeString(serializedTxn)
 	if err != nil {
-		return "", err
+		return "", "", fmt.Errorf("error decoding bitcoin&dogecoin transaction", err)
 	}
 	if err := tx.Deserialize(bytes.NewReader(txBytes)); err != nil {
-		return "", err
+		return "", "", fmt.Errorf("error deserializing bitcoin&dogecoin transaction", err)
 	}
 	// Get the first output's address (assuming it's the bridge address)
 	if len(tx.TxOut) > 0 {
 		_, addrs, _, err := txscript.ExtractPkScriptAddrs(tx.TxOut[0].PkScript, nil)
 		if err != nil || len(addrs) == 0 {
-			return "", err
+			return "", "", fmt.Errorf("error extracting bitcoin&dogecoin address", err)
 		}
-		return addrs[0].String(), nil
+		return addrs[0].String(), "", nil
 	}
-	return "", fmt.Errorf("no output destination bitcoin address")
+	return "", "", fmt.Errorf("no output destination bitcoin address")
 }

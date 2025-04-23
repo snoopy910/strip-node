@@ -187,7 +187,7 @@ ProcessLoop:
 					}
 
 					if operation.Type == libs.OperationTypeSendToBridge {
-						// Get bridge wallet for the chain //ADDED // verify the destination is equal the bridge address
+						// Get bridge wallet for the chain
 						bridgeWallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
 						if err != nil {
 							logger.Sugar().Errorw("Failed to get bridge wallet", "error", err)
@@ -294,8 +294,14 @@ ProcessLoop:
 						break
 					}
 
+					depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
+					if err != nil {
+						logger.Sugar().Errorw("error getting blockchain", "error", err)
+						break
+					}
+
 					// TODO: This code is not correct, but swapping is being worked on
-					transfers, err := opBlockchain.GetTransfers(depositOperation.Result, &publicKey)
+					transfers, err := depositOpBlockchain.GetTransfers(depositOperation.Result, &publicKey)
 					if err != nil {
 						logger.Sugar().Errorw("error getting transfers", "error", err)
 						break
@@ -312,15 +318,15 @@ ProcessLoop:
 					srcAddress := transfer.TokenAddress
 					amount := transfer.ScaledAmount
 
-					opBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
-					if err != nil {
-						logger.Sugar().Errorw("error getting blockchain", "error", err)
-						break
-					}
+					// opBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
+					// if err != nil {
+					// 	logger.Sugar().Errorw("error getting blockchain", "error", err)
+					// 	break
+					// }
 
-					chainID := opBlockchain.ChainID()
+					chainID := depositOpBlockchain.ChainID()
 					if chainID == nil {
-						logger.Sugar().Errorw("chainID is nil", "blockchainID", operation.BlockchainID, "networkType", operation.NetworkType)
+						logger.Sugar().Errorw("chainID is nil", "blockchainID", depositOperation.BlockchainID, "networkType", depositOperation.NetworkType)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
@@ -1232,11 +1238,17 @@ func getNextOperationType(intent *libs.Intent, operationIndex int) *libs.Operati
 func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Operation) (bool, error) {
 	var destAddress string
 	var expectedAddress string
+	var tokenAddress string
 	opBlockchain, err := blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
 	if err != nil {
 		return false, fmt.Errorf("error getting blockchain: %v", err)
 	}
-	destAddress, _ = opBlockchain.ExtractDestinationAddress(operation)
+
+	chainID := opBlockchain.ChainID()
+	if chainID == nil {
+		return false, fmt.Errorf("chainID is nil ")
+	}
+	destAddress, tokenAddress, _ = opBlockchain.ExtractDestinationAddress(*operation.SerializedTxn)
 	switch operation.BlockchainID {
 	// Extract destination address from serialized transaction
 	case blockchains.Bitcoin:
@@ -1263,13 +1275,24 @@ func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Ope
 		expectedAddress = bridgeWallet.ECDSAPublicKey
 	}
 
+	if tokenAddress != "" {
+		exists, peggedToken, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, tokenAddress)
+		if err != nil {
+			return false, fmt.Errorf("error checking token existence in bridge", err)
+		}
+		if !exists {
+			return false, fmt.Errorf("ERC20 token not registered in bridge", tokenAddress, chainID)
+		}
+		logger.Sugar().Infow("ERC20 token exists in bridge", "token", tokenAddress, "peggedToken", peggedToken)
+	}
+
 	// Verify the extracted destination matches the bridge wallet
 	if destAddress == "" {
-		return false, fmt.Errorf("Failed to extract destination address from %s transaction", operation.BlockchainID)
+		return false, fmt.Errorf("Failed to extract destination address from %s transaction", chainID)
 	}
 
 	if !strings.EqualFold(destAddress, expectedAddress) {
-		return false, fmt.Errorf("Invalid bridge destination address for %s transaction", chain.ChainType)
+		return false, fmt.Errorf("Invalid bridge destination address for %s transaction", chainID)
 	}
 
 	return true, nil

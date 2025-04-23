@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/ERC20"
@@ -177,15 +178,41 @@ ProcessLoop:
 						logger.Sugar().Errorw("error verifying identity lock", "error", err)
 						break
 					}
-					signature, err = getSignature(intent, i)
-					if err != nil {
-						fmt.Printf("error getting signature: %+v\n", err)
-						break
-					}
+
 					if operation.SerializedTxn == nil {
 						logger.Sugar().Errorw("serialized txn is nil", "operation", operation)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+
+					if operation.Type == libs.OperationTypeSendToBridge {
+						// Get bridge wallet for the chain //ADDED // verify the destination is equal the bridge address
+						bridgeWallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
+						if err != nil {
+							logger.Sugar().Errorw("Failed to get bridge wallet", "error", err)
+							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+							db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+							break
+						}
+						isVerified, err := verifyDestinationAddress(bridgeWallet, &operation)
+						if err != nil {
+							logger.Sugar().Errorw("Failed to verify destination address", "error", err)
+							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+							db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+							break
+						}
+						if !isVerified {
+							logger.Sugar().Errorw("Bridge address not verified", "error", err)
+							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+							db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+							break
+						}
+					}
+
+					signature, err = getSignature(intent, i)
+					if err != nil {
+						fmt.Printf("error getting signature: %+v\n", err)
 						break
 					}
 
@@ -258,12 +285,6 @@ ProcessLoop:
 						db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					}
 				case libs.OperationTypeBridgeDeposit:
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
-
 					depositOperation := intent.Operations[i-1]
 
 					if i == 0 || !(depositOperation.Type == libs.OperationTypeSendToBridge) {
@@ -363,11 +384,6 @@ ProcessLoop:
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					break OperationLoop
 				case libs.OperationTypeSwap:
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
 					bridgeDeposit := intent.Operations[i-1]
 
 					if i == 0 || !(bridgeDeposit.Type == libs.OperationTypeBridgeDeposit) {
@@ -1074,9 +1090,19 @@ func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
 
 func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, error) {
 	// get wallet
-	wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
-	if err != nil {
-		return "", "", fmt.Errorf("error getting wallet: %v", err)
+	transactionType := intent.Operations[operationIndex].Type
+	var wallet *db.WalletSchema
+	var err error
+	if transactionType == libs.OperationTypeWithdraw {
+		wallet, err = db.GetWallet(BridgeContractAddress, "ecdsa")
+		if err != nil {
+			return "", "", fmt.Errorf("error getting wallet: %v", err)
+		}
+	} else {
+		wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
+		if err != nil {
+			return "", "", fmt.Errorf("error getting wallet: %v", err)
+		}
 	}
 
 	// get the signer
@@ -1201,4 +1227,50 @@ func getNextOperationType(intent *libs.Intent, operationIndex int) *libs.Operati
 		return &intent.Operations[operationIndex+1].Type
 	}
 	return nil
+}
+
+func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Operation) (bool, error) {
+	var destAddress string
+	var expectedAddress string
+	opBlockchain, err := blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
+	if err != nil {
+		return false, fmt.Errorf("error getting blockchain: %v", err)
+	}
+	destAddress, _ = opBlockchain.ExtractDestinationAddress(operation)
+	switch operation.BlockchainID {
+	// Extract destination address from serialized transaction
+	case blockchains.Bitcoin:
+		expectedAddress = bridgeWallet.BitcoinMainnetPublicKey
+	case blockchains.Dogecoin:
+		expectedAddress = bridgeWallet.DogecoinMainnetPublicKey
+	// Extract destination address from serialized transaction based on chain type
+	case blockchains.Solana:
+		// Get the actual account address from the message accounts
+		expectedAddress = bridgeWallet.EDDSAPublicKey
+	case blockchains.Aptos:
+		expectedAddress = bridgeWallet.AptosEDDSAPublicKey
+	case blockchains.Stellar:
+		expectedAddress = bridgeWallet.StellarPublicKey
+	case blockchains.Algorand:
+		expectedAddress = bridgeWallet.AlgorandEDDSAPublicKey
+	case blockchains.Ripple:
+		expectedAddress = bridgeWallet.RippleEDDSAPublicKey
+	case blockchains.Cardano:
+		expectedAddress = bridgeWallet.CardanoPublicKey
+	case blockchains.Sui:
+		expectedAddress = bridgeWallet.SuiPublicKey
+	default:
+		expectedAddress = bridgeWallet.ECDSAPublicKey
+	}
+
+	// Verify the extracted destination matches the bridge wallet
+	if destAddress == "" {
+		return false, fmt.Errorf("Failed to extract destination address from %s transaction", operation.BlockchainID)
+	}
+
+	if !strings.EqualFold(destAddress, expectedAddress) {
+		return false, fmt.Errorf("Invalid bridge destination address for %s transaction", chain.ChainType)
+	}
+
+	return true, nil
 }

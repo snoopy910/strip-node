@@ -534,7 +534,7 @@ func startHTTPServer(port string) {
 			// Get bridgewallet by calling /getwallet from sequencer api
 			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
 			req, err := http.NewRequest("GET", SequencerHost+"/getBridgeAddress", nil)
-			req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchain=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
+			// req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchain=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return
@@ -1109,7 +1109,7 @@ func startHTTPServer(port string) {
 
 			// Get bridgewallet by calling /getwallet from sequencer api
 			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
-			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
+			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
 			req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchainID=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
@@ -1257,20 +1257,14 @@ func startHTTPServer(port string) {
 				http.Error(w, fmt.Sprintf("{\"error\":\"%s\"}", err.Error()), http.StatusInternalServerError)
 				return
 			}
-			if operation.Type == db.OPERATION_TYPE_SWAP ||
-				operation.Type == db.OPERATION_TYPE_BURN ||
-				operation.Type == db.OPERATION_TYPE_BURN_SYNTHETIC ||
-				operation.Type == db.OPERATION_TYPE_WITHDRAW {
-				go generateSignatureMessage(BridgeContractAddress, "ecdsa", EDDSA_CURVE, msgBytes)
+			if operation.Type == libs.OperationTypeSwap ||
+				operation.Type == libs.OperationTypeBurn ||
+				operation.Type == libs.OperationTypeBurnSynthetic ||
+				operation.Type == libs.OperationTypeWithdraw {
+				go generateSignatureMessage(BridgeContractAddress, blockchains.Arbitrum, common.CurveEcdsa, common.CurveEddsa, msgBytes)
 			} else {
-				go generateSignatureMessage(identity, identityCurve, keyCurve, msgBytes)
+				go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
 			}
-	        case blockchains.Bitcoin:
-			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
-		case blockchains.Dogecoin:
-			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
-		case blockchains.Sui:
-			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
 		case blockchains.Bitcoin:
 			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
 		case blockchains.Dogecoin:

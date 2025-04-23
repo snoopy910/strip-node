@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs"
 )
 
 type IBlockchain interface {
@@ -31,6 +32,7 @@ type IBlockchain interface {
 
 	RawPublicKeyBytesToAddress(pkBytes []byte, networkType NetworkType) (string, error)
 	RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error)
+	ExtractDestinationAddress(operation *libs.Operation) (string, error)
 }
 
 type Network struct {

@@ -1,6 +1,7 @@
 package blockchains
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -11,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/util"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/echovl/cardano-go"
@@ -762,4 +765,41 @@ func manualDecodeError(errorMsg string) string {
 
 	// Return the original message if all else fails
 	return errorMsg
+}
+
+func (b *EVMBlockchain) ExtractDestinationAddress(operation *libs.Operation, rpcUrl string, bridgeContractAddress string) (string, error) {
+	// For EVM chains, decode the transaction to get the 'to' address
+	txBytes, err := hex.DecodeString(*operation.SerializedTxn)
+	destAddress := ""
+	if err != nil {
+		return "", fmt.Errorf("error decoding EVM transaction", err)
+	}
+	tx := new(types.Transaction)
+	if err := rlp.DecodeBytes(txBytes, tx); err != nil {
+		return "", fmt.Errorf("error deserializing EVM transaction", err)
+	}
+	if tx.To() == nil {
+		return "", fmt.Errorf("EVM transaction has nil To address")
+	}
+	if len(tx.Data()) >= 4 && bytes.Equal(tx.Data()[:4], []byte{0xa9, 0x05, 0x9c, 0xbb}) {
+		// ERC20 transfer detected, extract recipient from call data
+		if len(tx.Data()) < 36 {
+			return "", fmt.Errorf("ERC20 transfer data too short to extract destination")
+		}
+		destAddress = ethCommon.BytesToAddress(tx.Data()[4:36]).Hex()
+
+		// For ERC20 transfers, verify the token exists in the bridge contract
+		tokenAddress := tx.To().Hex()
+		exists, peggedToken, err := bridge.TokenExists(rpcUrl, bridgeContractAddress, operation.BlockchainID.String(), tokenAddress)
+		if err != nil {
+			return "", fmt.Errorf("error checking token existence in bridge", err)
+		}
+		if !exists {
+			return "", fmt.Errorf("ERC20 token not registered in bridge", tokenAddress, operation.BlockchainID.String())
+		}
+		logger.Sugar().Infow("ERC20 token exists in bridge", "token", tokenAddress, "peggedToken", peggedToken)
+	} else {
+		destAddress = tx.To().Hex()
+	}
+	return destAddress, nil
 }

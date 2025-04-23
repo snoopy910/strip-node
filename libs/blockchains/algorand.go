@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs"
 	"github.com/algorand/go-algorand-sdk/client/v2/algod"
 	"github.com/algorand/go-algorand-sdk/client/v2/indexer"
 	"github.com/algorand/go-algorand-sdk/crypto"
@@ -288,4 +289,25 @@ func (b *AlgorandBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkT
 
 func (b *AlgorandBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
+}
+
+func (b *AlgorandBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+	txnBytes, err := base64.StdEncoding.DecodeString(*operation.SerializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode serialized transaction", err)
+	}
+	var txn types.Transaction
+	err = msgpack.Decode(txnBytes, &txn)
+	if err != nil {
+		return "", fmt.Errorf("failed to deserialize transaction", err)
+	}
+	destAddress := ""
+	if txn.Type == types.PaymentTx {
+		destAddress = txn.PaymentTxnFields.Receiver.String()
+	} else if txn.Type == types.AssetTransferTx {
+		destAddress = txn.AssetTransferTxnFields.AssetReceiver.String()
+	} else {
+		return "", fmt.Errorf("unknown transaction type", txn.Type)
+	}
+	return destAddress, nil
 }

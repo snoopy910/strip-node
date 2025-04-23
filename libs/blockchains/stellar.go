@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
@@ -356,4 +357,22 @@ func (b *StellarBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkTy
 
 func (b *StellarBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
+}
+
+func (b *StellarBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+	// For Stellar, parse the XDR transaction envelope
+	var txEnv xdr.TransactionEnvelope
+	destAddress := ""
+	err := xdr.SafeUnmarshalBase64(*operation.SerializedTxn, &txEnv)
+	if err != nil {
+		return "", fmt.Errorf("error parsing Stellar transaction", err)
+	}
+
+	// Get the first operation's destination
+	if len(txEnv.Operations()) > 0 {
+		if paymentOp, ok := txEnv.Operations()[0].Body.GetPaymentOp(); ok {
+			destAddress = paymentOp.Destination.Address()
+		}
+	}
+	return destAddress, nil
 }

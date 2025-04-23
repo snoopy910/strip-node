@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/util"
 	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
@@ -441,4 +442,23 @@ func (b *SolanaBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkTyp
 
 func (b *SolanaBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
+}
+
+func (b *SolanaBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+	// Decode base58 transaction and extract destination
+	decodedTxn, err := base58.Decode(*operation.SerializedTxn)
+	destAddress := ""
+	if err != nil {
+		return "", fmt.Errorf("error decoding Solana transaction", err)
+	}
+	tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTxn))
+	if err != nil || len(tx.Message.Instructions) == 0 {
+		return "", fmt.Errorf("error deserializing Solana transaction", err)
+	}
+	// Get the first instruction's destination account index
+	destAccountIndex := tx.Message.Instructions[0].Accounts[1]
+	// Get the actual account address from the message accounts
+	destAddress = tx.Message.AccountKeys[destAccountIndex].String()
+
+	return destAddress, nil
 }

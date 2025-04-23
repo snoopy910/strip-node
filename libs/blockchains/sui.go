@@ -2,6 +2,7 @@ package blockchains
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/StripChain/strip-node/common"
+	"github.com/StripChain/strip-node/libs"
 	"github.com/coming-chat/go-sui/v2/client"
 	"github.com/coming-chat/go-sui/v2/lib"
 	"github.com/coming-chat/go-sui/v2/sui_types"
@@ -364,4 +366,20 @@ func (b *SuiBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkType N
 
 func (b *SuiBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
+}
+
+func (b *SuiBlockchain) ExtractDestinationAddress(operation *libs.Operation) (string, error) {
+	var tx sui_types.TransactionData
+	txBytes, err := base64.StdEncoding.DecodeString(*operation.SerializedTxn)
+	if err != nil {
+		return "", fmt.Errorf("error decoding Sui transaction", err)
+	}
+	if err := json.Unmarshal(txBytes, &tx); err != nil {
+		return "", fmt.Errorf("error parsing Sui transaction", err)
+	}
+	if len(tx.V1.Kind.ProgrammableTransaction.Inputs) < 1 {
+		return "", fmt.Errorf("wrong format sui transaction")
+	}
+	destAddress := string(*tx.V1.Kind.ProgrammableTransaction.Inputs[0].Pure)
+	return destAddress, nil
 }

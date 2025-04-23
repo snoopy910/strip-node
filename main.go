@@ -10,6 +10,7 @@ import (
 	"github.com/StripChain/strip-node/bridgeTokenMock"
 	"github.com/StripChain/strip-node/evm"
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
+	"github.com/StripChain/strip-node/libs/blockchains"
 	"github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/sequencer"
 	"github.com/StripChain/strip-node/solana"
@@ -72,6 +73,8 @@ func main() {
 		log.Fatal("Failed to initialize logger:", err)
 	}
 	defer logger.Sync()
+
+	blockchains.InitBlockchainRegistry()
 
 	if *isDeployIntentOperatorsRegistry {
 		intentoperatorsregistry.DeployIntentOperatorsRegistryContract(*rpcURL, *privateKey)

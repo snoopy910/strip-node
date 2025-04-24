@@ -188,7 +188,7 @@ ProcessLoop:
 
 					if operation.Type == libs.OperationTypeSendToBridge {
 						// Get bridge wallet for the chain
-						bridgeWallet, err := db.GetWallet(BridgeContractAddress, "ecdsa")
+						bridgeWallet, err := db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
 						if err != nil {
 							logger.Sugar().Errorw("Failed to get bridge wallet", "error", err)
 							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
@@ -1100,7 +1100,7 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 	var wallet *db.WalletSchema
 	var err error
 	if transactionType == libs.OperationTypeWithdraw {
-		wallet, err = db.GetWallet(BridgeContractAddress, "ecdsa")
+		wallet, err = db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
 		if err != nil {
 			return "", "", fmt.Errorf("error getting wallet: %v", err)
 		}

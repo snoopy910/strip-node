@@ -28,7 +28,7 @@ import (
 func NewSolanaBlockchain(networkType NetworkType) (IBlockchain, error) {
 	apiKey := os.Getenv("HELIUS_API_KEY")
 	heliusURL := "https://api.helius.xyz/v0/transactions?api-key=" + apiKey
-	chainId := ""
+	chainId := "900"
 	network := Network{
 		networkType: networkType,
 		nodeURL:     "https://api.solana.com",

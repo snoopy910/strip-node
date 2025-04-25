@@ -93,12 +93,11 @@ func (b *SolanaBlockchain) BroadcastTransaction(txn string, signatureBase58 stri
 		return "", fmt.Errorf("failed to decode message data: %v", err)
 	}
 
-	// Create a message decoder and decode the message
-	decoder := bin.NewBinDecoder(messageData)
-	message := new(solana.Message)
-	err = message.UnmarshalWithDecoder(decoder)
+	// Deserialize the binary data into a Solana transaction
+	// This reconstructs the transaction object with all its instructions
+	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(messageData))
 	if err != nil {
-		return "", fmt.Errorf("failed to decode message: %v", err)
+		return "", fmt.Errorf("failed to deserialize transaction data: %v", err)
 	}
 
 	// Debug logging for message details
@@ -107,52 +106,32 @@ func (b *SolanaBlockchain) BroadcastTransaction(txn string, signatureBase58 stri
 		"  AccountKeys: %v\n"+
 		"  RecentBlockhash: %s\n"+
 		"  Instructions Count: %d\n",
-		message.Header, message.AccountKeys, message.RecentBlockhash, len(message.Instructions))
+		_tx.Message.Header, _tx.Message.AccountKeys, _tx.Message.RecentBlockhash, len(_tx.Message.Instructions))
 
-	// Create a new transaction with the decoded message
-	tx := &solana.Transaction{
-		Message: *message,
-	}
-
-	// Decode and add the signature
-	sig, err := base58.Decode(signatureBase58)
-	if err != nil {
-		return "", fmt.Errorf("error decoding signature: %v", err)
-	}
-
-	// The first account (fee payer) must sign
+	// Decode the base58-encoded signature and convert it to Solana's signature format
+	// Solana uses 64-byte Ed25519 signatures
+	sig, _ := base58.Decode(signatureBase58)
 	signature := solana.SignatureFromBytes(sig)
-	tx.Signatures = []solana.Signature{signature}
 
-	// Verify the transaction is well-formed
-	if err := tx.VerifySignatures(); err != nil {
-		// Get the message bytes that were signed
-		msgBytes, mErr := message.MarshalBinary()
-		if mErr != nil {
-			return "", fmt.Errorf("failed to marshal message: %v (original error: %v)", mErr, err)
-		}
+	// Add the signature to the transaction
+	// Solana transactions can have multiple signatures for multi-sig transactions
+	_tx.Signatures = append(_tx.Signatures, signature)
 
-		// Add more detailed error information
-		feePayer := "no fee payer"
-		if len(message.AccountKeys) > 0 {
-			feePayer = message.AccountKeys[0].String()
-		}
-
-		fmt.Printf("Signature Verification Details:\n"+
-			"  Fee Payer: %s\n"+
-			"  Signature: %s\n"+
-			"  Message (base58): %s\n",
-			feePayer, signature, base58.Encode(msgBytes))
-		return "", fmt.Errorf("signature verification failed: %v", err)
-	}
-
-	// Send the transaction
-	hash, err := b.client.SendTransaction(context.Background(), tx)
+	// Verify that all required signatures are present and valid
+	// This checks signatures against the transaction data and account permissions
+	err = _tx.VerifySignatures()
 	if err != nil {
-		fmt.Println("error during sending transaction:", err)
-		return "", err
+		return "", fmt.Errorf("failed to verify signatures: %v", err)
 	}
 
+	// Submit the transaction to the Solana network
+	// The returned hash can be used to track the transaction status
+	hash, err := b.client.SendTransaction(context.Background(), _tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+
+	// Return the transaction hash as a string
 	return hash.String(), nil
 }
 

@@ -30,7 +30,7 @@ func NewEthereumBlockchain(networkType NetworkType) (IBlockchain, error) {
 		networkID:   networkID,
 	}
 
-	newEVMBlockchain, err := NewEVMBlockchain(Ethereum, network, "hex", 18, time.Second*10, &chainID, "ETH")
+	newEVMBlockchain, err := NewEVMBlockchain(Ethereum, network, "hex", 18, time.Second*120, &chainID, "ETH")
 	if err != nil {
 		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
 		return nil, err
@@ -55,7 +55,7 @@ func NewArbitrumBlockchain(networkType NetworkType) (IBlockchain, error) {
 		networkID:   networkID,
 	}
 
-	newEVMBlockchain, err := NewEVMBlockchain(Arbitrum, network, "hex", 18, time.Second*10, &chainID, "ETH")
+	newEVMBlockchain, err := NewEVMBlockchain(Arbitrum, network, "hex", 18, time.Second*120, &chainID, "ETH")
 	if err != nil {
 		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
 		return nil, fmt.Errorf("failed to create new EVMBlockchain: %w", err)
@@ -80,7 +80,7 @@ func NewStripChainBlockchain(networkType NetworkType) (IBlockchain, error) {
 		networkID:   networkID,
 	}
 
-	newEVMBlockchain, err := NewEVMBlockchain(StripChain, network, "hex", 18, time.Second*10, &chainID, "ETH")
+	newEVMBlockchain, err := NewEVMBlockchain(StripChain, network, "hex", 18, time.Second*120, &chainID, "ETH")
 	if err != nil {
 		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
 		return nil, fmt.Errorf("failed to create new EVMBlockchain: %w", err)

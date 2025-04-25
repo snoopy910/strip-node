@@ -27,7 +27,9 @@ type MintOutput struct {
 }
 
 type SwapMetadata struct {
-	Token string `json:"token"`
+	Token    string `json:"token"`
+	Multiple bool   `json:"multiple"`
+	Path     string `json:"path"`
 }
 
 type BurnMetadata struct {
@@ -113,13 +115,6 @@ ProcessLoop:
 				continue
 			default:
 				// Process the operation...
-			}
-
-			// then get the data signed
-			signature, err = getSignature(intent, i)
-			if err != nil {
-				logger.Sugar().Errorw("error getting signature", "error", err)
-				break
 			}
 
 			wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
@@ -258,20 +253,14 @@ ProcessLoop:
 						db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					}
 				case libs.OperationTypeBridgeDeposit:
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
-
-					depositOperation := intent.Operations[i-1]
-
-					if i == 0 || !(depositOperation.Type == libs.OperationTypeSendToBridge) {
+					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeSendToBridge) {
 						logger.Sugar().Errorw("Invalid operation type for bridge deposit")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
+					depositOperation := intent.Operations[i-1]
 
 					// TODO: This code is not correct, but swapping is being worked on
 					transfers, err := opBlockchain.GetTransfers(depositOperation.Result, &publicKey)
@@ -363,19 +352,13 @@ ProcessLoop:
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					break OperationLoop
 				case libs.OperationTypeSwap:
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
-					bridgeDeposit := intent.Operations[i-1]
-
-					if i == 0 || !(bridgeDeposit.Type == libs.OperationTypeBridgeDeposit) {
+					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeBridgeDeposit) {
 						logger.Sugar().Errorw("Invalid operation type for swap")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+					bridgeDeposit := intent.Operations[i-1]
 
 					// Get the deposit operation details to find the actual source token address
 					depositOperation := intent.Operations[i-2] // The operation before bridge deposit is send-to-bridge
@@ -396,15 +379,19 @@ ProcessLoop:
 						break
 					}
 
-					// Use the actual token address from the transfer event
+					// Get the original token address from the transfer event
 					transfer := transfers[0]
-					tokenIn := transfer.TokenAddress
-					logger.Sugar().Infow("Using token from transfer event", "tokenIn", tokenIn)
+					originalTokenAddress := transfer.TokenAddress
+					logger.Sugar().Infow("Original token from transfer event", "originalToken", originalTokenAddress)
 
 					var bridgeDepositData MintOutput
 					var swapMetadata SwapMetadata
 					json.Unmarshal([]byte(bridgeDeposit.SolverOutput), &bridgeDepositData)
 					json.Unmarshal([]byte(operation.SolverMetadata), &swapMetadata)
+
+					// Use the pegged token from the bridge deposit output
+					tokenIn := bridgeDepositData.Token
+					logger.Sugar().Infow("Using pegged token for swap", "peggedToken", tokenIn, "originalToken", originalTokenAddress)
 
 					// Use the token from metadata for tokenOut
 					tokenOut := swapMetadata.Token
@@ -417,23 +404,51 @@ ProcessLoop:
 						break
 					}
 
-					dataToSign, err := bridge.BridgeSwapDataToSign(
-						RPC_URL,
-						BridgeContractAddress,
-						wallet.EthereumPublicKey,
-						tokenIn,
-						tokenOut,
-						amountIn,
-						deadline,
-					)
+					var dataToSign string
+					if swapMetadata.Multiple {
+						// Multi-pool swap
+						dataToSign, err = bridge.BridgeSwapMultiplePoolsDataToSign(
+							RPC_URL,
+							BridgeContractAddress,
+							wallet.EthereumPublicKey,
+							tokenIn,
+							swapMetadata.Path,
+							amountIn,
+							deadline,
+						)
+					} else {
+						// Single pool swap (default)
+						dataToSign, err = bridge.BridgeSwapDataToSign(
+							RPC_URL,
+							BridgeContractAddress,
+							wallet.EthereumPublicKey,
+							tokenIn,
+							tokenOut,
+							amountIn,
+							deadline,
+						)
+					}
 
 					if err != nil {
 						logger.Sugar().Errorw("error getting data to sign", "error", err)
 						break
 					}
 
+					// Log the dataToSign for debugging
+					logger.Sugar().Infow("Bridge swap data to sign generated",
+						"dataToSign", dataToSign,
+						"length", len(dataToSign),
+						"isMultiple", swapMetadata.Multiple,
+						"operation_id", operation.ID)
+
 					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
+
+					// Log before getting signature
+					logger.Sugar().Infow("Requesting signature for bridge swap",
+						"operationIndex", i,
+						"intentID", intent.ID,
+						"dataToSignAvailable", intent.Operations[i].SolverDataToSign != "")
 
 					signature, err := getSignature(intent, i)
 					if err != nil {
@@ -441,7 +456,7 @@ ProcessLoop:
 						break
 					}
 
-					logger.Sugar().Infow("Swapping bridge", "wallet", wallet.EthereumPublicKey, "tokenIn", tokenIn, "tokenOut", tokenOut, "amountIn", amountIn, "deadline", deadline, "signature", signature)
+					logger.Sugar().Infow("Swapping bridge", "wallet", wallet.EthereumPublicKey, "tokenIn", tokenIn, "tokenOut", tokenOut, "amountIn", amountIn, "deadline", deadline, "signature", signature, "multiple", swapMetadata.Multiple)
 
 					result, err := swapBridge(
 						wallet.EthereumPublicKey,
@@ -463,14 +478,6 @@ ProcessLoop:
 
 					break OperationLoop
 				case libs.OperationTypeBurn:
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
-
-					bridgeSwap := intent.Operations[i-1]
-
 					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != libs.OperationTypeWithdraw {
 						fmt.Println("BURN operation must be followed by a WITHDRAW operation")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
@@ -478,12 +485,13 @@ ProcessLoop:
 						break
 					}
 
-					if i == 0 || !(bridgeSwap.Type == libs.OperationTypeSwap) {
+					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeSwap) {
 						logger.Sugar().Errorw("Invalid operation type for swap")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+					bridgeSwap := intent.Operations[i-1]
 
 					logger.Sugar().Infow("Burning tokens", "bridgeSwap", bridgeSwap)
 
@@ -539,12 +547,6 @@ ProcessLoop:
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					break OperationLoop
 				case libs.OperationTypeBurnSynthetic:
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
-
 					// This operation allows direct burning of ERC20 tokens from the wallet
 					// without requiring a prior swap operation
 					burnSyntheticMetadata := BurnSyntheticMetadata{}
@@ -832,20 +834,13 @@ ProcessLoop:
 
 					break OperationLoop
 				case libs.OperationTypeWithdraw:
-					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
-					if lockSchema == nil {
-						logger.Sugar().Errorw("error verifying identity lock", "error", err)
-						break
-					}
-
-					burn := intent.Operations[i-1]
-
-					if i == 0 || !(burn.Type == libs.OperationTypeBurn || burn.Type == libs.OperationTypeBurnSynthetic) {
+					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeBurn || intent.Operations[i-1].Type == libs.OperationTypeBurnSynthetic) {
 						logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+					burn := intent.Operations[i-1]
 
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)

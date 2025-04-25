@@ -531,8 +531,8 @@ func startHTTPServer(port string) {
 			}
 		case libs.OperationTypeSendToBridge:
 			// Verify only operation for bridging
-			// Get bridgewallet by calling /getwallet from sequencer api
-			req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchain=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
+			// Get bridgewallet by calling /getBridgeAddress from sequencer api
+			req, err := http.NewRequest("GET", SequencerHost+"/getBridgeAddress", nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return
@@ -1067,6 +1067,13 @@ func startHTTPServer(port string) {
 				logger.Sugar().Errorw("Invalid operation type for swap")
 				return
 			}
+
+			// Log detailed information about the swap operation
+			logger.Sugar().Infow("Processing swap signature request",
+				"solverDataToSign", operation.SolverDataToSign,
+				"solverDataLength", len(operation.SolverDataToSign),
+				"intent_id", intent.ID,
+				"operation_id", operation.ID)
 
 			// Set message
 			msg = operation.SolverDataToSign

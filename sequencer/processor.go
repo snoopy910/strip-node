@@ -398,7 +398,7 @@ ProcessLoop:
 					amountIn := bridgeDepositData.Amount
 					deadline := time.Now().Add(time.Hour).Unix()
 
-					wallet, err := db.GetWallet(intent.Identity, "ecdsa")
+					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
 					if err != nil {
 						logger.Sugar().Errorw("error getting wallet", "error", err)
 						break
@@ -458,14 +458,28 @@ ProcessLoop:
 
 					logger.Sugar().Infow("Swapping bridge", "wallet", wallet.EthereumPublicKey, "tokenIn", tokenIn, "tokenOut", tokenOut, "amountIn", amountIn, "deadline", deadline, "signature", signature, "multiple", swapMetadata.Multiple)
 
-					result, err := swapBridge(
-						wallet.EthereumPublicKey,
-						tokenIn,
-						tokenOut,
-						amountIn,
-						deadline,
-						signature,
-					)
+					var result string
+					if swapMetadata.Multiple {
+						logger.Sugar().Infow("Using multiple pools swap function", "path", swapMetadata.Path)
+						result, err = swapMultiplePoolsBridge(
+							wallet.ECDSAPublicKey,
+							tokenIn,
+							swapMetadata.Path,
+							amountIn,
+							deadline,
+							signature,
+						)
+					} else {
+						logger.Sugar().Infow("Using single pool swap function")
+						result, err = swapBridge(
+							wallet.ECDSAPublicKey,
+							tokenIn,
+							tokenOut,
+							amountIn,
+							deadline,
+							signature,
+						)
+					}
 
 					if err != nil {
 						logger.Sugar().Errorw("error swapping bridge", "error", err)
@@ -500,7 +514,7 @@ ProcessLoop:
 
 					json.Unmarshal([]byte(operation.SolverMetadata), &burnMetadata)
 
-					wallet, err := db.GetWallet(intent.Identity, "ecdsa")
+					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
 					if err != nil {
 						logger.Sugar().Errorw("error getting wallet", "error", err)
 						break

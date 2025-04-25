@@ -79,23 +79,23 @@ func validateAndOrderSignatures(tx *solana.Transaction) error {
 	return nil
 }
 
-func (b *SolanaBlockchain) BroadcastTransaction(txn string, signatureBase58 string, _ *string) (string, error) {
+func (b *SolanaBlockchain) BroadcastTransaction(serializedTxn string, signatureBase58 string, _ *string) (string, error) {
 	fmt.Printf("Solana Transaction Params:\n"+
 		"  serializedTxn: %s\n"+
 		"  chainId: %s\n"+
 		"  keyCurve: %s\n"+
 		"  signatureBase58: %s\n",
-		txn, b.network.networkID, b.keyCurve, signatureBase58)
+		serializedTxn, b.network.networkID, b.keyCurve, signatureBase58)
 
 	// Decode the message data
-	messageData, err := base58.Decode(txn)
+	decodedTransactionData, err := base58.Decode(serializedTxn)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode message data: %v", err)
 	}
 
 	// Deserialize the binary data into a Solana transaction
 	// This reconstructs the transaction object with all its instructions
-	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(messageData))
+	_tx, err := solana.TransactionFromDecoder(bin.NewBinDecoder(decodedTransactionData))
 	if err != nil {
 		return "", fmt.Errorf("failed to deserialize transaction data: %v", err)
 	}
@@ -287,13 +287,24 @@ func (b *SolanaBlockchain) IsTransactionBroadcastedAndConfirmed(txHash string) (
 
 	// Regarding the deprecation of GetConfirmedTransaction in Solana-Core v2, this has been updated to use GetTransaction.
 	// https://spl_governance.crates.io/docs/rpc/deprecated/getconfirmedtransaction
-	_, err = b.client.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
+	txResp, err := b.client.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
 		Commitment: rpc.CommitmentConfirmed,
 	})
 
 	if err != nil {
+		fmt.Printf("Solana RPC Error: %v (type: %T)\n", err, err)
+		// Check for specific error types to provide better diagnostics
+		if err.Error() == "not found" {
+			fmt.Printf("Transaction %s was not found on the blockchain - it may have been rejected or never submitted\n", txHash)
+		}
 		return false, err
 	}
+
+	// Log transaction details
+	fmt.Printf("Transaction found! BlockTime: %v, Slot: %d, Confirmations: %d\n",
+		txResp.BlockTime,
+		txResp.Slot,
+		txResp.Meta.Err)
 
 	return true, nil
 }

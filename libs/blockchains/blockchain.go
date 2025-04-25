@@ -18,7 +18,7 @@ type IBlockchain interface {
 	ChainID() *string
 	TokenSymbol() string
 	// Replacing for Send*Transaction
-	BroadcastTransaction(txn string, signedHash string, publicKey *string) (string, error)
+	BroadcastTransaction(serializedTxn string, signedHash string, publicKey *string) (string, error)
 	GetTransfers(txHash string, address *string) ([]common.Transfer, error)
 	// Replacing for Check*TransactionConfirmed
 	IsTransactionBroadcastedAndConfirmed(txHash string) (bool, error)

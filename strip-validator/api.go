@@ -1261,7 +1261,7 @@ func startHTTPServer(port string) {
 				operation.Type == libs.OperationTypeBurn ||
 				operation.Type == libs.OperationTypeBurnSynthetic ||
 				operation.Type == libs.OperationTypeWithdraw {
-				go generateSignatureMessage(BridgeContractAddress, blockchains.Arbitrum, common.CurveEcdsa, common.CurveEddsa, msgBytes)
+				go generateSignatureMessage(BridgeContractAddress, blockchains.Ethereum, common.CurveEcdsa, common.CurveEddsa, msgBytes)
 			} else {
 				go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
 			}

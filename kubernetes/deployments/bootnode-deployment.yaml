@@ -29,3 +29,5 @@ spec:
           env:
             - name: PORT
               value: "30303"
+            - name: ENV
+              value: "production"

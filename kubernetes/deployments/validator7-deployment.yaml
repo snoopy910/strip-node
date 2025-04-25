@@ -57,7 +57,7 @@ spec:
             - name: POSTGRES_DB
               value: validator1
             - name: BOOTNODE_URL
-              value: "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"
+              value: "/dns/bootnode/tcp/30303/p2p/QmTuUh2kCEMWV1MxoT1UAk9hrutcKF9rfYFCszPgF61T8p"
             - name: SIGNER_HUB_CONTRACT_ADDRESS
               value: "0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c"
             - name: SOLVERS_REGISTRY_CONTRACT_ADDRESS

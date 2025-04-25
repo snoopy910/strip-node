@@ -117,6 +117,7 @@ ProcessLoop:
 			}
 
 			// then get the data signed
+			fmt.Println(">>>>>>>>>>>>>>>>>>>>>>BEGINNING getSignature")
 			signature, err = getSignature(intent, i)
 			if err != nil {
 				logger.Sugar().Errorw("error getting signature", "error", err)
@@ -185,10 +186,12 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("SEND_TO_BRIDGE-1")
 					if operation.Type == libs.OperationTypeSendToBridge {
 						// Get bridge wallet for the chain
 						bridgeWallet, err := db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
+						fmt.Println("SEND_TO_BRIDGE-2")
+						fmt.Printf("bridgeWallet ", bridgeWallet)
 						if err != nil {
 							logger.Sugar().Errorw("Failed to get bridge wallet", "error", err)
 							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
@@ -196,6 +199,8 @@ ProcessLoop:
 							break
 						}
 						isVerified, err := verifyDestinationAddress(bridgeWallet, &operation)
+						fmt.Println("SEND_TO_BRIDGE-3")
+						fmt.Printf("isVerified ", isVerified)
 						if err != nil {
 							logger.Sugar().Errorw("Failed to verify destination address", "error", err)
 							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
@@ -209,12 +214,12 @@ ProcessLoop:
 							break
 						}
 					}
-
-					signature, err = getSignature(intent, i)
-					if err != nil {
-						fmt.Printf("error getting signature: %+v\n", err)
-						break
-					}
+					fmt.Println("SEND_TO_BRIDGE-4")
+					// signature, err = getSignature(intent, i)
+					// if err != nil {
+					// 	fmt.Printf("error getting signature: %+v\n", err)
+					// 	break
+					// }
 
 					txHash, err := opBlockchain.BroadcastTransaction(*operation.SerializedTxn, signature, &publicKey)
 					if err != nil {
@@ -1096,6 +1101,11 @@ func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
 
 func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, error) {
 	// get wallet
+	fmt.Println(">>>>>>>>>>>>>>>>>>>>>getSignatureEx")
+	fmt.Println(intent)
+	fmt.Println(operationIndex)
+	fmt.Println(intent.Operations[operationIndex])
+	fmt.Println(intent.Operations[operationIndex].Type)
 	transactionType := intent.Operations[operationIndex].Type
 	var wallet *db.WalletSchema
 	var err error
@@ -1106,6 +1116,9 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 		}
 	} else {
 		wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
+		fmt.Println(wallet)
+		fmt.Println(intent.Identity)
+		fmt.Println(intent.BlockchainID)
 		if err != nil {
 			return "", "", fmt.Errorf("error getting wallet: %v", err)
 		}
@@ -1236,19 +1249,25 @@ func getNextOperationType(intent *libs.Intent, operationIndex int) *libs.Operati
 }
 
 func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Operation) (bool, error) {
+	fmt.Printf("verifyDestinationAddress-1")
 	var destAddress string
 	var expectedAddress string
 	var tokenAddress string
+	fmt.Println(operation.BlockchainID)
+	fmt.Println(operation.NetworkType)
 	opBlockchain, err := blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
+	fmt.Println(opBlockchain)
 	if err != nil {
 		return false, fmt.Errorf("error getting blockchain: %v", err)
 	}
-
+	fmt.Printf("verifyDestinationAddress-2")
 	chainID := opBlockchain.ChainID()
+	fmt.Println(chainID)
 	if chainID == nil {
 		return false, fmt.Errorf("chainID is nil ")
 	}
 	destAddress, tokenAddress, _ = opBlockchain.ExtractDestinationAddress(*operation.SerializedTxn)
+	fmt.Printf("verifyDestinationAddress-3 destAddress %s, tokenAddress %s\n", destAddress, tokenAddress)
 	switch operation.BlockchainID {
 	// Extract destination address from serialized transaction
 	case blockchains.Bitcoin:
@@ -1258,7 +1277,7 @@ func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Ope
 	// Extract destination address from serialized transaction based on chain type
 	case blockchains.Solana:
 		// Get the actual account address from the message accounts
-		expectedAddress = bridgeWallet.EDDSAPublicKey
+		expectedAddress = bridgeWallet.SolanaPublicKey
 	case blockchains.Aptos:
 		expectedAddress = bridgeWallet.AptosEDDSAPublicKey
 	case blockchains.Stellar:
@@ -1272,8 +1291,10 @@ func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Ope
 	case blockchains.Sui:
 		expectedAddress = bridgeWallet.SuiPublicKey
 	default:
-		expectedAddress = bridgeWallet.ECDSAPublicKey
+		expectedAddress = bridgeWallet.EthereumPublicKey
 	}
+
+	fmt.Println("verifyDestinationAddress-4 expectedAddress ", expectedAddress)
 
 	if tokenAddress != "" {
 		exists, peggedToken, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, tokenAddress)

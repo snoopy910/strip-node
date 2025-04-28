@@ -20,6 +20,7 @@ func NewServer(solver *LendingSolver) *Server {
 func startHTTPServer(solver *LendingSolver, port string) {
 	server := NewServer(solver)
 
+	http.HandleFunc("/health", server.handleHealth)
 	http.HandleFunc("/construct", server.handleConstruct)
 	http.HandleFunc("/solve", server.handleSolve)
 	http.HandleFunc("/status", server.handleStatus)
@@ -106,7 +107,15 @@ func (s *Server) handleOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
-		"output": output,
-	})
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(output))
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

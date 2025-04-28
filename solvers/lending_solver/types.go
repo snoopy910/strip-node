@@ -33,8 +33,9 @@ type LendingMetadata struct {
 // LendingOutput represents the result of a lending operation
 type LendingOutput struct {
 	TxHash        string  `json:"txHash"`
+	Token         string  `json:"token,omitempty"`
 	Amount        uint256 `json:"amount,omitempty"`
-	CollateralUSD uint256 `json:"collateralUSD,omitempty"`
-	BorrowedUSD   uint256 `json:"borrowedUSD,omitempty"`
 	HealthFactor  uint256 `json:"healthFactor,omitempty"`
+	Rate          string  `json:"rate,omitempty"`
+	RemainingDebt string  `json:"remainingDebt,omitempty"`
 }

@@ -118,10 +118,12 @@ ProcessLoop:
 
 			// then get the data signed
 			fmt.Println(">>>>>>>>>>>>>>>>>>>>>>BEGINNING getSignature")
-			signature, err = getSignature(intent, i)
-			if err != nil {
-				logger.Sugar().Errorw("error getting signature", "error", err)
-				break
+			if operation.Type != libs.OperationTypeBridgeDeposit { // for bridge deposit the dataToSign is set later
+				signature, err = getSignature(intent, i)
+				if err != nil {
+					logger.Sugar().Errorw("error getting signature", "error", err)
+					break
+				}
 			}
 
 			wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
@@ -228,7 +230,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("SEND_TO_BRIDGE-5")
 					var lockMetadata LockMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
@@ -290,6 +292,7 @@ ProcessLoop:
 						db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					}
 				case libs.OperationTypeBridgeDeposit:
+					fmt.Println("BRIDGE_DEPOSIT-1")
 					depositOperation := intent.Operations[i-1]
 
 					if i == 0 || !(depositOperation.Type == libs.OperationTypeSendToBridge) {
@@ -298,30 +301,32 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-2")
 					depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
 					if err != nil {
 						logger.Sugar().Errorw("error getting blockchain", "error", err)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-3", depositOpBlockchain)
 					// TODO: This code is not correct, but swapping is being worked on
 					transfers, err := depositOpBlockchain.GetTransfers(depositOperation.Result, &publicKey)
 					if err != nil {
 						logger.Sugar().Errorw("error getting transfers", "error", err)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-4", transfers)
 					if len(transfers) == 0 {
 						logger.Sugar().Errorw("No transfers found", "result", depositOperation.Result, "identity", intent.Identity)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-5")
 					transfer := transfers[0]
 					srcAddress := transfer.TokenAddress
 					amount := transfer.ScaledAmount
+
+					fmt.Println("BRIDGE_DEPOSIT-6", srcAddress, amount, transfer)
 
 					// opBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
 					// if err != nil {
@@ -336,14 +341,14 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-7", chainID)
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, srcAddress)
 
 					if err != nil {
 						logger.Sugar().Errorw("error checking token existence", "error", err)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-8", exists, destAddress)
 					if !exists {
 						logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "blockchainId", operation.BlockchainID, "networkType", operation.NetworkType)
 
@@ -352,12 +357,18 @@ ProcessLoop:
 						break
 					}
 
+					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
+					if err != nil {
+						logger.Sugar().Errorw("error getting wallet", "error", err)
+						break
+					}
+					fmt.Println("BRIDGE_DEPOSIT-9", wallet)
 					dataToSign, err := bridge.BridgeDepositDataToSign(RPC_URL, BridgeContractAddress, amount, wallet.EthereumPublicKey, destAddress)
 					if err != nil {
 						logger.Sugar().Errorw("error getting data to sign", "error", err)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-10", dataToSign)
 					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
@@ -378,7 +389,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BRIDGE_DEPOSIT-11 mint: ", result)
 					mintOutput := MintOutput{
 						Token:  destAddress,
 						Amount: amount,
@@ -993,7 +1004,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusCompleted)
 					}
 
-					break OperationLoop
+					// break OperationLoop
 				case libs.OperationTypeSolver:
 					status, err := solver.CheckStatus(
 						operation.Solver, &intentBytes, i,
@@ -1026,7 +1037,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 					}
 
-					break OperationLoop
+					// break OperationLoop
 				case libs.OperationTypeWithdraw:
 					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
 					if err != nil {
@@ -1102,7 +1113,7 @@ func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
 func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, error) {
 	// get wallet
 	fmt.Println(">>>>>>>>>>>>>>>>>>>>>getSignatureEx")
-	fmt.Println(intent)
+	fmt.Println(&intent)
 	fmt.Println(operationIndex)
 	fmt.Println(intent.Operations[operationIndex])
 	fmt.Println(intent.Operations[operationIndex].Type)

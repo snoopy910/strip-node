@@ -26,7 +26,7 @@ func main() {
 	isSolanaTest := flag.Bool("isSolanaTest", util.LookupEnvOrBool("IS_SOLANA_TEST", false), "is the process a signer")
 	isEthereumTest := flag.Bool("isEthereumTest", util.LookupEnvOrBool("IS_SOLANA_TEST", false), "is the process a signer")
 	isLendingSolver := flag.Bool("isLendingSolver", util.LookupEnvOrBool("IS_LENDING_SOLVER", false), "start lending solver")
-	isUniswapSolver := flag.Bool("isUniswapSolver", util.LookupEnvOrBool("IS_UNISWAP_SOLVER", false), "start uniswap v3 solver")
+	isSwapSolver := flag.Bool("isSwapSolver", util.LookupEnvOrBool("IS_SWAP_SOLVER", false), "start swap solver")
 
 	isDeployIntentOperatorsRegistry := flag.Bool("isDeployIntentOperatorsRegistry", util.LookupEnvOrBool("IS_DEPLOY_SIGNER_HUB", false), "deploy IntentOperatorsRegistry contract")
 	isDeploySolversRegistry := flag.Bool("isDeploySolversRegistry", util.LookupEnvOrBool("IS_DEPLOY_SOLVERS_REGISTRY", false), "deploy SolversRegistry contract")
@@ -50,8 +50,8 @@ func main() {
 	solversRegistryContractAddress := flag.String("solversRegistryAddress", util.LookupEnvOrString("SOLVERS_REGISTRY_CONTRACT_ADDRESS", "0x56A9bCddF533Af1859842074B46B0daD07b7686a"), "address of SolversRegistry contract")
 	bridgeContractAddress := flag.String("bridgeContractAddress", util.LookupEnvOrString("BRIDGE_CONTRACT_ADDRESS", "0x79E3A2B39e77dfB5C9C6a370D4a8a4fa42c482c0"), "address of Bridge contract")
 	lendingPoolAddress := flag.String("lendingPoolAddress", util.LookupEnvOrString("LENDING_POOL_ADDRESS", ""), "address of lending pool contract")
-	uniswapV3FactoryAddress := flag.String("uniswapV3FactoryAddress", util.LookupEnvOrString("UNISWAP_V3_FACTORY_ADDRESS", ""), "address of Uniswap V3 factory contract")
-	npmAddress := flag.String("npmAddress", util.LookupEnvOrString("NPM_ADDRESS", ""), "address of Uniswap V3 NonfungiblePositionManager contract")
+	uniswapV3FactoryAddress := flag.String("uniswapV3FactoryAddress", util.LookupEnvOrString("UNISWAP_V3_FACTORY_ADDRESS", "0x9af0e87FBA28e20863488bda3CfA012d1c7863d9"), "address of Uniswap V3 factory contract")
+	npmAddress := flag.String("npmAddress", util.LookupEnvOrString("NPM_ADDRESS", "0x0c3729964A75870f9c692833A18AFE315be700e1"), "address of Uniswap V3 NonfungiblePositionManager contract")
 	rpcURL := flag.String("rpcURL", util.LookupEnvOrString("RPC_URL", "http://localhost:8545"), "ethereum node RPC URL")
 	tokenName := flag.String("tokenName", util.LookupEnvOrString("TOKEN_NAME", "Strip"), "name of the token")
 	tokenSymbol := flag.String("tokenSymbol", util.LookupEnvOrString("TOKEN_SYMBOL", "STRP"), "symbol of the token")
@@ -107,7 +107,7 @@ func main() {
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)
-	} else if *isUniswapSolver {
+	} else if *isSwapSolver {
 		chainID, err := strconv.ParseInt(*chainId, 10, 64)
 		if err != nil {
 			log.Fatal("Failed to parse chain ID:", err)

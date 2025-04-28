@@ -934,6 +934,7 @@ func startHTTPServer(port string) {
 				// Use transaction details from previous operation
 				depositOperation = libs.Operation{
 					BlockchainID: prevOp.BlockchainID,
+					NetworkType:  prevOp.NetworkType,
 					Result:       prevOp.Result,
 				}
 
@@ -945,9 +946,17 @@ func startHTTPServer(port string) {
 
 			logger.Sugar().Infow("Processing bridgeDeposit for chain",
 				"blockchainID", depositOperation.BlockchainID,
+				"networkType", depositOperation.NetworkType,
 				"txHash", depositOperation.Result)
 
-			transfers, err := opBlockchain.GetTransfers(depositOperation.Result, &intent.Identity)
+			fmt.Println("deposit operation ", depositOperation)
+
+			depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
+			if err != nil {
+				logger.Sugar().Errorw("error getting blockchain", "error", err)
+				return
+			}
+			transfers, err := depositOpBlockchain.GetTransfers(depositOperation.Result, &intent.Identity)
 			if err != nil {
 				logger.Sugar().Errorw("error getting transfers", "error", err)
 				return

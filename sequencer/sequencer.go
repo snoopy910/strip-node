@@ -2,6 +2,7 @@ package sequencer
 
 import (
 	"log"
+	"os"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/StripChain/strip-node/libs"
@@ -26,6 +27,7 @@ func StartSequencer(
 	keepAlive := make(chan string)
 
 	HeliusApiKey = heliusApiKey
+	os.Setenv("HELIUS_API_KEY", heliusApiKey)
 
 	intents, err := db.GetIntentsWithStatus(libs.IntentStatusProcessing)
 	if err != nil {

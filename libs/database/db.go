@@ -241,12 +241,7 @@ func GetLock(identity string, blockchainId blockchains.BlockchainID) (*LockSchem
 }
 
 func UnlockIdentity(id int64) error {
-	lockSchema := LockSchema{
-		Id:     id,
-		Locked: false,
-	}
-
-	_, err := GetDB().Model(&lockSchema).Column("locked").WherePK().Update()
+	_, err := GetDB().Exec("UPDATE locks SET locked = FALSE WHERE id = ?", id)
 	if err != nil {
 		return err
 	}

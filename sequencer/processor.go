@@ -489,6 +489,8 @@ ProcessLoop:
 					}
 
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
+					// Also update the SolverOutput with the amount - this is critical for the burn operation
+					db.UpdateOperationSolverOutput(operation.ID, amountIn)
 
 					break OperationLoop
 				case libs.OperationTypeBurn:
@@ -513,6 +515,42 @@ ProcessLoop:
 					burnMetadata := BurnMetadata{}
 
 					json.Unmarshal([]byte(operation.SolverMetadata), &burnMetadata)
+
+					// Validate burnAmount is not empty
+					if burnAmount == "" {
+						logger.Sugar().Errorw("Empty burn amount in solver output",
+							"bridgeSwapID", bridgeSwap.ID,
+							"result", bridgeSwap.Result,
+							"solverOutput", bridgeSwap.SolverOutput)
+
+						// Try to extract the amount from the transaction receipt
+						if bridgeSwap.Result != "" {
+							// Get the actual output amount from the transaction
+							swapOutput, err := bridge.GetSwapOutput(
+								RPC_URL,
+								bridgeSwap.Result,
+							)
+
+							if err == nil && swapOutput != "" {
+								logger.Sugar().Infow("Successfully extracted amount from swap output",
+									"amount", swapOutput)
+								burnAmount = swapOutput
+								// Update the swap operation with the correct output amount
+								db.UpdateOperationSolverOutput(bridgeSwap.ID, swapOutput)
+							} else {
+								logger.Sugar().Warnw("Failed to extract amount from swap output",
+									"error", err)
+							}
+						}
+
+						// If still empty after fallback, fail the operation
+						if burnAmount == "" {
+							logger.Sugar().Errorw("Cannot proceed with burn operation: no valid amount available")
+							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+							db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+							break OperationLoop
+						}
+					}
 
 					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
 					if err != nil {
@@ -859,6 +897,18 @@ ProcessLoop:
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
 
+					// Set default value for unlock if not specified (empty JSON would set it to false)
+					// Check if the original metadata JSON contains the "unlock" field
+					var metadataMap map[string]interface{}
+					json.Unmarshal([]byte(operation.SolverMetadata), &metadataMap)
+					if _, hasUnlock := metadataMap["unlock"]; !hasUnlock {
+						// If "unlock" wasn't specified in the JSON, default to true
+						withdrawMetadata.Unlock = true
+						logger.Sugar().Infow("Setting default unlock=true for withdrawal",
+							"operationID", operation.ID,
+							"tokenAddress", withdrawMetadata.Token)
+					}
+
 					// Handle different burn operation types
 					var tokenToWithdraw string
 					var burnTokenAddress string
@@ -913,6 +963,8 @@ ProcessLoop:
 
 					var blockchainBridgeWallet string
 					switch operation.BlockchainID {
+					case blockchains.Ethereum:
+						blockchainBridgeWallet = bridgeWallet.EthereumPublicKey
 					case blockchains.Cardano:
 						blockchainBridgeWallet = bridgeWallet.CardanoPublicKey
 					default:
@@ -922,9 +974,16 @@ ProcessLoop:
 						break OperationLoop
 					}
 
-					tx, dataToSign, err := opBlockchain.BuildWithdrawTx(blockchainBridgeWallet, burn.SolverOutput, publicKey, &tokenToWithdraw)
+					// Convert burn.SolverOutput from numeric string to proper JSON format
+					// This fixes the "cannot unmarshal number into Go value of type map[string]interface{}" error
+					burnSolverOutputJSONString := fmt.Sprintf(`{"amount": "%s"}`, burn.SolverOutput)
+					logger.Sugar().Infow("Created JSON format for burn output",
+						"originalOutput", burn.SolverOutput,
+						"jsonFormatted", burnSolverOutputJSONString)
+
+					tx, dataToSign, err := opBlockchain.BuildWithdrawTx(blockchainBridgeWallet, burnSolverOutputJSONString, publicKey, &tokenToWithdraw)
 					if err != nil {
-						fmt.Println(err)
+						logger.Sugar().Errorw("error building withdraw transaction", "error", err)
 						break
 					}
 					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
@@ -932,7 +991,7 @@ ProcessLoop:
 
 					withdrawSignature, err := getSignature(intent, i)
 					if err != nil {
-						fmt.Printf("error getting signature: %+v\n", err)
+						logger.Sugar().Errorw("error getting signature", "error", err)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
@@ -945,7 +1004,7 @@ ProcessLoop:
 					)
 
 					if err != nil {
-						fmt.Printf("error withdrawing tokens: %+v\n", err)
+						logger.Sugar().Errorw("error withdrawing tokens", "error", err)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
@@ -959,7 +1018,7 @@ ProcessLoop:
 			case libs.OperationStatusWaiting:
 				// check for confirmations and update the status to completed
 				switch operation.Type {
-				case libs.OperationTypeTransaction, libs.OperationTypeSendToBridge, libs.OperationTypeBridgeDeposit, libs.OperationTypeSwap, libs.OperationTypeBurn, libs.OperationTypeBurnSynthetic:
+				case libs.OperationTypeTransaction, libs.OperationTypeSendToBridge, libs.OperationTypeBridgeDeposit, libs.OperationTypeBurnSynthetic:
 					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
 					if err != nil {
 						logger.Sugar().Errorw("error checking transaction", "error", err)
@@ -969,6 +1028,84 @@ ProcessLoop:
 						break
 					}
 					db.UpdateOperationStatus(operation.ID, libs.OperationStatusCompleted)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusCompleted)
+					}
+
+					break OperationLoop
+				case libs.OperationTypeSwap:
+					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
+					if err != nil {
+						logger.Sugar().Errorw("error checking swap transaction", "error", err)
+						break
+					}
+
+					if !confirmed {
+						break
+					}
+
+					// Extract the actual output amount from the swap transaction
+					swapOutput, err := bridge.GetSwapOutput(
+						RPC_URL,
+						operation.Result,
+					)
+
+					if err != nil {
+						logger.Sugar().Errorw("error getting swap output", "error", err,
+							"txHash", operation.Result)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+
+					logger.Sugar().Infow("Successfully extracted swap output for burn operation",
+						"txHash", operation.Result,
+						"swapOutput", swapOutput)
+
+					// Update the operation status and solver output with the actual amount
+					db.UpdateOperationStatus(operation.ID, libs.OperationStatusCompleted)
+					db.UpdateOperationSolverOutput(operation.ID, swapOutput)
+
+					if i+1 == len(intent.Operations) {
+						// update the intent status to completed
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusCompleted)
+					}
+
+					break OperationLoop
+				case libs.OperationTypeBurn:
+					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
+					if err != nil {
+						logger.Sugar().Errorw("error checking burn transaction", "error", err)
+						break
+					}
+
+					if !confirmed {
+						break
+					}
+
+					// Extract the actual output amount from the burn transaction
+					burnOutput, err := bridge.GetBurnOutput(
+						RPC_URL,
+						operation.Result,
+					)
+
+					if err != nil {
+						logger.Sugar().Errorw("error getting burn output", "error", err,
+							"txHash", operation.Result)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break ProcessLoop
+					}
+
+					logger.Sugar().Infow("Successfully extracted burn output for withdraw operation",
+						"txHash", operation.Result,
+						"burnOutput", burnOutput)
+
+					// Update the operation status and solver output with the actual amount
+					db.UpdateOperationStatus(operation.ID, libs.OperationStatusCompleted)
+					db.UpdateOperationSolverOutput(operation.ID, burnOutput)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
@@ -1022,6 +1159,18 @@ ProcessLoop:
 					// now unlock the identity if locked
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
+
+					// Set default value for unlock if not specified (empty JSON would set it to false)
+					// Check if the original metadata JSON contains the "unlock" field
+					var metadataMap map[string]interface{}
+					json.Unmarshal([]byte(operation.SolverMetadata), &metadataMap)
+					if _, hasUnlock := metadataMap["unlock"]; !hasUnlock {
+						// If "unlock" wasn't specified in the JSON, default to true
+						withdrawMetadata.Unlock = true
+						logger.Sugar().Infow("Setting default unlock=true for withdrawal",
+							"operationID", operation.ID,
+							"tokenAddress", withdrawMetadata.Token)
+					}
 
 					lockSchema, err := db.GetLock(intent.Identity, intent.BlockchainID)
 					if err != nil {

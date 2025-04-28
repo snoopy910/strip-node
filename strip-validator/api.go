@@ -1005,7 +1005,7 @@ func startHTTPServer(port string) {
 				"amount", transfer.Amount,
 				"isNative", transfer.IsNative)
 
-			chainID := opBlockchain.ChainID()
+			chainID := depositOpBlockchain.ChainID()
 			if chainID == nil {
 				logger.Sugar().Errorw("Chain ID is nil", "blockchainID", depositOperation.BlockchainID)
 				w.Header().Set("Content-Type", "application/json")
@@ -1043,19 +1043,19 @@ func startHTTPServer(port string) {
 			// Set message for signing - first try SolverDataToSign
 			msg = operation.SolverDataToSign
 
-			dataToSign := ""
-			if operation.DataToSign != nil {
-				dataToSign = *operation.DataToSign
-			}
+			// dataToSign := ""
+			// if operation.DataToSign != nil {
+			// 	dataToSign = *operation.DataToSign
+			// }
 			// Log detailed info about the message being signed
 			logger.Sugar().Infow("Processing bridge deposit signature",
 				"solverDataLength", len(operation.SolverDataToSign),
-				"dataToSignLength", len(dataToSign))
+				"dataToSignLength", len(*operation.DataToSign))
 
 			// If no SolverDataToSign is provided, use DataToSign as fallback
 			if len(msg) == 0 {
-				logger.Sugar().Infow("Using DataToSign for bridge deposit operation", "length", len(dataToSign))
-				msg = dataToSign
+				logger.Sugar().Infow("Using DataToSign for bridge deposit operation", "length", len(*operation.DataToSign))
+				msg = *operation.DataToSign
 			}
 
 			if len(msg) == 0 {

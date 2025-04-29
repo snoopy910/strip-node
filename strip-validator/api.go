@@ -1118,8 +1118,8 @@ func startHTTPServer(port string) {
 
 			// Get bridgewallet by calling /getwallet from sequencer api
 			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
-			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
-			req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchainID=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
+			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&blockchain="+string(intent.BlockchainID), nil)
+			// req, err := http.NewRequest("GET", SequencerHost+fmt.Sprintf("/getWallet?identity=%s&blockchainID=%s", intent.Identity, string(intent.BlockchainID)), nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return

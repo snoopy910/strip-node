@@ -118,7 +118,7 @@ ProcessLoop:
 
 			// then get the data signed
 			fmt.Println(">>>>>>>>>>>>>>>>>>>>>>BEGINNING getSignature")
-			if operation.Type != libs.OperationTypeBridgeDeposit { // for bridge deposit the dataToSign is set later
+			if operation.Type != libs.OperationTypeBridgeDeposit && operation.Type != libs.OperationTypeBurnSynthetic && operation.Type != libs.OperationTypeWithdraw { // for bridge deposit the dataToSign is set later
 				signature, err = getSignature(intent, i)
 				if err != nil {
 					logger.Sugar().Errorw("error getting signature", "error", err)
@@ -404,7 +404,7 @@ ProcessLoop:
 
 					db.UpdateOperationSolverOutput(operation.ID, string(mintOutputBytes))
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
-					break OperationLoop
+					break ProcessLoop
 				case libs.OperationTypeSwap:
 					bridgeDeposit := intent.Operations[i-1]
 
@@ -586,7 +586,7 @@ ProcessLoop:
 					// This operation allows direct burning of ERC20 tokens from the wallet
 					// without requiring a prior swap operation
 					burnSyntheticMetadata := BurnSyntheticMetadata{}
-
+					fmt.Println("BURN_SYNTHETIC-1")
 					// Verify that this operation is followed by a withdraw operation
 					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != libs.OperationTypeWithdraw {
 						logger.Sugar().Errorw("BURN_SYNTHETIC validation failed: must be followed by WITHDRAW",
@@ -600,8 +600,8 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
-					logger.Sugar().Infow("BURN_SYNTHETIC validati	on passed: followed by WITHDRAW",
+					fmt.Println("BURN_SYNTHETIC-2")
+					logger.Sugar().Infow("BURN_SYNTHETIC validation passed: followed by WITHDRAW",
 						"operationId", operation.ID,
 						"nextOperationId", intent.Operations[i+1].ID,
 						"nextOperationType", intent.Operations[i+1].Type)
@@ -618,7 +618,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BURN_SYNTHETIC-3")
 					logger.Sugar().Infow("BURN_SYNTHETIC metadata parsed successfully",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token,
@@ -637,8 +637,8 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
-					wallet, err := db.GetWallet(intent.Identity, "ecdsa")
+					fmt.Println("BURN_SYNTHETIC-4")
+					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
 					if err != nil {
 						logger.Sugar().Errorw("BURN_SYNTHETIC wallet retrieval failed",
 							"operationId", operation.ID,
@@ -654,7 +654,7 @@ ProcessLoop:
 					logger.Sugar().Infow("BURN_SYNTHETIC wallet retrieved successfully",
 						"operationId", operation.ID,
 						"publicKey", wallet.EthereumPublicKey)
-
+					fmt.Println("BURN_SYNTHETIC-5")
 					// Verify the user has sufficient token balance
 					balance, err := ERC20.GetBalance(RPC_URL, burnSyntheticMetadata.Token, wallet.EthereumPublicKey)
 					if err != nil {
@@ -669,7 +669,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BURN_SYNTHETIC-6")
 					logger.Sugar().Infow("BURN_SYNTHETIC balance retrieved successfully",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token,
@@ -687,7 +687,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BURN_SYNTHETIC-7")
 					amountBig, ok := new(big.Int).SetString(burnSyntheticMetadata.Amount, 10)
 					if !ok {
 						logger.Sugar().Errorw("BURN_SYNTHETIC amount parsing failed",
@@ -699,7 +699,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BURN_SYNTHETIC-8")
 					// Log balance check details
 					logBurnSyntheticBalanceCheck(balanceBig, amountBig, burnSyntheticMetadata.Token)
 
@@ -716,7 +716,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BURN_SYNTHETIC-9")
 					logger.Sugar().Infow("BURN_SYNTHETIC sufficient balance confirmed",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token,
@@ -736,7 +736,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("BURN_SYNTHETIC-10")
 					if exists {
 						logger.Sugar().Errorw("BURN_SYNTHETIC invalid token: token exists on bridge",
 							"operationId", operation.ID,
@@ -752,7 +752,7 @@ ProcessLoop:
 					logger.Sugar().Infow("BURN_SYNTHETIC token validated: not a bridged token",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token)
-
+					fmt.Println("BURN_SYNTHETIC-11")
 					// Generate data to sign for burning tokens
 					dataToSign, err := bridge.BridgeBurnDataToSign(
 						RPC_URL,
@@ -822,7 +822,7 @@ ProcessLoop:
 						"signatureLength", len(signature))
 
 					fmt.Println("Burning synthetic tokens", wallet.EthereumPublicKey, burnSyntheticMetadata.Amount, burnSyntheticMetadata.Token, signature)
-
+					fmt.Println("BURN_SYNTHETIC-12")
 					// Execute the burn transaction
 					result, err := burnTokens(
 						wallet.EthereumPublicKey,
@@ -867,8 +867,9 @@ ProcessLoop:
 								"tokensMatch", burnSyntheticMetadata.Token == withdrawMetadata.Token)
 						}
 					}
+					fmt.Println("BURN_SYNTHETIC-13")
 
-					break OperationLoop
+					// break OperationLoop
 				case libs.OperationTypeWithdraw:
 					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
 					if lockSchema == nil {
@@ -887,7 +888,7 @@ ProcessLoop:
 
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
-
+					fmt.Println("WITHDRAW-1")
 					// Handle different burn operation types
 					var tokenToWithdraw string
 					var burnTokenAddress string
@@ -940,18 +941,9 @@ ProcessLoop:
 						break
 					}
 
-					var blockchainBridgeWallet string
-					switch operation.BlockchainID {
-					case blockchains.Cardano:
-						blockchainBridgeWallet = bridgeWallet.CardanoPublicKey
-					default:
-						logger.Sugar().Errorw("Blockchain ID not supported", "blockchainID", operation.BlockchainID)
-						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
-						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
-						break OperationLoop
-					}
+					bridgeWalletPublicKey := getBridgeWalletPublicKey(&operation, bridgeWallet)
 
-					tx, dataToSign, err := opBlockchain.BuildWithdrawTx(blockchainBridgeWallet, burn.SolverOutput, publicKey, &tokenToWithdraw)
+					tx, dataToSign, err := opBlockchain.BuildWithdrawTx(bridgeWalletPublicKey, burn.SolverOutput, publicKey, &tokenToWithdraw)
 					if err != nil {
 						fmt.Println(err)
 						break
@@ -966,11 +958,11 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("WITHDRAW-2")
 					result, err := opBlockchain.BroadcastTransaction(
 						tx,
 						withdrawSignature,
-						&blockchainBridgeWallet,
+						&bridgeWalletPublicKey,
 					)
 
 					if err != nil {
@@ -1328,4 +1320,33 @@ func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Ope
 	}
 
 	return true, nil
+}
+
+func getBridgeWalletPublicKey(operation *libs.Operation, bridgeWallet *db.WalletSchema) string {
+	var bridgeWalletPublicKey string
+	switch operation.BlockchainID {
+	case blockchains.Bitcoin:
+		bridgeWalletPublicKey = bridgeWallet.BitcoinMainnetPublicKey
+	case blockchains.Dogecoin:
+		bridgeWalletPublicKey = bridgeWallet.DogecoinMainnetPublicKey
+	case blockchains.Solana:
+		// Get the actual account address from the message accounts
+		bridgeWalletPublicKey = bridgeWallet.SolanaPublicKey
+	case blockchains.Aptos:
+		bridgeWalletPublicKey = bridgeWallet.AptosEDDSAPublicKey
+	case blockchains.Stellar:
+		bridgeWalletPublicKey = bridgeWallet.StellarPublicKey
+	case blockchains.Algorand:
+		bridgeWalletPublicKey = bridgeWallet.AlgorandEDDSAPublicKey
+	case blockchains.Ripple:
+		bridgeWalletPublicKey = bridgeWallet.RippleEDDSAPublicKey
+	case blockchains.Cardano:
+		bridgeWalletPublicKey = bridgeWallet.CardanoPublicKey
+	case blockchains.Sui:
+		bridgeWalletPublicKey = bridgeWallet.SuiPublicKey
+	default:
+		bridgeWalletPublicKey = bridgeWallet.EthereumPublicKey
+	}
+
+	return bridgeWalletPublicKey
 }

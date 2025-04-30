@@ -26,6 +26,8 @@ var EVMRegistry = map[BlockchainID]bool{
 	Ethereum:   true,
 	Arbitrum:   true,
 	StripChain: true,
+	Berachain:  true,
+	Sonic:      true,
 }
 
 // RegisterEVMBlockchain adds a new EVM blockchain ID to the registry.
@@ -116,7 +118,7 @@ func (b *EVMBlockchain) BroadcastTransaction(txn string, signatureHex string, pu
 	// Handle hex strings with or without 0x prefix
 	var serializedTx []byte
 	var err error
-	
+
 	// Ensure the transaction has 0x prefix for hexutil.Decode
 	if !strings.HasPrefix(txn, "0x") && !strings.HasPrefix(txn, "0X") {
 		// No prefix, use standard hex decoding
@@ -125,7 +127,7 @@ func (b *EVMBlockchain) BroadcastTransaction(txn string, signatureHex string, pu
 		// Has prefix, use hexutil.Decode
 		serializedTx, err = hexutil.Decode(txn)
 	}
-	
+
 	if err != nil {
 		return "", fmt.Errorf("failed to decode transaction hex: %w", err)
 	}
@@ -135,7 +137,7 @@ func (b *EVMBlockchain) BroadcastTransaction(txn string, signatureHex string, pu
 
 	// Handle signatures with or without 0x prefix
 	var sigData []byte
-	
+
 	// Ensure the signature has 0x prefix for hexutil.Decode
 	if !strings.HasPrefix(signatureHex, "0x") && !strings.HasPrefix(signatureHex, "0X") {
 		// No prefix, use standard hex decoding
@@ -144,7 +146,7 @@ func (b *EVMBlockchain) BroadcastTransaction(txn string, signatureHex string, pu
 		// Has prefix, use hexutil.Decode
 		sigData, err = hexutil.Decode(signatureHex)
 	}
-	
+
 	if err != nil {
 		return "", fmt.Errorf("failed to decode signature hex: %w", err)
 	}

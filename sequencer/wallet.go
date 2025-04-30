@@ -122,9 +122,9 @@ func createWallet(identity string, blockchainID blockchains.BlockchainID) error 
 	}
 
 	var addressesResponse libs.AddressesResponse
-	logger.Sugar().Infof("addresses response: %s", string(body))
 	err = json.Unmarshal(body, &addressesResponse)
 	if err != nil {
+		logger.Sugar().Infof("addresses response: %s", string(body))
 		return fmt.Errorf("failed to unmarshal addresses response: %w", err)
 	}
 
@@ -161,7 +161,6 @@ func createWallet(identity string, blockchainID blockchains.BlockchainID) error 
 			wallet.SolanaPublicKey = addresses[blockchains.Mainnet]
 		default:
 			if blockchains.IsEVMBlockchain(blockchainID) {
-				logger.Sugar().Infof("%s address: %s", blockchainID, addresses[blockchains.Mainnet])
 				wallet.EthereumPublicKey = addresses[blockchains.Mainnet]
 			} else {
 				logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)

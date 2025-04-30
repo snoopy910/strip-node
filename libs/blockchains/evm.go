@@ -30,7 +30,7 @@ func NewEthereumBlockchain(networkType NetworkType) (IBlockchain, error) {
 		networkID:   networkID,
 	}
 
-	newEVMBlockchain, err := NewEVMBlockchain(Ethereum, network, "hex", 18, time.Second*120, &chainID, "ETH")
+	newEVMBlockchain, err := NewEVMBlockchain(Ethereum, network, "hex", 18, time.Minute*2, &chainID, "ETH")
 	if err != nil {
 		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
 		return nil, err
@@ -42,6 +42,10 @@ func NewEthereumBlockchain(networkType NetworkType) (IBlockchain, error) {
 func NewArbitrumBlockchain(networkType NetworkType) (IBlockchain, error) {
 	var nodeURL, networkID, chainID string
 	switch networkType {
+	case Mainnet:
+		nodeURL = "https://arbitrum-one-rpc.publicnode.com"
+		networkID = "mainnet"
+		chainID = "42161"
 	case Testnet:
 		nodeURL = "https://arbitrum-sepolia-rpc.publicnode.com"
 		networkID = "testnet"
@@ -55,7 +59,7 @@ func NewArbitrumBlockchain(networkType NetworkType) (IBlockchain, error) {
 		networkID:   networkID,
 	}
 
-	newEVMBlockchain, err := NewEVMBlockchain(Arbitrum, network, "hex", 18, time.Second*120, &chainID, "ETH")
+	newEVMBlockchain, err := NewEVMBlockchain(Arbitrum, network, "hex", 18, time.Minute*2, &chainID, "ETH")
 	if err != nil {
 		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
 		return nil, fmt.Errorf("failed to create new EVMBlockchain: %w", err)
@@ -80,7 +84,63 @@ func NewStripChainBlockchain(networkType NetworkType) (IBlockchain, error) {
 		networkID:   networkID,
 	}
 
-	newEVMBlockchain, err := NewEVMBlockchain(StripChain, network, "hex", 18, time.Second*120, &chainID, "ETH")
+	newEVMBlockchain, err := NewEVMBlockchain(StripChain, network, "hex", 18, time.Minute*2, &chainID, "ETH")
+	if err != nil {
+		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
+		return nil, fmt.Errorf("failed to create new EVMBlockchain: %w", err)
+	}
+	return &newEVMBlockchain, nil
+}
+
+func NewSonicBlockchain(networkType NetworkType) (IBlockchain, error) {
+	var nodeURL, networkID, chainID string
+	switch networkType {
+	case Mainnet:
+		nodeURL = "https://rpc.soniclabs.com"
+		networkID = "mainnet"
+		chainID = "146"
+	case Testnet:
+		nodeURL = "https://rpc.blaze.soniclabs.com"
+		networkID = "testnet"
+		chainID = "57054"
+	default:
+		return nil, fmt.Errorf("network type not supported: %s", networkType)
+	}
+	network := Network{
+		networkType: networkType,
+		nodeURL:     nodeURL,
+		networkID:   networkID,
+	}
+
+	newEVMBlockchain, err := NewEVMBlockchain(Sonic, network, "hex", 18, time.Minute*2, &chainID, "S")
+	if err != nil {
+		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
+		return nil, fmt.Errorf("failed to create new EVMBlockchain: %w", err)
+	}
+	return &newEVMBlockchain, nil
+}
+
+func NewBerachainBlockchain(networkType NetworkType) (IBlockchain, error) {
+	var nodeURL, networkID, chainID string
+	switch networkType {
+	case Mainnet:
+		nodeURL = "https://berachain-rpc.publicnode.com"
+		networkID = "mainnet"
+		chainID = "80094"
+	case Testnet:
+		nodeURL = "https://bepolia.rpc.berachain.com"
+		networkID = "testnet"
+		chainID = "80069"
+	default:
+		return nil, fmt.Errorf("network type not supported: %s", networkType)
+	}
+	network := Network{
+		networkType: networkType,
+		nodeURL:     nodeURL,
+		networkID:   networkID,
+	}
+
+	newEVMBlockchain, err := NewEVMBlockchain(Berachain, network, "hex", 18, time.Minute*2, &chainID, "BERA")
 	if err != nil {
 		logger.Sugar().Errorw("failed to create new EVMBlockchain", "error", err)
 		return nil, fmt.Errorf("failed to create new EVMBlockchain: %w", err)

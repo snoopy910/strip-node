@@ -31,6 +31,7 @@ jobs:
         run: git config --global http.sslVerify false
 
   deploy:
+    if: ${{ github.event.label.name == 'deploy' }}
     needs: build-and-test
     runs-on: ubuntu-latest
     steps:

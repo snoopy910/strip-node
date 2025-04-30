@@ -80,6 +80,8 @@ const (
 	Aptos      BlockchainID = "APTOS"
 	StripChain BlockchainID = "STRIPCHAIN"
 	Arbitrum   BlockchainID = "ARBITRUM"
+	Sonic      BlockchainID = "SONIC"
+	Berachain  BlockchainID = "BERACHAIN"
 )
 
 // BlockchainFactory creates blockchain instances for specific networks
@@ -251,6 +253,8 @@ func InitBlockchainRegistry() *Registry {
 		Aptos:      NewAptosBlockchain,
 		Dogecoin:   NewDogecoinBlockchain,
 		StripChain: NewStripChainBlockchain,
+		Sonic:      NewSonicBlockchain,
+		Berachain:  NewBerachainBlockchain,
 	}
 	for chain, factory := range chains {
 		registry.Register(chain, factory)

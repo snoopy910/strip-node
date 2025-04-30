@@ -11,6 +11,7 @@ on:
       - develop
       - stage
       - main
+    types: [ labeled ]
 
 env:
   AWS_REGION: us-east-1

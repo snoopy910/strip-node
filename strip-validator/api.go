@@ -169,6 +169,19 @@ func startHTTPServer(port string) {
 
 		key := createWallet.Identity + "_" + string(createWallet.IdentityCurve) + "_" + string(createWallet.KeyCurve)
 
+		keyShare, err := GetKeyShare(createWallet.Identity, createWallet.IdentityCurve, createWallet.KeyCurve)
+		if err != nil {
+			logger.Sugar().Errorw("error from postgres", "error", err)
+			return
+		}
+
+		if keyShare != "" {
+			logger.Sugar().Infow("key share already exists", "key", key)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Keygen operation completed successfully"))
+			return
+		}
+
 		// Create channel for keygen results with error handling
 		keygenGeneratedChan[key] = make(chan string)
 		errorChan := make(chan error, 1)

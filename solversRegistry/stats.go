@@ -1,6 +1,8 @@
 package solversregistry
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -57,4 +59,25 @@ func TotalSolvers(rpcURL string, contractAddress string) (uint, error) {
 	}
 
 	return uint(total.Int64()), nil
+}
+
+func SolverExistsAndWhitelisted(rpcURL string, contractAddress string, solverDomain string) (bool, error) {
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return false, fmt.Errorf("failed to dial ethclient: %w", err)
+	}
+
+	instance, err := NewSolversRegistry(common.HexToAddress(contractAddress), client)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to create new solvers registry: %w", err)
+	}
+
+	exists, err := instance.Solvers(nil, solverDomain)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to get solver: %w", err)
+	}
+
+	return exists.Whitelisted, nil
 }

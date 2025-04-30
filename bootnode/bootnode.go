@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	mrand "math/rand"
 	"os"
 	"strconv"
 
@@ -15,7 +14,7 @@ import (
 )
 
 func main() {
-	var listenHost, portStr, path string
+	var listenHost, portStr string
 	var ok bool
 
 	if listenHost, ok = os.LookupEnv("LISTEN_HOST"); !ok {
@@ -30,38 +29,34 @@ func main() {
 		panic(err)
 	}
 
-	if path, ok = os.LookupEnv("KEY_PATH"); !ok {
-		path = "static-bootnode"
-	}
-
 	fmt.Printf("[*] Listening on: %s with port: %d\n", listenHost, port)
 
-	filePath := fmt.Sprintf("%s/bootnode.bin", path)
+	filePath := "bootnode.bin"
 
 	var prvKey crypto.PrivKey
 
 	if _, err := os.Stat(filePath); err == nil {
+		fmt.Println("Loading private key from file")
 		buff, err := os.ReadFile(filePath)
-
 		if err != nil {
 			panic(err)
 		}
 
 		prvKey, err = crypto.UnmarshalPrivateKey(buff)
-
 		if err != nil {
 			panic(err)
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
-		r := mrand.New(mrand.NewSource(int64(port)))
-
-		// Creates a new RSA key pair for this host.
-		prvKey, _, err = crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
+		fmt.Println("Generating new private key")
+		priv, _, err := crypto.GenerateKeyPair(
+			crypto.RSA,
+			2048,
+		)
 		if err != nil {
 			panic(err)
 		}
 
-		buff, err := crypto.MarshalPrivateKey(prvKey)
+		buff, err := crypto.MarshalPrivateKey(priv)
 
 		if err != nil {
 			panic(err)

@@ -61,7 +61,6 @@ func discoverPeers(h host.Host, bootnode []multiaddr.Multiaddr) error {
 	// Look for others who have announced and attempt to connect to them
 	anyConnected := false
 	for !anyConnected {
-		//fmt.Println("Searching for peers...")
 		peerChan, err := routingDiscovery.FindPeers(ctx, topicNameFlag)
 		if err != nil {
 			return fmt.Errorf("failed to find peers: %w", err)

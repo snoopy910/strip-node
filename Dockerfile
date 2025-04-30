@@ -38,9 +38,6 @@ RUN mkdir -p /app/static-bootnode && \
 COPY --from=builder /build/strip-node /app/strip-node
 COPY --from=builder /build/libs/database/migrations /app/migrations
 
-# Copy the static bootnode key file to ensure consistent peer ID
-COPY bootnode/static-bootnode/ /app/static-bootnode/
-
 # Use the non-root user
 USER appuser
 

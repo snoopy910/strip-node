@@ -8,17 +8,16 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util"
 	"github.com/StripChain/strip-node/util/logger"
-	"github.com/echovl/cardano-go"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	ethCommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -28,6 +27,8 @@ var EVMRegistry = map[BlockchainID]bool{
 	Ethereum:   true,
 	Arbitrum:   true,
 	StripChain: true,
+	Berachain:  true,
+	Sonic:      true,
 }
 
 // RegisterEVMBlockchain adds a new EVM blockchain ID to the registry.
@@ -115,18 +116,40 @@ type EVMBlockchain struct {
 }
 
 func (b *EVMBlockchain) BroadcastTransaction(txn string, signatureHex string, publicKey *string) (string, error) {
-	serializedTx, err := hex.DecodeString(txn)
+	// Handle hex strings with or without 0x prefix
+	var serializedTx []byte
+	var err error
+
+	// Ensure the transaction has 0x prefix for hexutil.Decode
+	if !strings.HasPrefix(txn, "0x") && !strings.HasPrefix(txn, "0X") {
+		// No prefix, use standard hex decoding
+		serializedTx, err = hex.DecodeString(txn)
+	} else {
+		// Has prefix, use hexutil.Decode
+		serializedTx, err = hexutil.Decode(txn)
+	}
+
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to decode transaction hex: %w", err)
 	}
 
 	var tx types.Transaction
 	rlp.DecodeBytes(serializedTx, &tx)
 
-	sigData, err := hex.DecodeString(signatureHex)
+	// Handle signatures with or without 0x prefix
+	var sigData []byte
+
+	// Ensure the signature has 0x prefix for hexutil.Decode
+	if !strings.HasPrefix(signatureHex, "0x") && !strings.HasPrefix(signatureHex, "0X") {
+		// No prefix, use standard hex decoding
+		sigData, err = hex.DecodeString(signatureHex)
+	} else {
+		// Has prefix, use hexutil.Decode
+		sigData, err = hexutil.Decode(signatureHex)
+	}
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to decode signature hex: %w", err)
 	}
 
 	n, _ := new(big.Int).SetString(*b.chainID, 10)
@@ -434,107 +457,125 @@ func (b *EVMBlockchain) BuildWithdrawTx(bridgeAddress string,
 	userAddress string,
 	tokenAddress *string,
 ) (string, string, error) {
-	if tokenAddress == nil {
-		// Parse solver output to get amount
-		var solverData map[string]interface{}
-		if err := json.Unmarshal([]byte(solverOutput), &solverData); err != nil {
-			return "", "", fmt.Errorf("failed to parse solver output: %v", err)
-		}
-
-		txBuilder := cardano.NewTxBuilder(&cardano.ProtocolParams{})
-		amountStr, ok := solverData["amount"].(string)
-		if !ok {
-			return "", "", fmt.Errorf("amount not found in solver output")
-		}
-
-		amount, err := strconv.ParseUint(amountStr, 10, 64)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to parse amount: %v", err)
-		}
-
-		address, err := cardano.NewAddress(userAddress)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to parse address: %v", err)
-		}
-
-		inputTxHash := strings.ToLower(solverData["txHash"].(string))
-		txBuilder.AddInputs(&cardano.TxInput{
-			TxHash: cardano.Hash32(inputTxHash),
-			Amount: &cardano.Value{
-				Coin: cardano.Coin(amount),
-			},
-		})
-		txBuilder.AddOutputs(&cardano.TxOutput{
-			Address: address,
-			Amount: &cardano.Value{
-				Coin: cardano.Coin(amount),
-			},
-		})
-
-		tx, err := txBuilder.Build()
-		if err != nil {
-			return "", "", fmt.Errorf("failed to build transaction: %v", err)
-		}
-		hash, err := tx.Hash()
-		if err != nil {
-			return "", "", fmt.Errorf("failed to hash transaction: %v", err)
-		}
-		serializedTxn := tx.Hex()
-		dataToSign := hash.String()
-		return serializedTxn, dataToSign, nil
-	}
-	// Parse solver output
+	// Parse solver output to get amount
 	var solverData map[string]interface{}
 	if err := json.Unmarshal([]byte(solverOutput), &solverData); err != nil {
 		return "", "", fmt.Errorf("failed to parse solver output: %v", err)
 	}
 
-	txBuilder := cardano.NewTxBuilder(&cardano.ProtocolParams{})
 	amountStr, ok := solverData["amount"].(string)
 	if !ok {
 		return "", "", fmt.Errorf("amount not found in solver output")
 	}
 
-	amount, err := strconv.ParseUint(amountStr, 10, 64)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to parse amount: %v", err)
+	// Parse the amount as a big integer
+	amount, success := new(big.Int).SetString(amountStr, 10)
+	if !success {
+		return "", "", fmt.Errorf("failed to parse amount as big integer: %s", amountStr)
 	}
 
-	address, err := cardano.NewAddress(userAddress)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to parse address: %v", err)
+	// Validate Ethereum addresses
+	if !ethCommon.IsHexAddress(bridgeAddress) {
+		return "", "", fmt.Errorf("invalid bridge address format: %s", bridgeAddress)
 	}
 
-	inputTxHash := strings.ToLower(solverData["txHash"].(string))
-
-	// FIX: This is a temporary fillin and should be addressed
-	policyID := cardano.NewPolicyIDFromHash(cardano.Hash28(*tokenAddress))
-	assetName := cardano.NewAssetName(*tokenAddress)
-	txBuilder.AddInputs(&cardano.TxInput{
-		TxHash: cardano.Hash32(inputTxHash),
-		Amount: &cardano.Value{
-			MultiAsset: cardano.NewMultiAsset().Set(policyID, cardano.NewAssets().Set(assetName, cardano.BigNum(amount))),
-		},
-	})
-	txBuilder.AddOutputs(&cardano.TxOutput{
-		Address: address,
-		Amount: &cardano.Value{
-			MultiAsset: cardano.NewMultiAsset().Set(policyID, cardano.NewAssets().Set(assetName, cardano.BigNum(amount))),
-		},
-	})
-
-	tx, err := txBuilder.Build()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to build transaction: %v", err)
+	if !ethCommon.IsHexAddress(userAddress) {
+		return "", "", fmt.Errorf("invalid user address format: %s", userAddress)
 	}
-	hash, err := tx.Hash()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to hash transaction: %v", err)
-	}
-	serializedTxn := tx.Hex()
-	dataToSign := hash.String()
 
-	return serializedTxn, dataToSign, nil
+	// Setup the transaction based on whether it's an ERC20 or native token transfer
+	var tx *types.Transaction
+	var err error
+	var dataToSign string
+
+	if tokenAddress != nil && *tokenAddress != "" && *tokenAddress != util.ZERO_ADDRESS {
+		// ERC20 token withdrawal
+		if !ethCommon.IsHexAddress(*tokenAddress) {
+			return "", "", fmt.Errorf("invalid token address format: %s", *tokenAddress)
+		}
+
+		parsedABI, err := abi.JSON(strings.NewReader(erc20ABI))
+		if err != nil {
+			return "", "", fmt.Errorf("failed to parse ERC20 ABI: %v", err)
+		}
+
+		// Pack the transfer function call
+		tokenAddressObj := ethCommon.HexToAddress(*tokenAddress)
+		userAddressObj := ethCommon.HexToAddress(userAddress)
+
+		// Create the transfer function call data
+		transferFnData, err := parsedABI.Pack("transfer", userAddressObj, amount)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to pack transfer function data: %v", err)
+		}
+
+		// Create the transaction
+		bridgeAddressObj := ethCommon.HexToAddress(bridgeAddress)
+		nonce, err := b.client.PendingNonceAt(context.Background(), bridgeAddressObj)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get nonce: %v", err)
+		}
+
+		gasPrice, err := b.client.SuggestGasPrice(context.Background())
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get gas price: %v", err)
+		}
+
+		gasLimit := uint64(100000) // Safe default for ERC20 transfers
+
+		tx = types.NewTransaction(
+			nonce,
+			tokenAddressObj,
+			big.NewInt(0), // No ETH value for ERC20 transfers
+			gasLimit,
+			gasPrice,
+			transferFnData,
+		)
+	} else {
+		// Native token (ETH/BNB/etc.) withdrawal
+		bridgeAddressObj := ethCommon.HexToAddress(bridgeAddress)
+		userAddressObj := ethCommon.HexToAddress(userAddress)
+
+		nonce, err := b.client.PendingNonceAt(context.Background(), bridgeAddressObj)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get nonce: %v", err)
+		}
+
+		gasPrice, err := b.client.SuggestGasPrice(context.Background())
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get gas price: %v", err)
+		}
+
+		gasLimit := uint64(21000) // Standard gas limit for ETH transfers
+
+		tx = types.NewTransaction(
+			nonce,
+			userAddressObj,
+			amount,
+			gasLimit,
+			gasPrice,
+			nil, // No data for native transfers
+		)
+	}
+
+	// Get the chain ID
+	chainID, err := b.client.ChainID(context.Background())
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get chain ID: %v", err)
+	}
+
+	// Prepare the transaction for signing
+	signer := types.NewEIP155Signer(chainID)
+	// Remove the "0x" prefix to make it compatible with the validator's signature generation
+	dataToSign = fmt.Sprintf("%x", signer.Hash(tx).Bytes())
+
+	// Serialize the transaction
+	txBytes, err := tx.MarshalBinary()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to serialize transaction: %v", err)
+	}
+
+	return hexutil.Encode(txBytes), dataToSign, nil
 }
 
 func (b *EVMBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkType NetworkType) (string, error) {

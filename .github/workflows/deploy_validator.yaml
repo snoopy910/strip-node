@@ -40,6 +40,6 @@ jobs:
           echo "Building Docker image with tags: $FULL_TAG and $LATEST_TAG"
           
           # Build from root directory with strip-validator Dockerfile
-          docker build -t $FULL_TAG -t $LATEST_TAG -f ./strip-validator/Dockerfile .
+          docker build -t $FULL_TAG -t $LATEST_TAG -f ./strip-validator/Dockerfile --build-arg ENV=production .
           docker push $FULL_TAG
           docker push $LATEST_TAG

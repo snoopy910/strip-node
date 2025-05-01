@@ -17,6 +17,7 @@ import (
 	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/solver"
+	solversregistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/google/uuid"
 )
@@ -207,6 +208,42 @@ ProcessLoop:
 						db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, txHash)
 					}
 				case libs.OperationTypeSolver:
+					solverExists, err := solversregistry.SolverExistsAndWhitelisted(RPC_URL, SolversRegistryContractAddress, operation.Solver)
+					if err != nil {
+						logger.Sugar().Errorw("error checking if solver exists", "error", err)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+
+					if !solverExists {
+						logger.Sugar().Errorw("solver is not registered or not whitelisted", "solver", operation.Solver)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break OperationLoop
+					}
+
+					chainID := opBlockchain.ChainID()
+					if chainID == nil {
+						logger.Sugar().Errorw("chainID is nil", "blockchainID", operation.BlockchainID, "networkType", operation.NetworkType)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+					validChain, err := solversregistry.ValidateChain(RPC_URL, SolversRegistryContractAddress, operation.Solver, *chainID)
+					if err != nil {
+						logger.Sugar().Errorw("error validating chain", "error", err)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+					if !validChain {
+						logger.Sugar().Errorw("chain is not valid", "chain", *chainID)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break OperationLoop
+					}
+
 					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
 					if lockSchema == nil {
 						logger.Sugar().Errorw("error verifying identity lock", "error", err)

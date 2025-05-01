@@ -293,15 +293,13 @@ ProcessLoop:
 						db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					}
 				case libs.OperationTypeBridgeDeposit:
-					fmt.Println("BRIDGE_DEPOSIT-1")
-					depositOperation := intent.Operations[i-1]
-
-					if i == 0 || !(depositOperation.Type == libs.OperationTypeSendToBridge) {
+					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeSendToBridge) {
 						logger.Sugar().Errorw("Invalid operation type for bridge deposit")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+					depositOperation := intent.Operations[i-1]
 					fmt.Println("BRIDGE_DEPOSIT-2")
 					depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
 					if err != nil {
@@ -342,7 +340,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-					fmt.Println("BRIDGE_DEPOSIT-7", chainID)
+					fmt.Println("BRIDGE_DEPOSIT-7", *chainID)
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, srcAddress)
 
 					if err != nil {
@@ -351,14 +349,14 @@ ProcessLoop:
 					}
 					fmt.Println("BRIDGE_DEPOSIT-8", exists, destAddress)
 					if !exists {
-						logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "blockchainId", operation.BlockchainID, "networkType", operation.NetworkType)
+						logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "blockchainId", depositOperation.BlockchainID, "networkType", depositOperation.NetworkType)
 
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
 
-					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
+					wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
 					if err != nil {
 						logger.Sugar().Errorw("error getting wallet", "error", err)
 						break
@@ -405,16 +403,15 @@ ProcessLoop:
 
 					db.UpdateOperationSolverOutput(operation.ID, string(mintOutputBytes))
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
-					break ProcessLoop
+					break OperationLoop
 				case libs.OperationTypeSwap:
-					bridgeDeposit := intent.Operations[i-1]
-
-					if i == 0 || !(bridgeDeposit.Type == libs.OperationTypeBridgeDeposit) {
+					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeBridgeDeposit) {
 						logger.Sugar().Errorw("Invalid operation type for swap")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+					bridgeDeposit := intent.Operations[i-1]
 
 					// Get the deposit operation details to find the actual source token address
 					depositOperation := intent.Operations[i-2] // The operation before bridge deposit is send-to-bridge
@@ -941,7 +938,7 @@ ProcessLoop:
 					}
 					fmt.Println("BURN_SYNTHETIC-13")
 
-					// break OperationLoop
+					break OperationLoop
 				case libs.OperationTypeWithdraw:
 					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeBurn || intent.Operations[i-1].Type == libs.OperationTypeBurnSynthetic) {
 						logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
@@ -1065,6 +1062,7 @@ ProcessLoop:
 				// check for confirmations and update the status to completed
 				switch operation.Type {
 				case libs.OperationTypeTransaction, libs.OperationTypeSendToBridge, libs.OperationTypeBridgeDeposit:
+					fmt.Println("BRIDGE_DEPOSIT-WAITING", operation.Result, opBlockchain.ChainName(), *(opBlockchain.ChainID()))
 					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
 					if err != nil {
 						logger.Sugar().Errorw("error checking transaction", "error", err)
@@ -1191,7 +1189,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 					}
 
-					// break OperationLoop
+					break OperationLoop
 				case libs.OperationTypeWithdraw:
 					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
 					if err != nil {

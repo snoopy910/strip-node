@@ -24,7 +24,7 @@ import (
 	"github.com/mr-tron/base58"
 )
 
-// NewSolanaBlockchain creates a new Stellar blockchain instance
+// NewSolanaBlockchain creates a new Solana blockchain instance
 func NewSolanaBlockchain(networkType NetworkType) (IBlockchain, error) {
 	apiKey := os.Getenv("HELIUS_API_KEY")
 	apiKey = "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"

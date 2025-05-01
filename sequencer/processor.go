@@ -223,6 +223,27 @@ ProcessLoop:
 						break OperationLoop
 					}
 
+					chainID := opBlockchain.ChainID()
+					if chainID == nil {
+						logger.Sugar().Errorw("chainID is nil", "blockchainID", operation.BlockchainID, "networkType", operation.NetworkType)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+					validChain, err := solversregistry.ValidateChain(RPC_URL, SolversRegistryContractAddress, operation.Solver, *chainID)
+					if err != nil {
+						logger.Sugar().Errorw("error validating chain", "error", err)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+					if !validChain {
+						logger.Sugar().Errorw("chain is not valid", "chain", *chainID)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break OperationLoop
+					}
+
 					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
 					if lockSchema == nil {
 						logger.Sugar().Errorw("error verifying identity lock", "error", err)

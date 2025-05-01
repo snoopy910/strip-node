@@ -707,7 +707,7 @@ ProcessLoop:
 						break
 					}
 					fmt.Println("BURN_SYNTHETIC-4")
-					wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
+					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
 					if err != nil {
 						logger.Sugar().Errorw("BURN_SYNTHETIC wallet retrieval failed",
 							"operationId", operation.ID,

@@ -940,6 +940,7 @@ ProcessLoop:
 
 					break OperationLoop
 				case libs.OperationTypeWithdraw:
+					fmt.Println("WITHDRAW")
 					if i == 0 || !(intent.Operations[i-1].Type == libs.OperationTypeBurn || intent.Operations[i-1].Type == libs.OperationTypeBurnSynthetic) {
 						logger.Sugar().Errorw("Invalid operation type for withdraw after burn")
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
@@ -947,6 +948,7 @@ ProcessLoop:
 						break
 					}
 					burn := intent.Operations[i-1]
+					fmt.Println("WITHDRAW-0 ", burn)
 
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
@@ -987,7 +989,7 @@ ProcessLoop:
 					}
 					// verify these fields
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, tokenToWithdraw)
-
+					fmt.Println("WITHDRAW-1 burn.SolverOutput ", burn.SolverOutput)
 					if err != nil {
 						logger.Sugar().Errorw("error checking token existence", "error", err)
 						break
@@ -1029,6 +1031,7 @@ ProcessLoop:
 						logger.Sugar().Errorw("error building withdraw transaction", "error", err)
 						break
 					}
+					fmt.Println("WITHDRAW-2")
 					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
@@ -1128,12 +1131,14 @@ ProcessLoop:
 					if !confirmed {
 						break
 					}
-
+					fmt.Println("WAITING BURN SYNTHETIC-1 ", confirmed)
 					// Extract the actual output amount from the burn transaction
 					burnOutput, err := bridge.GetBurnOutput(
 						RPC_URL,
 						operation.Result,
 					)
+
+					fmt.Println("WAITING BURN SYNTHETIC-2 ", burnOutput)
 
 					if err != nil {
 						logger.Sugar().Errorw("error getting burn output", "error", err,
@@ -1150,6 +1155,8 @@ ProcessLoop:
 					// Update the operation status and solver output with the actual amount
 					db.UpdateOperationStatus(operation.ID, libs.OperationStatusCompleted)
 					db.UpdateOperationSolverOutput(operation.ID, burnOutput)
+					fmt.Println("WAITING BURN SYNTHETIC-4 ", operation.SolverOutput)
+					fmt.Println("WAITING BURN SYNTHETIC-5 ", operation.Status)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed

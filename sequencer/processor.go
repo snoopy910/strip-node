@@ -707,7 +707,7 @@ ProcessLoop:
 						break
 					}
 					fmt.Println("BURN_SYNTHETIC-4")
-					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
+					wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
 					if err != nil {
 						logger.Sugar().Errorw("BURN_SYNTHETIC wallet retrieval failed",
 							"operationId", operation.ID,
@@ -1151,6 +1151,8 @@ ProcessLoop:
 					logger.Sugar().Infow("Successfully extracted burn output for withdraw operation",
 						"txHash", operation.Result,
 						"burnOutput", burnOutput)
+
+					fmt.Println("WAITING BURN SYNTHETIC-3 Operation ID", operation.ID, operation)
 
 					// Update the operation status and solver output with the actual amount
 					db.UpdateOperationStatus(operation.ID, libs.OperationStatusCompleted)

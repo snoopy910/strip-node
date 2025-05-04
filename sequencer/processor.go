@@ -73,6 +73,7 @@ ProcessLoop:
 		}
 
 		if intent.Expiry.Before(time.Now()) {
+			logger.Sugar().Infow("intent expired", "intent", intent)
 			db.UpdateIntentStatus(intent.ID, libs.IntentStatusExpired)
 			return
 		}
@@ -95,7 +96,7 @@ ProcessLoop:
 				break ProcessLoop
 			}
 
-			// Create context with timeout for each operation using chain's OpTimeout
+			// // Create context with timeout for each operation using chain's OpTimeout
 			ctx, cancel := context.WithTimeout(context.Background(), opBlockchain.OpTimeout())
 			defer cancel()
 
@@ -956,7 +957,10 @@ ProcessLoop:
 					// Set default value for unlock if not specified (empty JSON would set it to false)
 					// Check if the original metadata JSON contains the "unlock" field
 					var metadataMap map[string]interface{}
-					json.Unmarshal([]byte(operation.SolverMetadata), &metadataMap)
+					err := json.Unmarshal([]byte(operation.SolverMetadata), &metadataMap)
+					if err != nil {
+						logger.Sugar().Errorw("Failed to unmarshal metadata for withdraw operation", "error", err)
+					}
 					if _, hasUnlock := metadataMap["unlock"]; !hasUnlock {
 						// If "unlock" wasn't specified in the JSON, default to true
 						withdrawMetadata.Unlock = true
@@ -1131,14 +1135,12 @@ ProcessLoop:
 					if !confirmed {
 						break
 					}
-					fmt.Println("WAITING BURN SYNTHETIC-1 ", confirmed)
+
 					// Extract the actual output amount from the burn transaction
 					burnOutput, err := bridge.GetBurnOutput(
 						RPC_URL,
 						operation.Result,
 					)
-
-					fmt.Println("WAITING BURN SYNTHETIC-2 ", burnOutput)
 
 					if err != nil {
 						logger.Sugar().Errorw("error getting burn output", "error", err,
@@ -1157,14 +1159,11 @@ ProcessLoop:
 					// Update the operation status and solver output with the actual amount
 					db.UpdateOperationStatus(operation.ID, libs.OperationStatusCompleted)
 					db.UpdateOperationSolverOutput(operation.ID, burnOutput)
-					fmt.Println("WAITING BURN SYNTHETIC-4 ", operation.SolverOutput)
-					fmt.Println("WAITING BURN SYNTHETIC-5 ", operation.Status)
 
 					if i+1 == len(intent.Operations) {
 						// update the intent status to completed
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusCompleted)
 					}
-
 					break OperationLoop
 				case libs.OperationTypeSolver:
 					status, err := solver.CheckStatus(

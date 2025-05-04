@@ -53,7 +53,7 @@ func NewSolanaBlockchain(networkType NetworkType) (IBlockchain, error) {
 			signingEncoding: "base64",
 			decimals:        7,
 			chainID:         &chainId,
-			opTimeout:       time.Second * 10,
+			opTimeout:       time.Second * 30,
 			tokenSymbol:     "SOL",
 		},
 		client:    client,
@@ -545,7 +545,7 @@ func (b *SolanaBlockchain) BuildWithdrawTx(account string,
 		return "", "", fmt.Errorf("amount not found in solver output")
 	}
 
-	if tokenAddress == nil {
+	if *tokenAddress == util.ZERO_ADDRESS {
 		accountFrom := solana.MustPublicKeyFromBase58(account)
 		accountTo := solana.MustPublicKeyFromBase58(recipient)
 

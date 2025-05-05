@@ -708,7 +708,7 @@ ProcessLoop:
 						break
 					}
 					fmt.Println("BURN_SYNTHETIC-4")
-					wallet, err := db.GetWallet(intent.Identity, blockchains.Ethereum)
+					wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
 					if err != nil {
 						logger.Sugar().Errorw("BURN_SYNTHETIC wallet retrieval failed",
 							"operationId", operation.ID,
@@ -1035,7 +1035,7 @@ ProcessLoop:
 						logger.Sugar().Errorw("error building withdraw transaction", "error", err)
 						break
 					}
-					fmt.Println("WITHDRAW-2")
+					fmt.Println("WITHDRAW-2 ", tx)
 					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
@@ -1293,6 +1293,7 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 	var wallet *db.WalletSchema
 	var err error
 	if transactionType == libs.OperationTypeWithdraw {
+		fmt.Println("getSignatureEx WITHDRAW")
 		wallet, err = db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
 		if err != nil {
 			return "", "", fmt.Errorf("error getting wallet: %v", err)

@@ -1187,19 +1187,28 @@ func startHTTPServer(port string) {
 			}
 
 			var withdrawMetadata WithdrawMetadata
-			json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
+			err := json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
+			if err != nil {
+				logger.Sugar().Errorw("Failed to unmarshal metadata for withdraw operation at signing", "error", err)
+			}
 
 			// Handle different burn operation types
 			var tokenToWithdraw string
 			var burnTokenAddress string
 			if burn.Type == libs.OperationTypeBurn {
 				var burnMetadata BurnMetadata
-				json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+				err := json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+				if err != nil {
+					logger.Sugar().Errorw("Failed to unmarshal metadata for burn operation at signing", "error", err)
+				}
 				tokenToWithdraw = withdrawMetadata.Token
 				burnTokenAddress = burnMetadata.Token
 			} else if burn.Type == libs.OperationTypeBurnSynthetic {
 				var burnSyntheticMetadata BurnSyntheticMetadata
-				json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+				err := json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+				if err != nil {
+					logger.Sugar().Errorw("Failed to unmarshal metadata for burn synthetic operation at signing", "error", err)
+				}
 				tokenToWithdraw = withdrawMetadata.Token
 				burnTokenAddress = burnSyntheticMetadata.Token
 			}
@@ -1275,8 +1284,10 @@ func startHTTPServer(port string) {
 				operation.Type == libs.OperationTypeBurn ||
 				operation.Type == libs.OperationTypeBurnSynthetic ||
 				operation.Type == libs.OperationTypeWithdraw {
-				go generateSignatureMessage(BridgeContractAddress, blockchains.Ethereum, common.CurveEcdsa, common.CurveEddsa, msgBytes)
+				fmt.Println("Generating signature message for burn or withdraw SOLANA")
+				go generateSignatureMessage(BridgeContractAddress, operation.BlockchainID, common.CurveEcdsa, common.CurveEddsa, msgBytes)
 			} else {
+				fmt.Println("Generating signature message for other operations SOLANA")
 				go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
 			}
 		case blockchains.Bitcoin:

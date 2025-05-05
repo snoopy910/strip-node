@@ -27,7 +27,6 @@ import (
 // NewSolanaBlockchain creates a new Solana blockchain instance
 func NewSolanaBlockchain(networkType NetworkType) (IBlockchain, error) {
 	apiKey := os.Getenv("HELIUS_API_KEY")
-	apiKey = "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"
 	heliusURL := "https://api.helius.xyz/v0/transactions?api-key=" + apiKey
 	chainId := "900"
 	network := Network{
@@ -41,6 +40,7 @@ func NewSolanaBlockchain(networkType NetworkType) (IBlockchain, error) {
 		network.networkID = "devnet"
 		heliusURL = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
 		chainId = "901"
+		apiKey = "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"
 	}
 
 	client := rpc.New(network.nodeURL)

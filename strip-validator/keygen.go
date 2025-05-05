@@ -15,20 +15,22 @@ func updateKeygen(identity string, identityCurve common.Curve, keyCurve common.C
 	TotalSigners := len(signers)
 	parties, _ := getParties(TotalSigners)
 
+	key := identity + "_" + string(identityCurve) + "_" + string(keyCurve)
+
 	//wait for 1 minute for party to be ready
 	for i := 0; i < 6; i++ {
-		if !partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)].Exists {
+		if !partyProcesses[key].Exists {
 			time.Sleep(10 * time.Second)
 		} else {
 			break
 		}
 	}
 
-	if !partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)].Exists {
+	if !partyProcesses[key].Exists {
 		return
 	}
 
-	party := *partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)].Party
+	party := *partyProcesses[key].Party
 
 	if to != -1 && to != party.PartyID().Index {
 		return
@@ -52,9 +54,6 @@ func updateKeygen(identity string, identityCurve common.Curve, keyCurve common.C
 }
 
 func generateKeygen(identity string, identityCurve common.Curve, keyCurve common.Curve, signers []string) {
-	logger.Sugar().Infof("signers: %v", signers)
-	logger.Sugar().Infof("NodePublicKey: %s", NodePublicKey)
-
 	Index := SliceIndexOfString(signers, NodePublicKey)
 
 	if Index == -1 {
@@ -89,7 +88,9 @@ func generateKeygen(identity string, identityCurve common.Curve, keyCurve common
 		return
 	}
 
-	delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
+	key := identity + "_" + string(identityCurve) + "_" + string(keyCurve)
+
+	delete(partyProcesses, key)
 	parties, partiesIds := getParties(TotalSigners)
 
 	ctx := tss.NewPeerContext(parties)
@@ -106,7 +107,7 @@ func generateKeygen(identity string, identityCurve common.Curve, keyCurve common
 	case common.CurveEddsa:
 		params := tss.NewParameters(tss.Edwards(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
 		localParty := eddsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEddsa)
-		partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)] = PartyProcess{&localParty, true}
+		partyProcesses[key] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	case common.CurveEcdsa:
 		params := tss.NewParameters(tss.S256(), ctx, partiesIds[Index], len(parties), int(CalculateThreshold(TotalSigners)))
@@ -115,7 +116,7 @@ func generateKeygen(identity string, identityCurve common.Curve, keyCurve common
 			panic(err)
 		}
 		localParty := ecdsaKeygen.NewLocalParty(params, outChanKeygen, saveChanEcdsa, *preParams)
-		partyProcesses[identity+"_"+string(identityCurve)+"_"+string(keyCurve)] = PartyProcess{&localParty, true}
+		partyProcesses[key] = PartyProcess{&localParty, true}
 		go localParty.Start()
 	}
 
@@ -165,9 +166,9 @@ func generateKeygen(identity string, identityCurve common.Curve, keyCurve common
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
 
 			completed = true
-			delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
+			delete(partyProcesses, key)
 
-			if val, ok := keygenGeneratedChan[identity+"_"+string(identityCurve)+"_"+string(keyCurve)]; ok {
+			if val, ok := keygenGeneratedChan[key]; ok {
 				val <- "generated keygen"
 			}
 
@@ -191,9 +192,9 @@ func generateKeygen(identity string, identityCurve common.Curve, keyCurve common
 			AddSignersForKeyShare(identity, identityCurve, keyCurve, string(signersOut))
 
 			completed = true
-			delete(partyProcesses, identity+"_"+string(identityCurve)+"_"+string(keyCurve))
+			delete(partyProcesses, key)
 
-			if val, ok := keygenGeneratedChan[identity+"_"+string(identityCurve)+"_"+string(keyCurve)]; ok {
+			if val, ok := keygenGeneratedChan[key]; ok {
 				val <- "generated keygen"
 			}
 

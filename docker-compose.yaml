@@ -89,21 +89,25 @@ services:
       - validator1postgres
     ports:
       - "30304:30304"
-      - "8080:8080"
+      - "50051:50051"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      # test: ["CMD", "grpc_health_probe", "-addr=localhost:50051", "-tls", "-tls-ca-cert=/etc/ssl/certs/client_ca.pem", "-tls-client-cert=/etc/ssl/certs/probe_client.pem", "-tls-client-key=/etc/ssl/certs/probe_client.key", "-tls-server-name=validator1"]
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
       interval: 15s
       timeout: 3s
       retries: 10
-      start_period: 2s
+      start_period: 5s
     environment:
       VALIDATOR_PUBLIC_KEY: "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf"
       VALIDATOR_PRIVATE_KEY: "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2"
       RPC_URL: "http://ganache:8545"
-      HTTP_PORT: 8080
+      GRPC_PORT: 50051
       PORT: 30304
       POSTGRES_HOST: "validator1postgres:5432"
       BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmdDinF9dkWKxLeftQhNEo8pWMd1cRWoo4mzAGzTBwJvDp"
+    #   SERVER_CERT_ARN: "YOUR_VALIDATOR1_SERVER_CERT_ARN"
+    #   SERVER_KEY_ARN: "YOUR_VALIDATOR1_SERVER_KEY_ARN"
+    #   CLIENT_CA_ARN: "YOUR_CLIENT_CA_CERT_ARN"
 
   validator2:
     build:
@@ -115,21 +119,25 @@ services:
       - validator2postgres
     ports:
       - "30305:30305"
-      - "8081:8081"
+      - "50052:50052"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/status"]
+      # test: ["CMD", "grpc_health_probe", "-addr=localhost:50052", "-tls", "-tls-ca-cert=/etc/ssl/certs/client_ca.pem", "-tls-client-cert=/etc/ssl/certs/probe_client.pem", "-tls-client-key=/etc/ssl/certs/probe_client.key", "-tls-server-name=validator2"]
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50052"]
       interval: 15s
       timeout: 3s
       retries: 10
-      start_period: 2s
+      start_period: 5s
     environment:
       VALIDATOR_PUBLIC_KEY: "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35"
       VALIDATOR_PRIVATE_KEY: "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de"
       RPC_URL: "http://ganache:8545"
-      HTTP_PORT: 8081
       PORT: 30305
+      GRPC_PORT: 50052
       POSTGRES_HOST: "validator2postgres:5432"
       BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmdDinF9dkWKxLeftQhNEo8pWMd1cRWoo4mzAGzTBwJvDp"
+      # SERVER_CERT_ARN: "YOUR_VALIDATOR2_SERVER_CERT_ARN"
+      # SERVER_KEY_ARN: "YOUR_VALIDATOR2_SERVER_KEY_ARN"
+      # CLIENT_CA_ARN: "YOUR_CLIENT_CA_CERT_ARN"
 
   sequencerpostgres:
     image: postgres:14.13
@@ -167,6 +175,11 @@ services:
       POSTGRES_HOST: "sequencerpostgres:5432"
       IS_SEQUENCER: true
       SWAP_ROUTER: "0x0c3729964A75870f9c692833A18AFE315be700e1"
+      # CLIENT_CERT_ARN: "YOUR_SEQUENCER_CLIENT_CERT_ARN"
+      # CLIENT_KEY_ARN: "YOUR_SEQUENCER_CLIENT_KEY_ARN"
+      # SERVER_CA_ARN: "YOUR_CLIENT_CA_CERT_ARN"
+    # volumes:
+    #   - ~/.aws:/root/.aws:ro
 
   solver:
     build:

@@ -31,6 +31,17 @@ WORKDIR /app
 # Copy only the binary from the builder stage
 COPY --from=builder /build/strip-validator/strip-validator /app/strip-validator
 
+# Install grpc-health-probe
+# Find latest version at: https://github.com/grpc-ecosystem/grpc-health-probe/releases
+ARG GRPC_HEALTH_PROBE_VERSION=v0.4.3 # Use the latest appropriate version
+RUN apk add --no-cache curl ca-certificates && \
+    curl -fL https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 -o /usr/local/bin/grpc_health_probe && \
+    chmod +x /usr/local/bin/grpc_health_probe && \
+    # Clean up (optional, good practice)
+    apk del --purge curl && \
+    rm -rf /var/cache/apk/*
+
+
 # Use the non-root user
 USER appuser
 

@@ -5,6 +5,9 @@ go 1.24.2
 require (
 	github.com/algorand/go-algorand-sdk v1.24.0
 	github.com/aptos-labs/aptos-go-sdk v1.6.2
+	github.com/aws/aws-sdk-go-v2 v1.36.3
+	github.com/aws/aws-sdk-go-v2/config v1.18.45
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.35.4
 	github.com/blockfrost/blockfrost-go v0.3.0
 	github.com/bnb-chain/tss-lib/v2 v2.0.2
 	github.com/btcsuite/btcd v0.24.2
@@ -22,6 +25,7 @@ require (
 	github.com/gagliardetto/solana-go v1.12.0
 	github.com/go-pg/pg/v10 v10.14.0
 	github.com/golang-migrate/migrate/v4 v4.18.2
+	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/mr-tron/base58 v1.2.0
@@ -33,6 +37,8 @@ require (
 	github.com/the729/lcs v0.1.5
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.37.0
+	google.golang.org/grpc v1.64.1
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
@@ -41,6 +47,16 @@ require (
 	github.com/agl/ed25519 v0.0.0-20200225211852-fd4d107ace12 // indirect
 	github.com/algorand/avm-abi v0.2.0 // indirect
 	github.com/algorand/go-codec/codec v1.1.10 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.13.43 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.13 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.45 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.37 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.15.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.17.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.23.2 // indirect
+	github.com/aws/smithy-go v1.22.2 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
@@ -128,8 +144,9 @@ require (
 	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
+	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240701130421-f6361c86f094 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	mellium.im/sasl v0.3.2 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect

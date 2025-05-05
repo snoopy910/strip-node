@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package validator;
+
+import "google/protobuf/timestamp.proto";
+
+// Define the package where Go code will be generated
+option go_package = "./;validator";
+
+enum Curve {
+  CURVE_UNSPECIFIED = 0;
+  CURVE_ECDSA = 1;
+  CURVE_EDDSA = 2;
+}
+
+enum BlockchainID {
+  BLOCKCHAIN_ID_UNSPECIFIED = 0;
+  BITCOIN = 1;
+  ETHEREUM = 2;
+  SOLANA = 3;
+  DOGECOIN = 4;
+  SUI = 5;
+  APTOS = 6;
+  STELLAR = 7;
+  ALGORAND = 8;
+  RIPPLE = 9;
+  CARDANO = 10;
+  STRIPCHAIN = 11;
+  ARBITRUM = 12;
+  SONIC = 13;
+  BERACHAIN = 14;
+}
+
+enum NetworkType {
+  NETWORK_TYPE_UNSPECIFIED = 0;
+  MAINNET = 1;
+  TESTNET = 2;
+  DEVNET = 3;
+  REGNET = 4;
+}
+
+enum OperationType {
+  OPERATION_TYPE_UNSPECIFIED = 0;
+  TRANSACTION = 1;
+  SEND_TO_BRIDGE = 2;
+  SOLVER = 3;
+  BRIDGE_DEPOSIT = 4;
+  SWAP = 5;
+  BURN = 6;
+  WITHDRAW = 7;
+  BURN_SYNTHETIC = 8;
+}
+
+enum IntentStatus {
+  INTENT_STATUS_UNSPECIFIED = 0;
+  INTENT_STATUS_PROCESSING = 1;
+  INTENT_STATUS_COMPLETED = 2;
+  INTENT_STATUS_FAILED = 3;
+  INTENT_STATUS_EXPIRED = 4;
+}
+
+enum OperationStatus {
+  OPERATION_STATUS_UNSPECIFIED = 0;
+  OPERATION_STATUS_PENDING = 1;
+  OPERATION_STATUS_WAITING = 2;
+  OPERATION_STATUS_COMPLETED = 3;
+  OPERATION_STATUS_FAILED = 4;
+  OPERATION_STATUS_EXPIRED = 5;
+}
+
+message Operation {
+  int32 ID = 1;
+  OperationType type = 2;
+  BlockchainID blockchain_id = 3;
+  NetworkType network_type = 4;
+  string result = 5;
+  string serialized_txn = 6;
+  Solver solver = 7;
+  optional string data_to_sign = 8;
+  OperationStatus status = 9;
+  string genesis_hash = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message Solver {
+    string domain = 1;
+    string metadata = 2;
+    string data_to_sign = 3;
+    string output = 4;
+}
+
+message Intent {
+  string ID = 1;
+  string identity = 2;
+  BlockchainID blockchain_id = 3;
+  NetworkType network_type = 4;
+  repeated Operation operations = 5;
+  google.protobuf.Timestamp expiry = 6;
+  string signature = 7;
+  IntentStatus status = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+// Keygen (/keygen) - Mirrors CreateWallet struct
+message KeygenRequest {
+  string identity = 1;
+  Curve identity_curve = 2;
+  repeated string signers = 3;
+}
+message KeygenResponse {
+  string message = 1; // e.g., "Keygen operation completed successfully" or error
+}
+
+// GetAddresses (/address)
+message GetAddressesRequest {
+  string identity = 1;
+  Curve identity_curve = 2; // Changed from string query param
+}
+
+message AddressDetail {
+  NetworkType network_type = 1;
+  string address = 2;
+}
+
+// Using nested maps to represent map[BlockchainID]map[NetworkType]string
+message BlockchainAddressMap {
+   map<int32, AddressDetail> network_addresses = 1;
+}
+
+message GetAddressesResponse {
+  // Key is BlockchainID enum value
+  map<int32, BlockchainAddressMap> addresses = 1;
+  string eddsa_address = 2;
+  string ecdsa_address = 3;
+}
+
+// SignIntentOperation (/signature)
+message SignIntentOperationRequest {
+  Intent intent = 1; // Pass the whole intent object
+  uint32 operation_index = 2; // From query param
+}
+
+// Mirrors SignatureResponse struct
+message SignIntentOperationResponse {
+  string signature = 1;
+}
+
+
+service ValidatorService {
+  rpc Keygen(KeygenRequest) returns (KeygenResponse);
+
+  rpc GetAddresses(GetAddressesRequest) returns (GetAddressesResponse);
+
+  rpc SignIntentOperation(SignIntentOperationRequest) returns (SignIntentOperationResponse);
+}

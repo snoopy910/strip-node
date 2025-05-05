@@ -1,13 +1,10 @@
 package sequencer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +14,7 @@ import (
 	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
+	pb "github.com/StripChain/strip-node/libs/proto"
 	"github.com/StripChain/strip-node/solver"
 	solversregistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/util/logger"
@@ -92,7 +90,7 @@ ProcessLoop:
 
 			opBlockchain, err = blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
 			if err != nil {
-				fmt.Printf("error getting blockchain: %+v\n", err)
+				logger.Sugar().Errorw("error getting blockchain", "error", err)
 				break ProcessLoop
 			}
 
@@ -121,7 +119,7 @@ ProcessLoop:
 
 			wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
 			if err != nil {
-				fmt.Printf("error getting wallet: %+v\n", err)
+				logger.Sugar().Errorw("error getting wallet", "error", err)
 				return
 			}
 
@@ -176,7 +174,7 @@ ProcessLoop:
 					}
 					signature, err = getSignature(intent, i)
 					if err != nil {
-						fmt.Printf("error getting signature: %+v\n", err)
+						logger.Sugar().Errorw("error getting signature", "error", err)
 						break
 					}
 					if operation.SerializedTxn == nil {
@@ -188,7 +186,7 @@ ProcessLoop:
 
 					txHash, err := opBlockchain.BroadcastTransaction(*operation.SerializedTxn, signature, &publicKey)
 					if err != nil {
-						fmt.Printf("error broadcasting transaction: %+v\n", err)
+						logger.Sugar().Errorw("error broadcasting transaction", "error", err)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
@@ -200,7 +198,7 @@ ProcessLoop:
 					if lockMetadata.Lock {
 						err := db.LockIdentity(lockSchema.Id)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error locking identity", "error", err)
 							break
 						}
 
@@ -1262,7 +1260,7 @@ ProcessLoop:
 					if confirmed {
 						err := db.UnlockIdentity(lockSchema.Id)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error unlocking identity", "error", err)
 							break
 						}
 
@@ -1295,18 +1293,18 @@ type SignatureResponse struct {
 }
 
 func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
-	signature, _, err := getSignatureEx(intent, operationIndex)
+	signature, err := getSignatureEx(intent, operationIndex)
 	if err != nil {
 		return "", err
 	}
 	return signature, nil
 }
 
-func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, error) {
+func getSignatureEx(intent *libs.Intent, operationIndex int) (string, error) {
 	// get wallet
 	wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
 	if err != nil {
-		return "", "", fmt.Errorf("error getting wallet: %v", err)
+		return "", fmt.Errorf("error getting wallet: %v", err)
 	}
 
 	// get the signer
@@ -1314,7 +1312,7 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 	signer, err := GetSigner(signers[0])
 
 	if err != nil {
-		return "", "", fmt.Errorf("error getting signer: %v", err)
+		return "", fmt.Errorf("error getting signer: %v", err)
 	}
 
 	operation := intent.Operations[operationIndex]
@@ -1343,7 +1341,7 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 
 	intentBytes, err := json.Marshal(intent)
 	if err != nil {
-		return "", "", fmt.Errorf("error marshalling intent: %v", err)
+		return "", fmt.Errorf("error marshalling intent: %v", err)
 	}
 
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
@@ -1357,57 +1355,29 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 		"requestBodyLength", len(intentBytes),
 		"solverDataToSignLength", len(operation.SolverDataToSign))
 
-	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
-
+	client, err := validatorClientManager.GetClient(signer.URL)
 	if err != nil {
-		return "", "", fmt.Errorf("error creating request: %v", err)
+		return "", fmt.Errorf("error getting validator client: %v", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{
-		Timeout: 30 * time.Second, // Add timeout to prevent hanging
-	}
-	resp, err := client.Do(req)
-
+	protoIntent, err := libs.IntentToProto(intent)
 	if err != nil {
-		return "", "", fmt.Errorf("error sending request: %v", err)
+		return "", fmt.Errorf("error converting intent to proto: %v", err)
 	}
-
-	defer resp.Body.Close()
-
-	// Check HTTP status code first
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("validator returned non-OK status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	resp, err := client.SignIntentOperation(context.Background(), &pb.SignIntentOperationRequest{
+		Intent:         protoIntent,
+		OperationIndex: uint32(operationIndex),
+	})
 	if err != nil {
-		return "", "", fmt.Errorf("error reading response body: %v", err)
-	}
-
-	// Log the response for debugging
-	responseStr := string(body)
-	logger.Sugar().Infow("Received signature response",
-		"contentLength", len(responseStr),
-		"responseBody", responseStr[:min(len(responseStr), 100)]) // Log first 100 chars to avoid excessive logging
-
-	// Handle empty responses
-	if len(responseStr) == 0 {
-		return "", "", fmt.Errorf("empty response from validator")
-	}
-
-	var signatureResponse SignatureResponse
-	err = json.Unmarshal(body, &signatureResponse)
-	if err != nil {
-		return "", "", fmt.Errorf("error unmarshalling response body: %v, body: %s", err, truncateString(responseStr, 200))
+		return "", fmt.Errorf("error getting signature: %v", err)
 	}
 
 	// Validate signature response
-	if signatureResponse.Signature == "" {
-		return "", "", fmt.Errorf("empty signature in response")
+	if len(resp.Signature) == 0 {
+		return "", fmt.Errorf("empty signature in response")
 	}
 
-	return signatureResponse.Signature, signatureResponse.Address, nil
+	return resp.Signature, nil
 }
 
 // Helper function to truncate strings for logging

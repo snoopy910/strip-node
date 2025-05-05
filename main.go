@@ -59,7 +59,7 @@ func main() {
 	chainId := flag.String("chainId", util.LookupEnvOrString("CHAIN_ID", "1337"), "chain id of the token")
 	tokenAddress := flag.String("tokenAddress", util.LookupEnvOrString("TOKEN_ADDRESS", "0x0000000000000000000000000000000000000000"), "address of the token")
 	peggedToken := flag.String("peggedToken", util.LookupEnvOrString("PEGGED_TOKEN", ""), "address of the pegged token")
-	swapRouter := flag.String("swapRouter", util.LookupEnvOrString("SWAP_ROUTER", "0x3466c635Bdf084DA32CD5bc16c00C1CA1A459011"), "address of the swap router")
+	swapRouter := flag.String("swapRouter", util.LookupEnvOrString("SWAP_ROUTER", ""), "address of the swap router")
 
 	// postgres
 	postgresHost := flag.String("postgresHost", util.LookupEnvOrString("POSTGRES_HOST", "localhost:5432"), "postgres host")

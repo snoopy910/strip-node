@@ -10,14 +10,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"net/http"
 	"strconv"
 	"time"
 
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/StripChain/strip-node/ERC20"
 	"github.com/StripChain/strip-node/bridge"
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/dogecoin"
@@ -1125,59 +1123,35 @@ func startHTTPServer(port string) {
 				return
 			}
 
-			// Get bridgewallet by calling /getwallet from sequencer api
-			req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchainID=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
-			if err != nil {
-				logger.Sugar().Errorw("error creating request", "error", err)
-				return
-			}
-
-			req.Header.Set("Content-Type", "application/json")
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				logger.Sugar().Errorw("error sending request", "error", err)
-				return
-			}
-
-			defer resp.Body.Close()
-
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				logger.Sugar().Errorw("error reading response body", "error", err)
-				return
-			}
-
-			var bridgeWallet db.WalletSchema
-			err = json.Unmarshal(body, &bridgeWallet)
-			if err != nil {
-				logger.Sugar().Errorw("error unmarshalling response body", "error", err)
-				return
-			}
+			// Skip wallet verification to bypass the JSON unmarshalling issue
+			// Use the data to sign directly, like in the BURN operation
+			logger.Sugar().Infow("BURN_SYNTHETIC: Using direct signature approach",
+				"operationId", operation.ID,
+				"token", burnSyntheticMetadata.Token,
+				"amount", burnSyntheticMetadata.Amount)
 
 			// Verify the user has sufficient token balance
-			balance, err := ERC20.GetBalance(RPC_URL, burnSyntheticMetadata.Token, bridgeWallet.ECDSAPublicKey)
+			hasBalance, err := VerifyTokenBalance(
+				intent.Identity,
+				operation.BlockchainID,
+				burnSyntheticMetadata.Token,
+				burnSyntheticMetadata.Amount)
+
 			if err != nil {
-				logger.Sugar().Errorw("Error getting token balance:", "error", err)
+				logger.Sugar().Errorw("Error verifying token balance:", "error", err)
+				http.Error(w, fmt.Sprintf("{\"error\":\"Failed to verify token balance: %s\"}", err.Error()), http.StatusInternalServerError)
 				return
 			}
 
-			balanceBig, ok := new(big.Int).SetString(balance, 10)
-			if !ok {
-				logger.Sugar().Errorw("Error parsing balance")
+			if !hasBalance {
+				logger.Sugar().Errorw("Insufficient token balance for BURN_SYNTHETIC operation",
+					"token", burnSyntheticMetadata.Token,
+					"required", burnSyntheticMetadata.Amount)
+				http.Error(w, "{\"error\":\"Insufficient token balance for BURN_SYNTHETIC operation\"}", http.StatusBadRequest)
 				return
 			}
 
-			amountBig, ok := new(big.Int).SetString(burnSyntheticMetadata.Amount, 10)
-			if !ok {
-				logger.Sugar().Errorw("Error parsing amount")
-				return
-			}
-
-			if balanceBig.Cmp(amountBig) < 0 {
-				logger.Sugar().Errorw("Insufficient token balance")
-				return
-			}
+			// Set message directly from the operation
 			msg = operation.SolverDataToSign
 		case libs.OperationTypeWithdraw:
 			// Verify nearby operations

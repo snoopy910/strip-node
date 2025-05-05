@@ -166,6 +166,7 @@ services:
       PORT: 30306
       POSTGRES_HOST: "sequencerpostgres:5432"
       IS_SEQUENCER: true
+      SWAP_ROUTER: "0x0c3729964A75870f9c692833A18AFE315be700e1"
 
   solver:
     build:

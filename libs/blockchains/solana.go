@@ -36,11 +36,11 @@ func NewSolanaBlockchain(networkType NetworkType) (IBlockchain, error) {
 	}
 
 	if networkType == Devnet {
+		apiKey = "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"
 		network.nodeURL = "https://api.devnet.solana.com"
 		network.networkID = "devnet"
 		heliusURL = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
 		chainId = "901"
-		apiKey = "6ccb4a2e-a0e6-4af3-afd0-1e06e1439547"
 	}
 
 	client := rpc.New(network.nodeURL)

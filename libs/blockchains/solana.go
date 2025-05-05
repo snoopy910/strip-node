@@ -163,26 +163,6 @@ type HeliusRequest struct {
 
 func (b *SolanaBlockchain) GetTransfers(txnHash string, address *string) ([]common.Transfer, error) {
 	fmt.Printf("Getting Solana transfers for transaction - chainId: %s, txnHash: %s\n", b.network.networkID, txnHash)
-	fmt.Printf("GET TRANSFERS Helius URL: %s\n", b.heliusURL)
-	// Configure Helius API URL based on chain ID
-	// Currently only supports devnet (chainId 901)
-	// var url string
-	// if chainId == "901" {
-	// 	url = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
-	// 	fmt.Printf("Using Helius Devnet API endpoint\n")
-	// } else {
-	// 	fmt.Printf("Chain ID %s is not supported for Helius API (only supports 901/devnet)\n", chainId)
-	// 	return nil, fmt.Errorf("unsupported chainId: %s", chainId)
-	// }
-
-	// // Get chain configuration for native token info and RPC URL
-	// chain, err := common.GetChain(chainId)
-	// if err != nil {
-	// 	fmt.Printf("Error getting chain for ID %s: %v\n", chainId, err)
-	// 	return nil, err
-	// }
-	// fmt.Printf("Using RPC endpoint: %s\n", chain.ChainUrl)
-
 	// Parse Helius API response
 	var heliusResponse []HeliusResponse
 

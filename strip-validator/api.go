@@ -947,8 +947,6 @@ func startHTTPServer(port string) {
 				"networkType", depositOperation.NetworkType,
 				"txHash", depositOperation.Result)
 
-			fmt.Println("deposit operation ", depositOperation)
-
 			depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
 			if err != nil {
 				logger.Sugar().Errorw("error getting blockchain", "error", err)
@@ -1041,10 +1039,6 @@ func startHTTPServer(port string) {
 			// Set message for signing - first try SolverDataToSign
 			msg = operation.SolverDataToSign
 
-			// dataToSign := ""
-			// if operation.DataToSign != nil {
-			// 	dataToSign = *operation.DataToSign
-			// }
 			// Log detailed info about the message being signed
 			logger.Sugar().Infow("Processing bridge deposit signature",
 				"solverDataLength", len(operation.SolverDataToSign),
@@ -1122,9 +1116,7 @@ func startHTTPServer(port string) {
 			}
 
 			// Get bridgewallet by calling /getwallet from sequencer api
-			// req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&identityCurve="+intent.IdentityCurve, nil)
 			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&blockchain="+string(intent.BlockchainID), nil)
-			// req, err := http.NewRequest("GET", SequencerHost+fmt.Sprintf("/getWallet?identity=%s&blockchainID=%s", intent.Identity, string(intent.BlockchainID)), nil)
 			if err != nil {
 				logger.Sugar().Errorw("error creating request", "error", err)
 				return
@@ -1284,10 +1276,10 @@ func startHTTPServer(port string) {
 				operation.Type == libs.OperationTypeBurn ||
 				operation.Type == libs.OperationTypeBurnSynthetic ||
 				operation.Type == libs.OperationTypeWithdraw {
-				fmt.Println("Generating signature message for burn or withdraw SOLANA")
+				logger.Sugar().Infow("Generating signature message for withdraw on Solana")
 				go generateSignatureMessage(BridgeContractAddress, operation.BlockchainID, common.CurveEcdsa, common.CurveEddsa, msgBytes)
 			} else {
-				fmt.Println("Generating signature message for other operations SOLANA")
+				logger.Sugar().Infow("Generating signature message for other operations on Solana")
 				go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
 			}
 		case blockchains.Bitcoin:

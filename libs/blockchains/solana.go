@@ -15,7 +15,6 @@ import (
 
 	"github.com/StripChain/strip-node/common"
 	"github.com/StripChain/strip-node/util"
-	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
@@ -379,125 +378,6 @@ func requestHeliusTransactionDetails(heliusTransactionUrl string, txnHash string
 	}
 
 	return heliusResponse, nil
-}
-
-func (b *SolanaBlockchain) GetXTransfers(txHash string, address *string) ([]common.Transfer, error) {
-	// Configure Helius API URL based on chain ID
-	// Currently only supports devnet (chainId 901)
-
-	// Prepare request body with transaction hash
-	requestBody := HeliusRequest{
-		Transactions: []string{txHash},
-	}
-
-	// Marshal request to JSON
-	requestBodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create HTTP request to Helius API
-	req, err := http.NewRequest("POST", b.heliusURL, bytes.NewBuffer(requestBodyBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	// Set content type for JSON request
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request to Helius API
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	// Parse Helius API response
-	var heliusResponse []HeliusResponse
-	err = json.Unmarshal(body, &heliusResponse)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
-	}
-
-	var transfers []common.Transfer
-
-	// Process each transaction in the response
-	for _, response := range heliusResponse {
-		// Handle native SOL transfers
-		for _, nativeTransfer := range response.NativeTransfers {
-			// Convert amount to big.Int and format with 9 decimals (SOL decimal places)
-			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", nativeTransfer.Amount), 10)
-			formattedAmount, _ := util.FormatUnits(num, 9)
-
-			// Create transfer record for native SOL
-			transfers = append(transfers, common.Transfer{
-				From:         nativeTransfer.FromUserAccount,
-				To:           nativeTransfer.ToUserAccount,
-				Amount:       formattedAmount,
-				Token:        b.TokenSymbol(),
-				IsNative:     true,
-				TokenAddress: util.ZERO_ADDRESS,
-				ScaledAmount: num.String(),
-			})
-		}
-
-		// Handle SPL token transfers
-		for _, tokenTransfer := range response.TokenTransfers {
-			// Skip non-fungible token transfers (e.g., NFTs)
-			if tokenTransfer.TokenStandard != "Fungible" {
-				continue
-			}
-
-			// Get token mint account address
-			accountAddress := solana.MustPublicKeyFromBase58(tokenTransfer.Mint)
-			// Fetch token mint account data for decimals
-			accountInfo, err := b.client.GetAccountInfo(context.Background(), accountAddress)
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to get account info: %v", err)
-			}
-
-			spew.Dump(accountInfo)
-
-			// Decode mint account data to get token decimals
-			var mint token.Mint
-			// Account{}.Data.GetBinary() returns the *decoded* binary data
-			// regardless the original encoding (it can handle them all).
-			err = bin.NewBinDecoder(accountInfo.GetBinary()).Decode(&mint)
-			if err != nil {
-				panic(err)
-			}
-			spew.Dump(mint)
-
-			// Format token amount using the correct number of decimals
-			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", tokenTransfer.TokenAmount), 10)
-			formattedAmount, err := util.FormatUnits(num, int(mint.Decimals))
-
-			if err != nil {
-				return nil, err
-			}
-
-			// Create transfer record for SPL token
-			transfers = append(transfers, common.Transfer{
-				From:         tokenTransfer.FromUserAccount,
-				To:           tokenTransfer.ToUserAccount,
-				Amount:       formattedAmount,
-				Token:        tokenTransfer.Mint,
-				IsNative:     false,
-				TokenAddress: tokenTransfer.Mint,
-				ScaledAmount: num.String(),
-			})
-		}
-	}
-
-	return transfers, nil
 }
 
 func (b *SolanaBlockchain) IsTransactionBroadcastedAndConfirmed(txHash string) (bool, error) {

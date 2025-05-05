@@ -18,6 +18,7 @@ import (
 	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/solver"
+	solversregistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/google/uuid"
 )
@@ -237,6 +238,42 @@ ProcessLoop:
 						db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, txHash)
 					}
 				case libs.OperationTypeSolver:
+					solverExists, err := solversregistry.SolverExistsAndWhitelisted(RPC_URL, SolversRegistryContractAddress, operation.Solver)
+					if err != nil {
+						logger.Sugar().Errorw("error checking if solver exists", "error", err)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+
+					if !solverExists {
+						logger.Sugar().Errorw("solver is not registered or not whitelisted", "solver", operation.Solver)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break OperationLoop
+					}
+
+					chainID := opBlockchain.ChainID()
+					if chainID == nil {
+						logger.Sugar().Errorw("chainID is nil", "blockchainID", operation.BlockchainID, "networkType", operation.NetworkType)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+					validChain, err := solversregistry.ValidateChain(RPC_URL, SolversRegistryContractAddress, operation.Solver, *chainID)
+					if err != nil {
+						logger.Sugar().Errorw("error validating chain", "error", err)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break
+					}
+					if !validChain {
+						logger.Sugar().Errorw("chain is not valid", "chain", *chainID)
+						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+						break OperationLoop
+					}
+
 					lockSchema, err := db.VerifyIdentityLockSchema(intent, &operation)
 					if lockSchema == nil {
 						logger.Sugar().Errorw("error verifying identity lock", "error", err)
@@ -676,6 +713,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
 					if err != nil {
 						logger.Sugar().Errorw("BURN_SYNTHETIC wallet retrieval failed",
@@ -807,17 +845,31 @@ ProcessLoop:
 						break
 					}
 
+					fmt.Println("DEBUG: BURN_SYNTHETIC dataToSign format check:")
+					fmt.Printf("- Raw value: %q\n", dataToSign)
+					fmt.Printf("- Has '0x' prefix: %v\n", strings.HasPrefix(dataToSign, "0x"))
+					fmt.Printf("- Length: %d\n", len(dataToSign))
+					fmt.Printf("- First 20 bytes: %v\n", dataToSign[:min(len(dataToSign), 20)])
+
+					// Remove the code that adds 0x prefix
+					// if !strings.HasPrefix(dataToSign, "0x") {
+					// 	dataToSign = "0x" + dataToSign
+					// 	logger.Sugar().Infow("BURN_SYNTHETIC added 0x prefix to dataToSign",
+					// 		"operationId", operation.ID,
+					// 		"originalLength", len(dataToSign)-2,
+					// 		"newLength", len(dataToSign))
+					// }
+
 					logger.Sugar().Infow("BURN_SYNTHETIC data generated successfully",
 						"operationId", operation.ID,
 						"dataToSignLength", len(dataToSign),
-						"dataToSignPrefix", truncateString(dataToSign, 20))
+						"dataToSignPrefix", truncateString(dataToSign, 20),
+						"dataToSignHasPrefix", strings.HasPrefix(dataToSign, "0x"),
+						"dataToSignFormat", fmt.Sprintf("%T", dataToSign))
 
 					// Update operation with data to sign and wait for signature
 					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
-
-					logger.Sugar().Infow("BURN_SYNTHETIC operation updated with data to sign",
-						"operationId", operation.ID)
 
 					signature, err := getSignature(intent, i)
 					if err != nil {
@@ -880,7 +932,14 @@ ProcessLoop:
 						"account", wallet.EthereumPublicKey,
 						"transactionHash", result)
 
+					// Save the transaction hash and amount as the solver output
+					// This amount is needed by the subsequent WITHDRAW operation
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
+					db.UpdateOperationSolverOutput(operation.ID, burnSyntheticMetadata.Amount)
+
+					logger.Sugar().Infow("BURN_SYNTHETIC saved amount as solver output",
+						"operationId", operation.ID,
+						"amount", burnSyntheticMetadata.Amount)
 
 					// Log integration with next withdraw operation
 					if i+1 < len(intent.Operations) && intent.Operations[i+1].Type == libs.OperationTypeWithdraw {
@@ -1105,8 +1164,6 @@ ProcessLoop:
 						"txHash", operation.Result,
 						"burnOutput", burnOutput)
 
-					fmt.Println("WAITING BURN SYNTHETIC-3 Operation ID", operation.ID, operation)
-
 					// Update the operation status and solver output with the actual amount
 					db.UpdateOperationStatus(operation.ID, libs.OperationStatusCompleted)
 					db.UpdateOperationSolverOutput(operation.ID, burnOutput)
@@ -1216,7 +1273,7 @@ ProcessLoop:
 						// update the intent status to completed
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusCompleted)
 					}
-					fmt.Println("WITHDRAW-7 WAITING PROCESS")
+
 					break OperationLoop
 				default:
 					logger.Sugar().Errorw("Unknown operation type", "type", operation.Type)
@@ -1270,6 +1327,30 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 		return "", "", fmt.Errorf("error getting signer: %v", err)
 	}
 
+	operation := intent.Operations[operationIndex]
+	fmt.Printf("DEBUG: Requesting signature for operation type: %s\n", operation.Type)
+
+	// For BURN_SYNTHETIC operations, add extra debug details
+	if operation.Type == libs.OperationTypeBurnSynthetic {
+		fmt.Println("DEBUG: BURN_SYNTHETIC operation signature request details:")
+		fmt.Printf("- SolverDataToSign format: %T\n", operation.SolverDataToSign)
+		fmt.Printf("- SolverDataToSign has '0x' prefix: %v\n", strings.HasPrefix(operation.SolverDataToSign, "0x"))
+		fmt.Printf("- SolverDataToSign length: %d\n", len(operation.SolverDataToSign))
+		fmt.Printf("- SolverDataToSign first 20 chars: %v\n", operation.SolverDataToSign[:min(len(operation.SolverDataToSign), 20)])
+
+		// Create a modified intent for debugging to see if validator unmarshals properly
+		debugIntent := *intent
+		debugOps := make([]libs.Operation, len(intent.Operations))
+		copy(debugOps, intent.Operations)
+		debugIntent.Operations = debugOps
+
+		// Attempt manual JSON marshal of intent to check format
+		debugBytes, debugErr := json.Marshal(debugIntent)
+		if debugErr == nil {
+			fmt.Printf("DEBUG: Intent JSON starts with: %s\n", string(debugBytes)[:min(len(string(debugBytes)), 100)])
+		}
+	}
+
 	intentBytes, err := json.Marshal(intent)
 	if err != nil {
 		return "", "", fmt.Errorf("error marshalling intent: %v", err)
@@ -1281,7 +1362,10 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 	logger.Sugar().Infow("Requesting signature from validator",
 		"url", signer.URL+"/signature?operationIndex="+operationIndexStr,
 		"intentID", intent.ID,
-		"operationIndex", operationIndex)
+		"operationIndex", operationIndex,
+		"operationType", operation.Type,
+		"requestBodyLength", len(intentBytes),
+		"solverDataToSignLength", len(operation.SolverDataToSign))
 
 	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
 

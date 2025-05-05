@@ -166,6 +166,7 @@ services:
       PORT: 30306
       POSTGRES_HOST: "sequencerpostgres:5432"
       IS_SEQUENCER: true
+      SWAP_ROUTER: "0x0c3729964A75870f9c692833A18AFE315be700e1"
 
   solver:
     build:
@@ -177,6 +178,17 @@ services:
     environment:
       HTTP_PORT: 8083
       IS_TEST_SOLVER: true
+
+  swap-solver:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: swap-solver
+    ports:
+      - "8084:8084"
+    environment:
+      HTTP_PORT: 8084
+      IS_SWAP_SOLVER: true
 
   # Bitcoin Core service
   bitcoind:

@@ -75,9 +75,6 @@ func generateKeygen(identity string, identityCurve common.Curve, keyCurve common
 	}
 
 	keyShare, err := GetKeyShare(identity, identityCurve, keyCurve)
-
-	logger.Sugar().Infof("key share from postgres: %s, error: %v", keyShare, err)
-
 	if err != nil {
 		logger.Sugar().Errorw("error from postgres", "error", err)
 		return

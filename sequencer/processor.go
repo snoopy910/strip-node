@@ -1046,7 +1046,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-					fmt.Println("WITHDRAW-2")
+					fmt.Println("WITHDRAW-3")
 					result, err := opBlockchain.BroadcastTransaction(
 						tx,
 						withdrawSignature,
@@ -1059,7 +1059,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
+					fmt.Println("WITHDRAW-4")
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					break OperationLoop
 				}
@@ -1199,6 +1199,7 @@ ProcessLoop:
 
 					break OperationLoop
 				case libs.OperationTypeWithdraw:
+					fmt.Println("WITHDRAW-5 WAITING PROCESS")
 					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
 					if err != nil {
 						logger.Sugar().Errorw("error checking transaction", "error", err)
@@ -1207,7 +1208,7 @@ ProcessLoop:
 					if !confirmed {
 						break
 					}
-
+					fmt.Println("WITHDRAW-6 WAITING PROCESS ", operation.Result)
 					// now unlock the identity if locked
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
@@ -1231,12 +1232,25 @@ ProcessLoop:
 					}
 
 					if withdrawMetadata.Unlock {
-						depositOperation := intent.Operations[i-4]
-						// check for confirmations
-						confirmed, err = opBlockchain.IsTransactionBroadcastedAndConfirmed(depositOperation.Result)
-						if err != nil {
-							logger.Sugar().Errorw("error checking transaction", "error", err)
-							break
+						// TODO: proper unlock handling
+						// Check if i-4 is a valid index before accessing it
+						if i >= 4 {
+							depositOperation := intent.Operations[i-4]
+							// check for confirmations
+							confirmed, err = opBlockchain.IsTransactionBroadcastedAndConfirmed(depositOperation.Result)
+							if err != nil {
+								logger.Sugar().Errorw("error checking transaction", "error", err)
+								break
+							}
+						} else {
+							// Log that we couldn't find an expected deposit operation
+							logger.Sugar().Warnw("no deposit operation found 4 positions before withdraw",
+								"operationId", operation.ID,
+								"intentId", intent.ID,
+								"currentIndex", i,
+								"unlockRequested", withdrawMetadata.Unlock)
+							// Proceed without checking deposit confirmation
+							confirmed = true
 						}
 					}
 					if confirmed {
@@ -1253,7 +1267,7 @@ ProcessLoop:
 						// update the intent status to completed
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusCompleted)
 					}
-
+					fmt.Println("WITHDRAW-7 WAITING PROCESS")
 					break OperationLoop
 				default:
 					logger.Sugar().Errorw("Unknown operation type", "type", operation.Type)

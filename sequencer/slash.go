@@ -3,8 +3,7 @@ package sequencer
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
-	"net/http"
+	"errors"
 	"time"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
@@ -12,6 +11,8 @@ import (
 	db "github.com/StripChain/strip-node/libs/database"
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 )
 
 func UpdateSignersList() error {
@@ -69,22 +70,47 @@ func CheckSignersStatus() {
 
 	for _, signer := range signers {
 		logger.Sugar().Infow("Checking signer", "url", signer.URL)
-		url := fmt.Sprintf("%s/health", signer.URL)
-		resp, err := http.Get(url)
+		serviceClient, err := validatorClientManager.FindOrCreateClient(signer.URL)
 		if err != nil {
-			logger.Sugar().Errorf("Signer %s is not working well, error: %v", signer, err)
+			logger.Sugar().Errorf("Failed to get managed client for signer %s: %v", signer.URL, err)
 			return
 		}
-		if resp != nil && resp.StatusCode == http.StatusOK {
-			err := db.UpdateHeartbeat(signer.PublicKey)
-			if err != nil {
-				logger.Sugar().Errorf("Failed to update heartbeat for signer %s: %v", signer, err)
-				return
-			} else {
-				logger.Sugar().Infow("Updated heartbeat successfully", "heartbeat", signer.PublicKey, "timestamp", time.Now())
-			}
+
+		conn := serviceClient.GetClientConn()
+		healthClient := grpc_health_v1.NewHealthClient(conn)
+		healthCheckRequest := &grpc_health_v1.HealthCheckRequest{
+			Service: "",
 		}
-		defer resp.Body.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		resp, err := healthClient.Check(ctx, healthCheckRequest)
+		if err != nil {
+			statusErr, ok := status.FromError(err)
+			target := conn.Target()
+			if ok {
+				logger.Sugar().Errorf("gRPC health check call failed for target %s: Code=%s, Msg=%s", target, statusErr.Code(), statusErr.Message())
+			} else {
+				if errors.Is(err, context.DeadlineExceeded) {
+					logger.Sugar().Warnf("gRPC health check timed out for target %s after 5 seconds", target)
+				} else {
+					logger.Sugar().Errorf("gRPC health check call failed for target %s: %v", target, err)
+				}
+			}
+			return
+		}
+		if resp.Status != grpc_health_v1.HealthCheckResponse_SERVING {
+			logger.Sugar().Warnf("Signer %s is not serving (status: %s)", signer.URL, resp.Status)
+			return
+		}
+
+		err = db.UpdateHeartbeat(signer.PublicKey)
+		if err != nil {
+			logger.Sugar().Errorw("Failed to update heartbeat for signer", "signer", signer, "publicKey", signer.PublicKey, "error", err)
+			return
+		} else {
+			logger.Sugar().Infow("Updated heartbeat successfully", "signerURL", signer.URL, "publicKey", signer.PublicKey)
+		}
 	}
 }
 

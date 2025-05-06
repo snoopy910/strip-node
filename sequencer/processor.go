@@ -1,13 +1,10 @@
 package sequencer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +14,7 @@ import (
 	"github.com/StripChain/strip-node/libs"
 	"github.com/StripChain/strip-node/libs/blockchains"
 	db "github.com/StripChain/strip-node/libs/database"
+	pb "github.com/StripChain/strip-node/libs/proto"
 	"github.com/StripChain/strip-node/solver"
 	solversregistry "github.com/StripChain/strip-node/solversRegistry"
 	"github.com/StripChain/strip-node/util/logger"
@@ -93,7 +91,7 @@ ProcessLoop:
 
 			opBlockchain, err = blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
 			if err != nil {
-				fmt.Printf("error getting blockchain: %+v\n", err)
+				logger.Sugar().Errorw("error getting blockchain", "error", err)
 				break ProcessLoop
 			}
 
@@ -131,7 +129,7 @@ ProcessLoop:
 
 			wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
 			if err != nil {
-				fmt.Printf("error getting wallet: %+v\n", err)
+				logger.Sugar().Errorw("error getting wallet", "error", err)
 				return
 			}
 
@@ -184,7 +182,11 @@ ProcessLoop:
 						logger.Sugar().Errorw("error verifying identity lock", "error", err)
 						break
 					}
-
+					signature, err = getSignature(intent, i)
+					if err != nil {
+						logger.Sugar().Errorw("error getting signature", "error", err)
+						break
+					}
 					if operation.SerializedTxn == nil {
 						logger.Sugar().Errorw("serialized txn is nil", "operation", operation)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
@@ -218,18 +220,19 @@ ProcessLoop:
 
 					txHash, err := opBlockchain.BroadcastTransaction(*operation.SerializedTxn, signature, &publicKey)
 					if err != nil {
-						fmt.Printf("error broadcasting transaction: %+v\n", err)
+						logger.Sugar().Errorw("error broadcasting transaction", "error", err)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					var lockMetadata LockMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &lockMetadata)
 
 					if lockMetadata.Lock {
 						err := db.LockIdentity(lockSchema.Id)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error locking identity", "error", err)
 							break
 						}
 
@@ -379,6 +382,7 @@ ProcessLoop:
 						logger.Sugar().Errorw("error getting data to sign", "error", err)
 						break
 					}
+
 					db.UpdateOperationSolverDataToSign(operation.ID, dataToSign)
 					intent.Operations[i].SolverDataToSign = dataToSign
 
@@ -399,6 +403,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					mintOutput := MintOutput{
 						Token:  destAddress,
 						Amount: amount,
@@ -665,6 +670,7 @@ ProcessLoop:
 					// This operation allows direct burning of ERC20 tokens from the wallet
 					// without requiring a prior swap operation
 					burnSyntheticMetadata := BurnSyntheticMetadata{}
+
 					// Verify that this operation is followed by a withdraw operation
 					if i+1 >= len(intent.Operations) || intent.Operations[i+1].Type != libs.OperationTypeWithdraw {
 						logger.Sugar().Errorw("BURN_SYNTHETIC validation failed: must be followed by WITHDRAW",
@@ -695,6 +701,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					logger.Sugar().Infow("BURN_SYNTHETIC metadata parsed successfully",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token,
@@ -730,6 +737,7 @@ ProcessLoop:
 					logger.Sugar().Infow("BURN_SYNTHETIC wallet retrieved successfully",
 						"operationId", operation.ID,
 						"publicKey", wallet.EthereumPublicKey)
+
 					// Verify the user has sufficient token balance
 					balance, err := ERC20.GetBalance(RPC_URL, burnSyntheticMetadata.Token, wallet.EthereumPublicKey)
 					if err != nil {
@@ -744,6 +752,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					logger.Sugar().Infow("BURN_SYNTHETIC balance retrieved successfully",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token,
@@ -761,6 +770,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					amountBig, ok := new(big.Int).SetString(burnSyntheticMetadata.Amount, 10)
 					if !ok {
 						logger.Sugar().Errorw("BURN_SYNTHETIC amount parsing failed",
@@ -772,6 +782,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					// Log balance check details
 					logBurnSyntheticBalanceCheck(balanceBig, amountBig, burnSyntheticMetadata.Token)
 
@@ -788,6 +799,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					logger.Sugar().Infow("BURN_SYNTHETIC sufficient balance confirmed",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token,
@@ -807,6 +819,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					if exists {
 						logger.Sugar().Errorw("BURN_SYNTHETIC invalid token: token exists on bridge",
 							"operationId", operation.ID,
@@ -822,6 +835,7 @@ ProcessLoop:
 					logger.Sugar().Infow("BURN_SYNTHETIC token validated: not a bridged token",
 						"operationId", operation.ID,
 						"token", burnSyntheticMetadata.Token)
+
 					// Generate data to sign for burning tokens
 					dataToSign, err := bridge.BridgeBurnDataToSign(
 						RPC_URL,
@@ -1008,6 +1022,7 @@ ProcessLoop:
 					}
 					// verify these fields
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, tokenToWithdraw)
+
 					if err != nil {
 						logger.Sugar().Errorw("error checking token existence", "error", err)
 						break
@@ -1059,6 +1074,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					result, err := opBlockchain.BroadcastTransaction(
 						tx,
 						withdrawSignature,
@@ -1071,6 +1087,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
+
 					db.UpdateOperationResult(operation.ID, libs.OperationStatusWaiting, result)
 					break OperationLoop
 				}
@@ -1172,6 +1189,7 @@ ProcessLoop:
 						// update the intent status to completed
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusCompleted)
 					}
+
 					break OperationLoop
 				case libs.OperationTypeSolver:
 					status, err := solver.CheckStatus(
@@ -1215,6 +1233,7 @@ ProcessLoop:
 					if !confirmed {
 						break
 					}
+
 					// now unlock the identity if locked
 					var withdrawMetadata WithdrawMetadata
 					json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
@@ -1262,7 +1281,7 @@ ProcessLoop:
 					if confirmed {
 						err := db.UnlockIdentity(lockSchema.Id)
 						if err != nil {
-							fmt.Println(err)
+							logger.Sugar().Errorw("error unlocking identity", "error", err)
 							break
 						}
 
@@ -1295,14 +1314,14 @@ type SignatureResponse struct {
 }
 
 func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
-	signature, _, err := getSignatureEx(intent, operationIndex)
+	signature, err := getSignatureEx(intent, operationIndex)
 	if err != nil {
 		return "", err
 	}
 	return signature, nil
 }
 
-func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, error) {
+func getSignatureEx(intent *libs.Intent, operationIndex int) (string, error) {
 	// get wallet
 	transactionType := intent.Operations[operationIndex].Type
 	var wallet *db.WalletSchema
@@ -1310,12 +1329,12 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 	if transactionType == libs.OperationTypeWithdraw {
 		wallet, err = db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
 		if err != nil {
-			return "", "", fmt.Errorf("error getting wallet: %v", err)
+			return "", fmt.Errorf("error getting wallet: %v", err)
 		}
 	} else {
 		wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
 		if err != nil {
-			return "", "", fmt.Errorf("error getting wallet: %v", err)
+			return "", fmt.Errorf("error getting wallet: %v", err)
 		}
 	}
 
@@ -1324,7 +1343,7 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 	signer, err := GetSigner(signers[0])
 
 	if err != nil {
-		return "", "", fmt.Errorf("error getting signer: %v", err)
+		return "", fmt.Errorf("error getting signer: %v", err)
 	}
 
 	operation := intent.Operations[operationIndex]
@@ -1353,7 +1372,7 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 
 	intentBytes, err := json.Marshal(intent)
 	if err != nil {
-		return "", "", fmt.Errorf("error marshalling intent: %v", err)
+		return "", fmt.Errorf("error marshalling intent: %v", err)
 	}
 
 	operationIndexStr := strconv.FormatUint(uint64(operationIndex), 10)
@@ -1367,57 +1386,29 @@ func getSignatureEx(intent *libs.Intent, operationIndex int) (string, string, er
 		"requestBodyLength", len(intentBytes),
 		"solverDataToSignLength", len(operation.SolverDataToSign))
 
-	req, err := http.NewRequest("POST", signer.URL+"/signature?operationIndex="+operationIndexStr, bytes.NewBuffer(intentBytes))
-
+	client, err := validatorClientManager.GetClient(signer.URL)
 	if err != nil {
-		return "", "", fmt.Errorf("error creating request: %v", err)
+		return "", fmt.Errorf("error getting validator client: %v", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{
-		Timeout: 30 * time.Second, // Add timeout to prevent hanging
-	}
-	resp, err := client.Do(req)
-
+	protoIntent, err := libs.IntentToProto(intent)
 	if err != nil {
-		return "", "", fmt.Errorf("error sending request: %v", err)
+		return "", fmt.Errorf("error converting intent to proto: %v", err)
 	}
-
-	defer resp.Body.Close()
-
-	// Check HTTP status code first
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("validator returned non-OK status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	resp, err := client.SignIntentOperation(context.Background(), &pb.SignIntentOperationRequest{
+		Intent:         protoIntent,
+		OperationIndex: uint32(operationIndex),
+	})
 	if err != nil {
-		return "", "", fmt.Errorf("error reading response body: %v", err)
-	}
-
-	// Log the response for debugging
-	responseStr := string(body)
-	logger.Sugar().Infow("Received signature response",
-		"contentLength", len(responseStr),
-		"responseBody", responseStr[:min(len(responseStr), 100)]) // Log first 100 chars to avoid excessive logging
-
-	// Handle empty responses
-	if len(responseStr) == 0 {
-		return "", "", fmt.Errorf("empty response from validator")
-	}
-
-	var signatureResponse SignatureResponse
-	err = json.Unmarshal(body, &signatureResponse)
-	if err != nil {
-		return "", "", fmt.Errorf("error unmarshalling response body: %v, body: %s", err, truncateString(responseStr, 200))
+		return "", fmt.Errorf("error getting signature: %v", err)
 	}
 
 	// Validate signature response
-	if signatureResponse.Signature == "" {
-		return "", "", fmt.Errorf("empty signature in response")
+	if len(resp.Signature) == 0 {
+		return "", fmt.Errorf("empty signature in response")
 	}
 
-	return signatureResponse.Signature, signatureResponse.Address, nil
+	return resp.Signature, nil
 }
 
 // Helper function to truncate strings for logging

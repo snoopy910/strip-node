@@ -10,7 +10,6 @@ import (
 	"github.com/StripChain/strip-node/util/logger"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -18,7 +17,6 @@ var RPC_URL, IntentOperatorsRegistryContractAddress, SolversRegistryContractAddr
 var MaximumSigners int
 var HeliusApiKey string
 var SequencerHost string
-var h host.Host
 
 type PartyProcess struct {
 	Party  *tss.Party
@@ -32,9 +30,12 @@ func main() {
 	listenHost := flag.String("host", util.LookupEnvOrString("LISTEN_HOST", "0.0.0.0"), "The bootstrap node host listen address\n")
 	port := flag.Int("port", util.LookupEnvOrInt("PORT", 4001), "The bootstrap node listen port")
 	bootnodeURL := flag.String("bootnode", util.LookupEnvOrString("BOOTNODE_URL", ""), "is the process a signer")
-	httpPort := flag.String("httpPort", util.LookupEnvOrString("HTTP_PORT", "8080"), "http API port")
+	grpcPort := flag.String("grpcPort", util.LookupEnvOrString("GRPC_PORT", "50051"), "grpc API port")
 	validatorPublicKey := flag.String("validatorPublicKey", util.LookupEnvOrString("VALIDATOR_PUBLIC_KEY", ""), "public key of the validator nodes")
 	validatorPrivateKey := flag.String("validatorPrivateKey", util.LookupEnvOrString("VALIDATOR_PRIVATE_KEY", ""), "private key of the validator nodes")
+	// serverCertARN := flag.String("server-cert-arn", util.LookupEnvOrString("SERVER_CERT_ARN", ""), "ARN of the gRPC server certificate in Secrets Manager")
+	// serverKeyARN := flag.String("server-key-arn", util.LookupEnvOrString("SERVER_KEY_ARN", ""), "ARN of the gRPC server private key in Secrets Manager")
+	// clientCaARN := flag.String("client-ca-arn", util.LookupEnvOrString("CLIENT_CA_ARN", ""), "ARN of the client CA certificate for gRPC mTLS in Secrets Manager")
 
 	intentOperatorsRegistryContractAddress := flag.String("intentOperatorsRegistryAddress", util.LookupEnvOrString("SIGNER_HUB_CONTRACT_ADDRESS", "0x716A4f850809d929F85BF1C589c24FB25F884674"), "address of IntentOperatorsRegistry contract")
 	solversRegistryContractAddress := flag.String("solversRegistryAddress", util.LookupEnvOrString("SOLVERS_REGISTRY_CONTRACT_ADDRESS", "0x56A9bCddF533Af1859842074B46B0daD07b7686a"), "address of SolversRegistry contract")
@@ -62,14 +63,41 @@ func main() {
 	IntentOperatorsRegistryContractAddress = *intentOperatorsRegistryContractAddress
 
 	RPC_URL = *rpcURL
+
+	if err := logger.Init(); err != nil {
+		log.Fatal("Failed to initialize logger:", err)
+	}
+	defer logger.Sync()
+
+	// awsCfg, err := config.LoadDefaultConfig(context.TODO())
+	// if err != nil {
+	// 	logger.Sugar().Fatalf("Failed to load AWS config: %v", err)
+	// }
+	// smClient := secretsmanager.NewFromConfig(awsCfg)
+
+	// logger.Sugar().Info("Fetching gRPC mTLS credentials from AWS Secrets Manager...")
+	// serverCertPEM, err := libs.FetchSecret(context.TODO(), smClient, *serverCertARN)
+	// if err != nil {
+	// 	logger.Sugar().Fatalf("Failed to fetch server certificate: %v", err)
+	// }
+	// serverKeyPEM, err := libs.FetchSecret(context.TODO(), smClient, *serverKeyARN)
+	// if err != nil {
+	// 	logger.Sugar().Fatalf("Failed to fetch server key: %v", err)
+	// }
+	// clientCaPEM, err := libs.FetchSecret(context.TODO(), smClient, *clientCaARN)
+	// if err != nil {
+	// 	logger.Sugar().Fatalf("Failed to fetch client CA certificate: %v", err)
+	// }
+	// logger.Sugar().Info("Successfully fetched gRPC mTLS credentials.")
+
 	instance, err := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
 	if err != nil {
-		panic(err)
+		logger.Sugar().Fatalf("Failed to get IntentOperatorsRegistry contract instance: %v", err)
 	}
 
 	_maxSigners, err := instance.MAXIMUMSIGNERS(&bind.CallOpts{})
 	if err != nil {
-		panic(err)
+		logger.Sugar().Fatalf("Failed to query MAXIMUM_SIGNERS from contract: %v", err)
 	}
 
 	if err := logger.Init(); err != nil {
@@ -84,17 +112,19 @@ func main() {
 	blockchains.InitBlockchainRegistry()
 	// Initialize host first
 	var addr multiaddr.Multiaddr
-	h, addr, err = createHost(*listenHost, *port, *bootnodeURL)
+	h, addr, err := createHost(*listenHost, *port, *bootnodeURL)
 	if err != nil {
-		panic(err)
+		logger.Sugar().Fatalf("Failed to create libp2p host: %v", err)
 	}
 
-	// Start HTTP server after host is initialized
-	go startHTTPServer(*httpPort)
+	discoverPeers(h, []multiaddr.Multiaddr{addr})
 
-	go discoverPeers(h, []multiaddr.Multiaddr{addr})
+	// Start HTTP server after host is initialized
+	// go startHTTPServer(*httpPort)
+	go startGRPCServer(*grpcPort, h, "", "", "")
+
 	err = subscribe(h)
 	if err != nil {
-		panic(err)
+		logger.Sugar().Fatalf("Failed to subscribe to libp2p topic: %v", err)
 	}
 }

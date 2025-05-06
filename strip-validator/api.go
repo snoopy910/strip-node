@@ -223,12 +223,12 @@ func startHTTPServer(port string) {
 	})
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		peers := h.Network().Peers()
-		if len(peers) < 2 {
-			http.Error(w, "not enough peers", http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintf(w, "OK")
+		// peers := h.Network().Peers()
+		// if len(peers) < 2 {
+		// 	http.Error(w, "not enough peers", http.StatusInternalServerError)
+		// 	return
+		// }
+		// fmt.Fprintf(w, "OK")
 	})
 
 	http.HandleFunc("/address", func(w http.ResponseWriter, r *http.Request) {

@@ -67,14 +67,17 @@ func main() {
 	postgresUser := flag.String("postgresUser", util.LookupEnvOrString("POSTGRES_USER", "postgres"), "postgres user")
 	postgresPassword := flag.String("postgresPassword", util.LookupEnvOrString("POSTGRES_PASSWORD", "password"), "postgres password")
 
+	// clientCertARN := flag.String("client-cert-arn", util.LookupEnvOrString("CLIENT_CERT_ARN", ""), "ARN for sequencer client cert")
+	// clientKeyARN := flag.String("client-key-arn", util.LookupEnvOrString("CLIENT_KEY_ARN", ""), "ARN for sequencer client key")
+	// // *** Simplified: Assume ONE CA for all validators for this example ***
+	// serverCaARN := flag.String("server-ca-arn", util.LookupEnvOrString("SERVER_CA_ARN", ""), "ARN for the CA signing validator server certs")
+
 	flag.Parse()
 
 	if err := logger.Init(); err != nil {
 		log.Fatal("Failed to initialize logger:", err)
 	}
 	defer logger.Sync()
-
-	blockchains.InitBlockchainRegistry()
 
 	if *isDeployIntentOperatorsRegistry {
 		intentoperatorsregistry.DeployIntentOperatorsRegistryContract(*rpcURL, *privateKey)
@@ -95,7 +98,43 @@ func main() {
 	} else if *isSetSwapRouter {
 		bridge.SetSwapRouter(*rpcURL, *privateKey, *bridgeContractAddress, *swapRouter)
 	} else if *isSequencer {
+		// if *clientCertARN == "" || *clientKeyARN == "" || *serverCaARN == "" {
+		// 	logger.Sugar().Fatal("Client cert ARN, client key ARN, and server CA ARN must be provided via flags/env")
+		// }
+
+		// awsCfg, err := config.LoadDefaultConfig(ctx)
+		// if err != nil {
+		// 	logger.Sugar().Fatalf("Failed to load AWS config: %v", err)
+		// }
+		// smClient := secretsmanager.NewFromConfig(awsCfg)
+
+		// logger.Sugar().Info("Fetching TLS credentials from AWS Secrets Manager...")
+		// clientCertPEM, err := libs.FetchSecret(ctx, smClient, *clientCertARN)
+		// if err != nil {
+		// 	logger.Sugar().Fatalf("Failed to fetch client cert: %v", err)
+		// }
+		// clientKeyPEM, err := libs.FetchSecret(ctx, smClient, *clientKeyARN)
+		// if err != nil {
+		// 	logger.Sugar().Fatalf("Failed to fetch client key: %v", err)
+		// }
+		// serverCaPEM, err := libs.FetchSecret(ctx, smClient, *serverCaARN)
+		// if err != nil {
+		// 	logger.Sugar().Fatalf("Failed to fetch server CA: %v", err)
+		// }
+		// logger.Sugar().Info("Successfully fetched TLS credentials.")
+
+		blockchains.InitBlockchainRegistry()
+
 		database.InitialiseDB(*postgresHost, *postgresDB, *postgresUser, *postgresPassword)
+
+		validatorClientManager, err := sequencer.NewValidatorClientManager(
+		// clientCertPEM,
+		// clientKeyPEM,
+		// serverCaPEM,
+		)
+		if err != nil {
+			logger.Sugar().Fatalf("Failed to initialize ValidatorClientManager: %v", err)
+		}
 		sequencer.StartSequencer(
 			*httpPort,
 			*rpcURL,
@@ -104,6 +143,7 @@ func main() {
 			*heliusApiKey,
 			*bridgeContractAddress,
 			*privateKey,
+			validatorClientManager,
 		)
 	} else if *isTestSolver {
 		solver.StartTestSolver(*httpPort)

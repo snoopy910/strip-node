@@ -769,6 +769,7 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 			// Use transaction details from previous operation
 			depositOperation = libs.Operation{
 				BlockchainID: prevOp.BlockchainID,
+				NetworkType:  prevOp.NetworkType,
 				Result:       prevOp.Result,
 			}
 
@@ -780,9 +781,16 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 
 		logger.Sugar().Infow("Processing bridgeDeposit for chain",
 			"blockchainID", depositOperation.BlockchainID,
+			"networkType", depositOperation.NetworkType,
 			"txHash", depositOperation.Result)
 
-		transfers, err := opBlockchain.GetTransfers(depositOperation.Result, &intent.Identity)
+		depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
+		if err != nil {
+			logger.Sugar().Errorw("error getting blockchain", "error", err)
+			return nil, status.Errorf(codes.Internal, "error getting blockchain: %v", err)
+		}
+
+		transfers, err := depositOpBlockchain.GetTransfers(depositOperation.Result, &intent.Identity)
 		if err != nil {
 			logger.Sugar().Errorw("error getting transfers", "error", err)
 			return nil, status.Errorf(codes.Internal, "error getting transfers: %v", err)
@@ -828,7 +836,7 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 			"amount", transfer.Amount,
 			"isNative", transfer.IsNative)
 
-		chainID := opBlockchain.ChainID()
+		chainID := depositOpBlockchain.ChainID()
 		if chainID == nil {
 			logger.Sugar().Errorw("Chain ID is nil", "blockchainID", depositOperation.BlockchainID)
 			return nil, status.Errorf(codes.Internal, "chain ID is nil")
@@ -935,7 +943,7 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 		}
 
 		// Get bridgewallet by calling /getwallet from sequencer api
-		req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchainID=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
+		req, err := http.NewRequest("GET", fmt.Sprintf("%s/getWallet?identity=%s&blockchain=%s", SequencerHost, intent.Identity, intent.BlockchainID), nil)
 		if err != nil {
 			logger.Sugar().Errorw("error creating request", "error", err)
 			return nil, status.Errorf(codes.Internal, "error creating request: %v", err)
@@ -1005,12 +1013,18 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 		var burnTokenAddress string
 		if burn.Type == libs.OperationTypeBurn {
 			var burnMetadata BurnMetadata
-			json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+			err := json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+			if err != nil {
+				logger.Sugar().Errorw("Failed to unmarshal metadata for burn operation at signing", "error", err)
+			}
 			tokenToWithdraw = withdrawMetadata.Token
 			burnTokenAddress = burnMetadata.Token
 		} else if burn.Type == libs.OperationTypeBurnSynthetic {
 			var burnSyntheticMetadata BurnSyntheticMetadata
-			json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+			err := json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+			if err != nil {
+				logger.Sugar().Errorw("Failed to unmarshal metadata for burn synthetic operation at signing", "error", err)
+			}
 			tokenToWithdraw = withdrawMetadata.Token
 			burnTokenAddress = burnSyntheticMetadata.Token
 		}
@@ -1080,11 +1094,10 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 
 	switch operation.BlockchainID {
 	case blockchains.Solana:
-		mBytes, err := base58.Decode(msg)
+		msgBytes, err = base58.Decode(msg)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid base58 message for Solana: %v", err)
 		}
-		msgBytes = mBytes
 	case blockchains.Bitcoin, blockchains.Dogecoin:
 		// api.go seems to send raw string bytes for these
 		msgBytes = []byte(msg)
@@ -1127,13 +1140,14 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 
 	// Determine identity for signing (special case for bridge ops on EVM)
 	signingIdentity := identity
-	if blockchains.IsEVMBlockchain(operation.BlockchainID) &&
+	if (blockchains.IsEVMBlockchain(operation.BlockchainID) || operation.BlockchainID == blockchains.Solana) &&
 		(operation.Type == libs.OperationTypeBridgeDeposit ||
 			operation.Type == libs.OperationTypeSwap ||
 			operation.Type == libs.OperationTypeBurn ||
 			operation.Type == libs.OperationTypeBurnSynthetic ||
 			operation.Type == libs.OperationTypeWithdraw) {
 		signingIdentity = BridgeContractAddress
+		identityCurve = common.CurveEcdsa
 		logger.Sugar().Infow("Using BridgeContractAddress as signing identity", "address", signingIdentity)
 	}
 

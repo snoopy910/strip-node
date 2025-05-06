@@ -1126,7 +1126,6 @@ func startHTTPServer(port string) {
 				return
 			}
 
-
 			// Get bridgewallet by calling /getwallet from sequencer api
 			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&blockchain="+string(intent.BlockchainID), nil)
 			if err != nil {

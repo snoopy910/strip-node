@@ -1,6 +1,7 @@
 package blockchains
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -803,4 +804,34 @@ func manualDecodeError(errorMsg string) string {
 
 	// Return the original message if all else fails
 	return errorMsg
+}
+
+func (b *EVMBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
+	// For EVM chains, decode the transaction to get the 'to' address
+	destAddress := ""
+	tokenAddress := ""
+	txBytes, err := hex.DecodeString(serializedTxn)
+	if err != nil {
+		return "", "", fmt.Errorf("error decoding EVM transaction", err)
+	}
+	tx := new(types.Transaction)
+	if err := rlp.DecodeBytes(txBytes, tx); err != nil {
+		return "", "", fmt.Errorf("error deserializing EVM transaction", err)
+	}
+	if tx.To() == nil {
+		return "", "", fmt.Errorf("EVM transaction has nil To address")
+	}
+	if len(tx.Data()) >= 4 && bytes.Equal(tx.Data()[:4], []byte{0xa9, 0x05, 0x9c, 0xbb}) {
+		// ERC20 transfer detected, extract recipient from call data
+		if len(tx.Data()) < 36 {
+			return "", "", fmt.Errorf("ERC20 transfer data too short to extract destination")
+		}
+		destAddress = ethCommon.BytesToAddress(tx.Data()[4:36]).Hex()
+
+		// For ERC20 transfers, verify the token exists in the bridge contract
+		tokenAddress = tx.To().Hex()
+	} else {
+		destAddress = tx.To().Hex()
+	}
+	return destAddress, tokenAddress, nil
 }

@@ -362,3 +362,24 @@ func (b *BitcoinBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkTy
 func (b *BitcoinBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented yet")
 }
+
+func (b *BitcoinBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
+	// For Bitcoin, decode the serialized transaction to get output address
+	var tx wire.MsgTx
+	txBytes, err := hex.DecodeString(serializedTxn)
+	if err != nil {
+		return "", "", fmt.Errorf("error decoding bitcoin&dogecoin transaction", err)
+	}
+	if err := tx.Deserialize(bytes.NewReader(txBytes)); err != nil {
+		return "", "", fmt.Errorf("error deserializing bitcoin&dogecoin transaction", err)
+	}
+	// Get the first output's address (assuming it's the bridge address)
+	if len(tx.TxOut) > 0 {
+		_, addrs, _, err := txscript.ExtractPkScriptAddrs(tx.TxOut[0].PkScript, nil)
+		if err != nil || len(addrs) == 0 {
+			return "", "", fmt.Errorf("error extracting bitcoin&dogecoin address", err)
+		}
+		return addrs[0].String(), "", nil
+	}
+	return "", "", fmt.Errorf("no output destination bitcoin address")
+}

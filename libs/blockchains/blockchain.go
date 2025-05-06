@@ -18,7 +18,7 @@ type IBlockchain interface {
 	ChainID() *string
 	TokenSymbol() string
 	// Replacing for Send*Transaction
-	BroadcastTransaction(txn string, signedHash string, publicKey *string) (string, error)
+	BroadcastTransaction(serializedTxn string, signedHash string, publicKey *string) (string, error)
 	GetTransfers(txHash string, address *string) ([]common.Transfer, error)
 	// Replacing for Check*TransactionConfirmed
 	IsTransactionBroadcastedAndConfirmed(txHash string) (bool, error)
@@ -31,6 +31,7 @@ type IBlockchain interface {
 
 	RawPublicKeyBytesToAddress(pkBytes []byte, networkType NetworkType) (string, error)
 	RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error)
+	ExtractDestinationAddress(serializedTxn string) (string, string, error)
 }
 
 type Network struct {
@@ -225,6 +226,10 @@ func (b *BaseBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkType 
 
 func (b *BaseBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
+}
+
+func (b *BaseBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
+	return "", "", errors.New("ExtractDestinationAddress not implemented")
 }
 
 // TODO: This needs improvement

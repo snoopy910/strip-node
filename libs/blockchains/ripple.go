@@ -317,3 +317,22 @@ func (b *RippleBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkTyp
 func (b *RippleBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
 }
+
+func (b *RippleBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
+	// For Ripple, the destination is in the transaction payload
+	// Decode the serialized transaction
+	txBytes, err := hex.DecodeString(strings.TrimPrefix(serializedTxn, "0x"))
+	if err != nil {
+		return "", "", fmt.Errorf("error decoding transaction", err)
+	}
+
+	// Parse the transaction
+	var tx data.Payment
+	err = json.Unmarshal(txBytes, &tx)
+	if err != nil {
+		return "", "", fmt.Errorf("error unmarshalling transaction", err)
+	}
+	destAddress := tx.Destination.String()
+	return destAddress, "", nil
+
+}

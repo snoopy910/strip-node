@@ -943,6 +943,7 @@ func startHTTPServer(port string) {
 				// Use transaction details from previous operation
 				depositOperation = libs.Operation{
 					BlockchainID: prevOp.BlockchainID,
+					NetworkType:  prevOp.NetworkType,
 					Result:       prevOp.Result,
 				}
 
@@ -954,9 +955,15 @@ func startHTTPServer(port string) {
 
 			logger.Sugar().Infow("Processing bridgeDeposit for chain",
 				"blockchainID", depositOperation.BlockchainID,
+				"networkType", depositOperation.NetworkType,
 				"txHash", depositOperation.Result)
 
-			transfers, err := opBlockchain.GetTransfers(depositOperation.Result, &intent.Identity)
+			depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
+			if err != nil {
+				logger.Sugar().Errorw("error getting blockchain", "error", err)
+				return
+			}
+			transfers, err := depositOpBlockchain.GetTransfers(depositOperation.Result, &intent.Identity)
 			if err != nil {
 				logger.Sugar().Errorw("error getting transfers", "error", err)
 				return
@@ -1005,7 +1012,7 @@ func startHTTPServer(port string) {
 				"amount", transfer.Amount,
 				"isNative", transfer.IsNative)
 
-			chainID := opBlockchain.ChainID()
+			chainID := depositOpBlockchain.ChainID()
 			if chainID == nil {
 				logger.Sugar().Errorw("Chain ID is nil", "blockchainID", depositOperation.BlockchainID)
 				w.Header().Set("Content-Type", "application/json")
@@ -1043,19 +1050,15 @@ func startHTTPServer(port string) {
 			// Set message for signing - first try SolverDataToSign
 			msg = operation.SolverDataToSign
 
-			dataToSign := ""
-			if operation.DataToSign != nil {
-				dataToSign = *operation.DataToSign
-			}
 			// Log detailed info about the message being signed
 			logger.Sugar().Infow("Processing bridge deposit signature",
 				"solverDataLength", len(operation.SolverDataToSign),
-				"dataToSignLength", len(dataToSign))
+				"dataToSignLength", len(*operation.DataToSign))
 
 			// If no SolverDataToSign is provided, use DataToSign as fallback
 			if len(msg) == 0 {
-				logger.Sugar().Infow("Using DataToSign for bridge deposit operation", "length", len(dataToSign))
-				msg = dataToSign
+				logger.Sugar().Infow("Using DataToSign for bridge deposit operation", "length", len(*operation.DataToSign))
+				msg = *operation.DataToSign
 			}
 
 			if len(msg) == 0 {
@@ -1123,6 +1126,37 @@ func startHTTPServer(port string) {
 				return
 			}
 
+
+			// Get bridgewallet by calling /getwallet from sequencer api
+			req, err := http.NewRequest("GET", SequencerHost+"/getWallet?identity="+intent.Identity+"&blockchain="+string(intent.BlockchainID), nil)
+			if err != nil {
+				logger.Sugar().Errorw("error creating request", "error", err)
+				return
+			}
+
+			req.Header.Set("Content-Type", "application/json")
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				logger.Sugar().Errorw("error sending request", "error", err)
+				return
+			}
+
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				logger.Sugar().Errorw("error reading response body", "error", err)
+				return
+			}
+
+			var bridgeWallet db.WalletSchema
+			err = json.Unmarshal(body, &bridgeWallet)
+			if err != nil {
+				logger.Sugar().Errorw("error unmarshalling response body", "error", err)
+				return
+			}
+
 			// Skip wallet verification to bypass the JSON unmarshalling issue
 			// Use the data to sign directly, like in the BURN operation
 			logger.Sugar().Infow("BURN_SYNTHETIC: Using direct signature approach",
@@ -1163,19 +1197,28 @@ func startHTTPServer(port string) {
 			}
 
 			var withdrawMetadata WithdrawMetadata
-			json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
+			err := json.Unmarshal([]byte(operation.SolverMetadata), &withdrawMetadata)
+			if err != nil {
+				logger.Sugar().Errorw("Failed to unmarshal metadata for withdraw operation at signing", "error", err)
+			}
 
 			// Handle different burn operation types
 			var tokenToWithdraw string
 			var burnTokenAddress string
 			if burn.Type == libs.OperationTypeBurn {
 				var burnMetadata BurnMetadata
-				json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+				err := json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+				if err != nil {
+					logger.Sugar().Errorw("Failed to unmarshal metadata for burn operation at signing", "error", err)
+				}
 				tokenToWithdraw = withdrawMetadata.Token
 				burnTokenAddress = burnMetadata.Token
 			} else if burn.Type == libs.OperationTypeBurnSynthetic {
 				var burnSyntheticMetadata BurnSyntheticMetadata
-				json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+				err := json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+				if err != nil {
+					logger.Sugar().Errorw("Failed to unmarshal metadata for burn synthetic operation at signing", "error", err)
+				}
 				tokenToWithdraw = withdrawMetadata.Token
 				burnTokenAddress = burnSyntheticMetadata.Token
 			}
@@ -1247,7 +1290,16 @@ func startHTTPServer(port string) {
 				http.Error(w, fmt.Sprintf("{\"error\":\"%s\"}", err.Error()), http.StatusInternalServerError)
 				return
 			}
-			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
+			if operation.Type == libs.OperationTypeSwap ||
+				operation.Type == libs.OperationTypeBurn ||
+				operation.Type == libs.OperationTypeBurnSynthetic ||
+				operation.Type == libs.OperationTypeWithdraw {
+				logger.Sugar().Infow("Generating signature message for withdraw on Solana")
+				go generateSignatureMessage(BridgeContractAddress, operation.BlockchainID, common.CurveEcdsa, common.CurveEddsa, msgBytes)
+			} else {
+				logger.Sugar().Infow("Generating signature message for other operations on Solana")
+				go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
+			}
 		case blockchains.Bitcoin:
 			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, []byte(msg))
 		case blockchains.Dogecoin:

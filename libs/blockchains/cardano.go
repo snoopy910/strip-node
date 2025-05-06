@@ -391,3 +391,17 @@ func (b *CardanoBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkTy
 func (b *CardanoBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", nil
 }
+
+func (b *CardanoBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
+	var tx cardano.Tx
+	txBytes, err := hex.DecodeString(serializedTxn)
+	destAddress := ""
+	if err != nil {
+		return "", "", fmt.Errorf("error decoding Cardano transaction", err)
+	}
+	if err := json.Unmarshal(txBytes, &tx); err != nil {
+		return "", "", fmt.Errorf("error parsing Cardano transaction", err)
+	}
+	destAddress = tx.Body.Outputs[0].Address.String()
+	return destAddress, "", nil
+}

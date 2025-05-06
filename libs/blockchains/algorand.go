@@ -289,3 +289,24 @@ func (b *AlgorandBlockchain) RawPublicKeyBytesToAddress(pkBytes []byte, networkT
 func (b *AlgorandBlockchain) RawPublicKeyToPublicKeyStr(pkBytes []byte) (string, error) {
 	return "", errors.New("RawPublicKeyToPublicKeyStr not implemented")
 }
+
+func (b *AlgorandBlockchain) ExtractDestinationAddress(serializedTxn string) (string, string, error) {
+	txnBytes, err := base64.StdEncoding.DecodeString(serializedTxn)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to decode serialized transaction", err)
+	}
+	var txn types.Transaction
+	err = msgpack.Decode(txnBytes, &txn)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to deserialize transaction", err)
+	}
+	destAddress := ""
+	if txn.Type == types.PaymentTx {
+		destAddress = txn.PaymentTxnFields.Receiver.String()
+	} else if txn.Type == types.AssetTransferTx {
+		destAddress = txn.AssetTransferTxnFields.AssetReceiver.String()
+	} else {
+		return "", "", fmt.Errorf("unknown transaction type", txn.Type)
+	}
+	return destAddress, "", nil
+}

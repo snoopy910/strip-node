@@ -72,6 +72,7 @@ ProcessLoop:
 		}
 
 		if intent.Expiry.Before(time.Now()) {
+			logger.Sugar().Infow("intent expired", "intent", intent)
 			db.UpdateIntentStatus(intent.ID, libs.IntentStatusExpired)
 			return
 		}
@@ -94,7 +95,7 @@ ProcessLoop:
 				break ProcessLoop
 			}
 
-			// Create context with timeout for each operation using chain's OpTimeout
+			// Create context with timeout for each operation using chain's OpTimeout: Timeout logic needs to be reviewed TO DO later
 			ctx, cancel := context.WithTimeout(context.Background(), opBlockchain.OpTimeout())
 			defer cancel()
 
@@ -115,6 +116,15 @@ ProcessLoop:
 				continue
 			default:
 				// Process the operation...
+			}
+
+			// then get the data signed
+			if operation.Type != libs.OperationTypeBridgeDeposit && operation.Type != libs.OperationTypeBurnSynthetic && operation.Type != libs.OperationTypeWithdraw { // for bridge deposit the dataToSign is set later
+				signature, err = getSignature(intent, i)
+				if err != nil {
+					logger.Sugar().Errorw("error getting signature", "error", err)
+					break
+				}
 			}
 
 			wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
@@ -182,6 +192,30 @@ ProcessLoop:
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
+					}
+
+					if operation.Type == libs.OperationTypeSendToBridge {
+						// Get bridge wallet for the chain
+						bridgeWallet, err := db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
+						if err != nil {
+							logger.Sugar().Errorw("Failed to get bridge wallet", "error", err)
+							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+							db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+							break
+						}
+						isVerified, err := verifyDestinationAddress(bridgeWallet, &operation)
+						if err != nil {
+							logger.Sugar().Errorw("Failed to verify destination address", "error", err)
+							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+							db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+							break
+						}
+						if !isVerified {
+							logger.Sugar().Errorw("Bridge address not verified", "error", err)
+							db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
+							db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
+							break
+						}
 					}
 
 					txHash, err := opBlockchain.BroadcastTransaction(*operation.SerializedTxn, signature, &publicKey)
@@ -295,56 +329,54 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
 					depositOperation := intent.Operations[i-1]
-
+					depositOpBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
+					if err != nil {
+						logger.Sugar().Errorw("error getting blockchain", "error", err)
+						break
+					}
 					// TODO: This code is not correct, but swapping is being worked on
-					transfers, err := opBlockchain.GetTransfers(depositOperation.Result, &publicKey)
+					transfers, err := depositOpBlockchain.GetTransfers(depositOperation.Result, &publicKey)
 					if err != nil {
 						logger.Sugar().Errorw("error getting transfers", "error", err)
 						break
 					}
-
 					if len(transfers) == 0 {
 						logger.Sugar().Errorw("No transfers found", "result", depositOperation.Result, "identity", intent.Identity)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
 					transfer := transfers[0]
 					srcAddress := transfer.TokenAddress
 					amount := transfer.ScaledAmount
 
-					opBlockchain, err := blockchains.GetBlockchain(depositOperation.BlockchainID, depositOperation.NetworkType)
-					if err != nil {
-						logger.Sugar().Errorw("error getting blockchain", "error", err)
-						break
-					}
-
-					chainID := opBlockchain.ChainID()
+					chainID := depositOpBlockchain.ChainID()
 					if chainID == nil {
-						logger.Sugar().Errorw("chainID is nil", "blockchainID", operation.BlockchainID, "networkType", operation.NetworkType)
+						logger.Sugar().Errorw("chainID is nil", "blockchainID", depositOperation.BlockchainID, "networkType", depositOperation.NetworkType)
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, srcAddress)
 
 					if err != nil {
 						logger.Sugar().Errorw("error checking token existence", "error", err)
 						break
 					}
-
 					if !exists {
-						logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "blockchainId", operation.BlockchainID, "networkType", operation.NetworkType)
+						logger.Sugar().Errorw("Token does not exist", "srcAddress", srcAddress, "blockchainId", depositOperation.BlockchainID, "networkType", depositOperation.NetworkType)
 
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
 
+					wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
+					if err != nil {
+						logger.Sugar().Errorw("error getting wallet", "error", err)
+						break
+					}
 					dataToSign, err := bridge.BridgeDepositDataToSign(RPC_URL, BridgeContractAddress, amount, wallet.EthereumPublicKey, destAddress)
 					if err != nil {
 						logger.Sugar().Errorw("error getting data to sign", "error", err)
@@ -652,8 +684,7 @@ ProcessLoop:
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
 					}
-
-					logger.Sugar().Infow("BURN_SYNTHETIC validati	on passed: followed by WITHDRAW",
+					logger.Sugar().Infow("BURN_SYNTHETIC validation passed: followed by WITHDRAW",
 						"operationId", operation.ID,
 						"nextOperationId", intent.Operations[i+1].ID,
 						"nextOperationType", intent.Operations[i+1].Type)
@@ -887,8 +918,6 @@ ProcessLoop:
 						"token", burnSyntheticMetadata.Token,
 						"signatureLength", len(signature))
 
-					fmt.Println("Burning synthetic tokens", wallet.EthereumPublicKey, burnSyntheticMetadata.Amount, burnSyntheticMetadata.Token, signature)
-
 					// Execute the burn transaction
 					result, err := burnTokens(
 						wallet.EthereumPublicKey,
@@ -957,7 +986,10 @@ ProcessLoop:
 					// Set default value for unlock if not specified (empty JSON would set it to false)
 					// Check if the original metadata JSON contains the "unlock" field
 					var metadataMap map[string]interface{}
-					json.Unmarshal([]byte(operation.SolverMetadata), &metadataMap)
+					err := json.Unmarshal([]byte(operation.SolverMetadata), &metadataMap)
+					if err != nil {
+						logger.Sugar().Errorw("Failed to unmarshal metadata for withdraw operation", "error", err)
+					}
 					if _, hasUnlock := metadataMap["unlock"]; !hasUnlock {
 						// If "unlock" wasn't specified in the JSON, default to true
 						withdrawMetadata.Unlock = true
@@ -1018,18 +1050,7 @@ ProcessLoop:
 						break
 					}
 
-					var blockchainBridgeWallet string
-					switch operation.BlockchainID {
-					case blockchains.Ethereum:
-						blockchainBridgeWallet = bridgeWallet.EthereumPublicKey
-					case blockchains.Cardano:
-						blockchainBridgeWallet = bridgeWallet.CardanoPublicKey
-					default:
-						logger.Sugar().Errorw("Blockchain ID not supported", "blockchainID", operation.BlockchainID)
-						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
-						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
-						break OperationLoop
-					}
+					bridgeWalletPublicKey := getBridgeWalletPublicKey(&operation, bridgeWallet)
 
 					// Convert burn.SolverOutput from numeric string to proper JSON format
 					// This fixes the "cannot unmarshal number into Go value of type map[string]interface{}" error
@@ -1038,7 +1059,7 @@ ProcessLoop:
 						"originalOutput", burn.SolverOutput,
 						"jsonFormatted", burnSolverOutputJSONString)
 
-					tx, dataToSign, err := opBlockchain.BuildWithdrawTx(blockchainBridgeWallet, burnSolverOutputJSONString, publicKey, &tokenToWithdraw)
+					tx, dataToSign, err := opBlockchain.BuildWithdrawTx(bridgeWalletPublicKey, burnSolverOutputJSONString, publicKey, &tokenToWithdraw)
 					if err != nil {
 						logger.Sugar().Errorw("error building withdraw transaction", "error", err)
 						break
@@ -1057,7 +1078,7 @@ ProcessLoop:
 					result, err := opBlockchain.BroadcastTransaction(
 						tx,
 						withdrawSignature,
-						&blockchainBridgeWallet,
+						&bridgeWalletPublicKey,
 					)
 
 					if err != nil {
@@ -1075,7 +1096,7 @@ ProcessLoop:
 			case libs.OperationStatusWaiting:
 				// check for confirmations and update the status to completed
 				switch operation.Type {
-				case libs.OperationTypeTransaction, libs.OperationTypeSendToBridge, libs.OperationTypeBridgeDeposit, libs.OperationTypeBurnSynthetic:
+				case libs.OperationTypeTransaction, libs.OperationTypeSendToBridge, libs.OperationTypeBridgeDeposit:
 					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
 					if err != nil {
 						logger.Sugar().Errorw("error checking transaction", "error", err)
@@ -1131,7 +1152,7 @@ ProcessLoop:
 					}
 
 					break OperationLoop
-				case libs.OperationTypeBurn:
+				case libs.OperationTypeBurn, libs.OperationTypeBurnSynthetic:
 					confirmed, err := opBlockchain.IsTransactionBroadcastedAndConfirmed(operation.Result)
 					if err != nil {
 						logger.Sugar().Errorw("error checking burn transaction", "error", err)
@@ -1302,9 +1323,19 @@ func getSignature(intent *libs.Intent, operationIndex int) (string, error) {
 
 func getSignatureEx(intent *libs.Intent, operationIndex int) (string, error) {
 	// get wallet
-	wallet, err := db.GetWallet(intent.Identity, intent.BlockchainID)
-	if err != nil {
-		return "", fmt.Errorf("error getting wallet: %v", err)
+	transactionType := intent.Operations[operationIndex].Type
+	var wallet *db.WalletSchema
+	var err error
+	if transactionType == libs.OperationTypeWithdraw {
+		wallet, err = db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
+		if err != nil {
+			return "", fmt.Errorf("error getting wallet: %v", err)
+		}
+	} else {
+		wallet, err = db.GetWallet(intent.Identity, intent.BlockchainID)
+		if err != nil {
+			return "", fmt.Errorf("error getting wallet: %v", err)
+		}
 	}
 
 	// get the signer
@@ -1428,4 +1459,95 @@ func getNextOperationType(intent *libs.Intent, operationIndex int) *libs.Operati
 		return &intent.Operations[operationIndex+1].Type
 	}
 	return nil
+}
+
+func verifyDestinationAddress(bridgeWallet *db.WalletSchema, operation *libs.Operation) (bool, error) {
+	var destAddress string
+	var expectedAddress string
+	var tokenAddress string
+	opBlockchain, err := blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
+	if err != nil {
+		return false, fmt.Errorf("error getting blockchain: %v", err)
+	}
+	chainID := opBlockchain.ChainID()
+	if chainID == nil {
+		return false, fmt.Errorf("chainID is nil ")
+	}
+	destAddress, tokenAddress, _ = opBlockchain.ExtractDestinationAddress(*operation.SerializedTxn)
+	switch operation.BlockchainID {
+	// Extract destination address from serialized transaction
+	case blockchains.Bitcoin:
+		expectedAddress = bridgeWallet.BitcoinMainnetPublicKey
+	case blockchains.Dogecoin:
+		expectedAddress = bridgeWallet.DogecoinMainnetPublicKey
+	// Extract destination address from serialized transaction based on chain type
+	case blockchains.Solana:
+		// Get the actual account address from the message accounts
+		expectedAddress = bridgeWallet.SolanaPublicKey
+	case blockchains.Aptos:
+		expectedAddress = bridgeWallet.AptosEDDSAPublicKey
+	case blockchains.Stellar:
+		expectedAddress = bridgeWallet.StellarPublicKey
+	case blockchains.Algorand:
+		expectedAddress = bridgeWallet.AlgorandEDDSAPublicKey
+	case blockchains.Ripple:
+		expectedAddress = bridgeWallet.RippleEDDSAPublicKey
+	case blockchains.Cardano:
+		expectedAddress = bridgeWallet.CardanoPublicKey
+	case blockchains.Sui:
+		expectedAddress = bridgeWallet.SuiPublicKey
+	default:
+		expectedAddress = bridgeWallet.EthereumPublicKey
+	}
+
+	if tokenAddress != "" {
+		exists, peggedToken, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, tokenAddress)
+		if err != nil {
+			return false, fmt.Errorf("error checking token existence in bridge", err)
+		}
+		if !exists {
+			return false, fmt.Errorf("ERC20 token not registered in bridge", tokenAddress, chainID)
+		}
+		logger.Sugar().Infow("ERC20 token exists in bridge", "token", tokenAddress, "peggedToken", peggedToken)
+	}
+
+	// Verify the extracted destination matches the bridge wallet
+	if destAddress == "" {
+		return false, fmt.Errorf("Failed to extract destination address from %s transaction", chainID)
+	}
+
+	if !strings.EqualFold(destAddress, expectedAddress) {
+		return false, fmt.Errorf("Invalid bridge destination address for %s transaction", chainID)
+	}
+
+	return true, nil
+}
+
+func getBridgeWalletPublicKey(operation *libs.Operation, bridgeWallet *db.WalletSchema) string {
+	var bridgeWalletPublicKey string
+	switch operation.BlockchainID {
+	case blockchains.Bitcoin:
+		bridgeWalletPublicKey = bridgeWallet.BitcoinMainnetPublicKey
+	case blockchains.Dogecoin:
+		bridgeWalletPublicKey = bridgeWallet.DogecoinMainnetPublicKey
+	case blockchains.Solana:
+		// Get the actual account address from the message accounts
+		bridgeWalletPublicKey = bridgeWallet.SolanaPublicKey
+	case blockchains.Aptos:
+		bridgeWalletPublicKey = bridgeWallet.AptosEDDSAPublicKey
+	case blockchains.Stellar:
+		bridgeWalletPublicKey = bridgeWallet.StellarPublicKey
+	case blockchains.Algorand:
+		bridgeWalletPublicKey = bridgeWallet.AlgorandEDDSAPublicKey
+	case blockchains.Ripple:
+		bridgeWalletPublicKey = bridgeWallet.RippleEDDSAPublicKey
+	case blockchains.Cardano:
+		bridgeWalletPublicKey = bridgeWallet.CardanoPublicKey
+	case blockchains.Sui:
+		bridgeWalletPublicKey = bridgeWallet.SuiPublicKey
+	default:
+		bridgeWalletPublicKey = bridgeWallet.EthereumPublicKey
+	}
+
+	return bridgeWalletPublicKey
 }

@@ -9,11 +9,11 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"time"
 
 	"github.com/StripChain/strip-node/common"
 
 	"github.com/StripChain/strip-node/util"
-	"github.com/davecgh/go-spew/spew"
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/system"
@@ -200,71 +200,81 @@ func SendSolanaTransactionWithValidation(serializedTxn string, chainId string, k
 }
 
 func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common.Transfer, error) {
+	fmt.Printf("Getting Solana transfers for transaction - chainId: %s, txnHash: %s\n", chainId, txnHash)
+
 	// Configure Helius API URL based on chain ID
 	// Currently only supports devnet (chainId 901)
 	var url string
 	if chainId == "901" {
 		url = "https://api-devnet.helius.xyz/v0/transactions?api-key=" + apiKey
+		fmt.Printf("Using Helius Devnet API endpoint\n")
 	} else {
+		fmt.Printf("Chain ID %s is not supported for Helius API (only supports 901/devnet)\n", chainId)
 		return nil, fmt.Errorf("unsupported chainId: %s", chainId)
 	}
 
 	// Get chain configuration for native token info and RPC URL
 	chain, err := common.GetChain(chainId)
 	if err != nil {
+		fmt.Printf("Error getting chain for ID %s: %v\n", chainId, err)
 		return nil, err
 	}
-
-	// Prepare request body with transaction hash
-	requestBody := HeliusRequest{
-		Transactions: []string{txnHash},
-	}
-
-	// Marshal request to JSON
-	requestBodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create HTTP request to Helius API
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBodyBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	// Set content type for JSON request
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request to Helius API
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
+	fmt.Printf("Using RPC endpoint: %s\n", chain.ChainUrl)
 
 	// Parse Helius API response
 	var heliusResponse []HeliusResponse
-	err = json.Unmarshal(body, &heliusResponse)
+
+	heliusResponse, err = requestHeliusTransactionDetails(chainId, url, txnHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+		fmt.Printf("Error getting transaction details from Helius: %v\n", err)
+		return nil, err
+	}
+
+	if len(heliusResponse) == 0 {
+		ticker := time.NewTicker(1 * time.Second)
+		timeout := time.After(10 * time.Second)
+		defer ticker.Stop()
+	request:
+		for {
+			select {
+			case <-ticker.C:
+				heliusResponse, err = requestHeliusTransactionDetails(chainId, url, txnHash)
+				if err != nil {
+					fmt.Printf("Error getting transaction details from Helius: %v\n", err)
+					return nil, err
+				}
+				if len(heliusResponse) > 0 {
+					fmt.Printf("Got transaction details from Helius\n")
+					break request
+				}
+			case <-timeout:
+				fmt.Printf("Timeout waiting for transaction details from Helius\n")
+				break request
+			}
+		}
+	}
+
+	fmt.Printf("Parsed Helius response - got %d transaction(s)\n", len(heliusResponse))
+	if len(heliusResponse) == 0 {
+		fmt.Printf("WARNING: Helius returned empty response for transaction %s\n", txnHash)
+		return []common.Transfer{}, nil
 	}
 
 	var transfers []common.Transfer
 
 	// Process each transaction in the response
-	for _, response := range heliusResponse {
+	for i, response := range heliusResponse {
+		fmt.Printf("Processing transaction %d - Native transfers: %d, Token transfers: %d\n",
+			i+1, len(response.NativeTransfers), len(response.TokenTransfers))
+
 		// Handle native SOL transfers
-		for _, nativeTransfer := range response.NativeTransfers {
+		for j, nativeTransfer := range response.NativeTransfers {
 			// Convert amount to big.Int and format with 9 decimals (SOL decimal places)
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", nativeTransfer.Amount), 10)
 			formattedAmount, _ := util.FormatUnits(num, 9)
+
+			fmt.Printf("Native transfer %d: %s SOL from %s to %s\n",
+				j+1, formattedAmount, nativeTransfer.FromUserAccount, nativeTransfer.ToUserAccount)
 
 			// Create transfer record for native SOL
 			transfers = append(transfers, common.Transfer{
@@ -279,9 +289,13 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 		}
 
 		// Handle SPL token transfers
-		for _, tokenTransfer := range response.TokenTransfers {
+		for j, tokenTransfer := range response.TokenTransfers {
+			fmt.Printf("Token transfer %d: Mint: %s, Standard: %s\n",
+				j+1, tokenTransfer.Mint, tokenTransfer.TokenStandard)
+
 			// Skip non-fungible token transfers (e.g., NFTs)
 			if tokenTransfer.TokenStandard != "Fungible" {
+				fmt.Printf("Skipping non-fungible token transfer (standard: %s)\n", tokenTransfer.TokenStandard)
 				continue
 			}
 
@@ -290,30 +304,36 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 
 			// Get token mint account address
 			accountAddress := solana.MustPublicKeyFromBase58(tokenTransfer.Mint)
+			fmt.Printf("Getting token metadata for mint: %s\n", accountAddress)
+
 			// Fetch token mint account data for decimals
 			accountInfo, err := c.GetAccountInfo(context.Background(), accountAddress)
 
 			if err != nil {
+				fmt.Printf("Failed to get account info for token %s: %v\n", tokenTransfer.Mint, err)
 				return nil, fmt.Errorf("failed to get account info: %v", err)
 			}
-
-			spew.Dump(accountInfo)
 
 			// Decode mint account data to get token decimals
 			var mint token.Mint
 			err = bin.NewBinDecoder(accountInfo.GetBinary()).Decode(&mint)
 			if err != nil {
+				fmt.Printf("Failed to decode mint data: %v\n", err)
 				panic(err)
 			}
-			spew.Dump(mint)
+			fmt.Printf("Token %s has %d decimals\n", tokenTransfer.Mint, mint.Decimals)
 
 			// Format token amount using the correct number of decimals
 			num, _ := new(big.Int).SetString(fmt.Sprintf("%d", tokenTransfer.TokenAmount), 10)
 			formattedAmount, err := util.FormatUnits(num, int(mint.Decimals))
 
 			if err != nil {
+				fmt.Printf("Error formatting token amount: %v\n", err)
 				return nil, err
 			}
+
+			fmt.Printf("Token transfer: %s tokens from %s to %s\n",
+				formattedAmount, tokenTransfer.FromUserAccount, tokenTransfer.ToUserAccount)
 
 			// Create transfer record for SPL token
 			transfers = append(transfers, common.Transfer{
@@ -328,32 +348,115 @@ func GetSolanaTransfers(chainId string, txnHash string, apiKey string) ([]common
 		}
 	}
 
-	fmt.Println(transfers)
+	fmt.Printf("Extracted %d transfers from transaction %s\n", len(transfers), txnHash)
+	if len(transfers) == 0 {
+		fmt.Printf("WARNING: No transfers found in transaction %s - this might indicate an issue with the transaction type or API parsing\n", txnHash)
+	}
+
 	return transfers, nil
 }
 
+func requestHeliusTransactionDetails(chainId string, heliusTransactionUrl string, txnHash string) ([]HeliusResponse, error) {
+
+	// Prepare request body with transaction hash
+	requestBody := HeliusRequest{
+		Transactions: []string{txnHash},
+	}
+
+	// Marshal request to JSON
+	requestBodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Printf("Error marshaling request body: %v\n", err)
+		return nil, err
+	}
+	fmt.Printf("Sending request to Helius API with transaction: %s\n", txnHash)
+
+	// Create HTTP request to Helius API
+	req, err := http.NewRequest("POST", heliusTransactionUrl, bytes.NewBuffer(requestBodyBytes))
+	if err != nil {
+		fmt.Printf("Error creating HTTP request: %v\n", err)
+		return nil, err
+	}
+
+	// Set content type for JSON request
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request to Helius API
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Error sending request to Helius API: %v\n", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	fmt.Printf("Helius API response status: %s\n", resp.Status)
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Failed to read response body: %v\n", err)
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Log response body for debugging
+	bodyStr := string(body)
+	if len(bodyStr) > 500 {
+		fmt.Printf("Helius API response (truncated): %s...\n", bodyStr[:500])
+	} else {
+		fmt.Printf("Helius API response: %s\n", bodyStr)
+	}
+
+	// Parse Helius API response
+	var heliusResponse []HeliusResponse
+	err = json.Unmarshal(body, &heliusResponse)
+	if err != nil {
+		fmt.Printf("Failed to parse JSON response: %v\n", err)
+		return nil, fmt.Errorf("failed to parse JSON response: %v", err)
+	}
+
+	return heliusResponse, nil
+}
+
 func CheckSolanaTransactionConfirmed(chainId string, txnHash string) (bool, error) {
+	fmt.Printf("Checking Solana transaction confirmation - chainId: %s, txnHash: %s\n", chainId, txnHash)
+
 	chain, err := common.GetChain(chainId)
 	if err != nil {
+		fmt.Printf("Error getting chain for ID %s: %v\n", chainId, err)
 		return false, err
 	}
+	fmt.Printf("Using RPC endpoint: %s\n", chain.ChainUrl)
 
 	c := rpc.New(chain.ChainUrl)
 
 	signature, err := solana.SignatureFromBase58(txnHash)
 	if err != nil {
+		fmt.Printf("Error parsing transaction signature from %s: %v\n", txnHash, err)
 		return false, err
 	}
 
 	// Regarding the deprecation of GetConfirmedTransaction in Solana-Core v2, this has been updated to use GetTransaction.
 	// https://spl_governance.crates.io/docs/rpc/deprecated/getconfirmedtransaction
-	_, err = c.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
+	fmt.Printf("Requesting transaction details from Solana RPC for signature: %s\n", signature)
+	txResp, err := c.GetTransaction(context.Background(), signature, &rpc.GetTransactionOpts{
 		Commitment: rpc.CommitmentConfirmed,
 	})
 
 	if err != nil {
+		fmt.Printf("Solana RPC Error: %v (type: %T)\n", err, err)
+		// Check for specific error types to provide better diagnostics
+		if err.Error() == "not found" {
+			fmt.Printf("Transaction %s was not found on the blockchain - it may have been rejected or never submitted\n", txnHash)
+		}
 		return false, err
 	}
+
+	// Log transaction details
+	fmt.Printf("Transaction found! BlockTime: %v, Slot: %d, Confirmations: %d\n",
+		txResp.BlockTime,
+		txResp.Slot,
+		txResp.Meta.Err)
 
 	return true, nil
 }

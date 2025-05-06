@@ -1013,12 +1013,18 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 		var burnTokenAddress string
 		if burn.Type == libs.OperationTypeBurn {
 			var burnMetadata BurnMetadata
-			json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+			err := json.Unmarshal([]byte(burn.SolverMetadata), &burnMetadata)
+			if err != nil {
+				logger.Sugar().Errorw("Failed to unmarshal metadata for burn operation at signing", "error", err)
+			}
 			tokenToWithdraw = withdrawMetadata.Token
 			burnTokenAddress = burnMetadata.Token
 		} else if burn.Type == libs.OperationTypeBurnSynthetic {
 			var burnSyntheticMetadata BurnSyntheticMetadata
-			json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+			err := json.Unmarshal([]byte(burn.SolverMetadata), &burnSyntheticMetadata)
+			if err != nil {
+				logger.Sugar().Errorw("Failed to unmarshal metadata for burn synthetic operation at signing", "error", err)
+			}
 			tokenToWithdraw = withdrawMetadata.Token
 			burnTokenAddress = burnSyntheticMetadata.Token
 		}
@@ -1088,19 +1094,9 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 
 	switch operation.BlockchainID {
 	case blockchains.Solana:
-		msgBytes, err := base58.Decode(msg)
+		msgBytes, err = base58.Decode(msg)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid base58 message for Solana: %v", err)
-		}
-		if operation.Type == libs.OperationTypeSwap ||
-			operation.Type == libs.OperationTypeBurn ||
-			operation.Type == libs.OperationTypeBurnSynthetic ||
-			operation.Type == libs.OperationTypeWithdraw {
-			logger.Sugar().Infow("Generating signature message for withdraw on Solana")
-			go generateSignatureMessage(BridgeContractAddress, operation.BlockchainID, common.CurveEcdsa, common.CurveEddsa, msgBytes)
-		} else {
-			logger.Sugar().Infow("Generating signature message for other operations on Solana")
-			go generateSignatureMessage(identity, operation.BlockchainID, identityCurve, keyCurve, msgBytes)
 		}
 	case blockchains.Bitcoin, blockchains.Dogecoin:
 		// api.go seems to send raw string bytes for these
@@ -1144,13 +1140,14 @@ func (s *validatorServer) SignIntentOperation(ctx context.Context, req *pb.SignI
 
 	// Determine identity for signing (special case for bridge ops on EVM)
 	signingIdentity := identity
-	if blockchains.IsEVMBlockchain(operation.BlockchainID) &&
+	if (blockchains.IsEVMBlockchain(operation.BlockchainID) || operation.BlockchainID == blockchains.Solana) &&
 		(operation.Type == libs.OperationTypeBridgeDeposit ||
 			operation.Type == libs.OperationTypeSwap ||
 			operation.Type == libs.OperationTypeBurn ||
 			operation.Type == libs.OperationTypeBurnSynthetic ||
 			operation.Type == libs.OperationTypeWithdraw) {
 		signingIdentity = BridgeContractAddress
+		identityCurve = common.CurveEcdsa
 		logger.Sugar().Infow("Using BridgeContractAddress as signing identity", "address", signingIdentity)
 	}
 

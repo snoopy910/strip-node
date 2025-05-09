@@ -1019,6 +1019,13 @@ ProcessLoop:
 						db.UpdateOperationStatus(operation.ID, libs.OperationStatusFailed)
 						db.UpdateIntentStatus(intent.ID, libs.IntentStatusFailed)
 						break
+					} else if operation.Type == OPERATION_TYPE_SIGN_MESSAGE {
+						signature, err := getSignature(intent, i)
+						if err != nil {
+							fmt.Println("Message signing error:", err)
+							UpdateOperationStatus(operation.ID, OPERATION_STATUS_FAILED)
+						UpdateIntentStatus(intent.ID, INTENT_STATUS_FAILED)
+						break
 					}
 					// verify these fields
 					exists, destAddress, err := bridge.TokenExists(RPC_URL, BridgeContractAddress, *chainID, tokenToWithdraw)

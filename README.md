@@ -1,4 +1,4 @@
-# StripChain Node
+# StripCNode
 
 ## Quick Start
 
@@ -6,23 +6,23 @@ To create a complete network with bootnode, 2 SIOs (Signer Interfacing Oracles),
 
 ```sh
 # First, build the contracts image from the contracts repository
-cd /path/to/StripChain/contracts
+cd /path/to/contracts
 docker build -t strip-contracts .
 
 # Then return to strip-node repository and run the network
-cd /path/to/StripChain/strip-node
+cd /path/to/strip-node
 ./runNetwork.sh
 ```
 
 ## Running with Docker
 
-StripChain is designed to run as a multi-container application using Docker and Docker Compose. The system includes several components that work together:
+StripNode is designed to run as a multi-container application using Docker and Docker Compose. The system includes several components that work together:
 
 ### Prerequisites
 
 - Docker and Docker Compose installed on your system
 - Git (to clone the repositories)
-- StripChain/contracts repository (for building the contracts image)
+- ./contracts repository (for building the contracts image)
 
 ### Available Services
 
@@ -42,7 +42,7 @@ The Docker Compose configuration includes the following services:
 1. **Build the contracts image** (must be done in the contracts repository):
 
    ```sh
-   git clone git@github.com:StripChain/contracts.git
+   git clone git@github.com:snoopy910/contracts.git
    # Navigate to the contracts repository
    cd contracts
    # Build the contracts image
@@ -52,7 +52,7 @@ The Docker Compose configuration includes the following services:
 2. **Start the complete network** (in the strip-node repository):
 
    ```sh
-   git clone git@github.com:StripChain/strip-node.git
+   git clone git@github.com:snoopy910/strip-node.git
    # Navigate to the strip-node repository
    cd strip-node
    # Start the network

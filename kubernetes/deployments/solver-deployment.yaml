@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-strip-node-solver
+  labels:
+    app: backend-strip-node-solver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-strip-node-solver
+  template:
+    metadata:
+      labels:
+        app: backend-strip-node-solver
+    spec:
+      containers:
+      - name: backend-strip-node-solver
+        image: dev/backend/strip-node:solver
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: IS_UNISWAP_SOLVER
+          value: "true"
+        - name: RPC_URL
+          value: "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz/"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: UNISWAP_V3_FACTORY
+          value: "0xb1a101860602D32A50E0e426CB827ce2121f12D2"
+        - name: NPM_ADDRESS
+          value: "0x782Ed0e82F04fBcF8F6De1F609215A6CeD0EdB85"
+        - name: CHAIN_ID
+          value: "44331"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1024Mi"

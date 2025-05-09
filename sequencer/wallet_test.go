@@ -5,15 +5,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/StripChain/strip-node/libs/blockchains"
+	db "github.com/StripChain/strip-node/libs/database"
+	"github.com/stretchr/testify/require"
 )
 
 // MockDB for testing
 type mockDB struct {
-	wallets map[string]WalletSchema
+	wallets map[string]db.WalletSchema
 }
 
 // AddWallet function for mockDB
-func (m *mockDB) AddWallet(wallet *WalletSchema) (int64, error) {
+func (m *mockDB) AddWallet(wallet *db.WalletSchema) (int64, error) {
 	m.wallets[wallet.Identity] = *wallet
 	return 1, nil
 }
@@ -71,22 +75,22 @@ func setupTestEnvironment(t *testing.T) (*httptest.Server, func()) {
 
 	// Store original functions
 	originalSignersList := SignersList
-	originalAddWallet := AddWallet
+	originalAddWallet := db.AddWallet
 
 	// Create mock database
-	mockDB := &mockDB{wallets: make(map[string]WalletSchema)}
+	mockDB := &mockDB{wallets: make(map[string]db.WalletSchema)}
 
 	// Set up mock functions
-	SignersList = func() []Signer {
-		return mockSigners
+	SignersList = func() ([]Signer, error) {
+		return mockSigners, nil
 	}
-	AddWallet = mockDB.AddWallet
+	db.AddWallet = mockDB.AddWallet
 
 	// Return cleanup function
 	cleanup := func() {
 		mockServer.Close()
 		SignersList = originalSignersList
-		AddWallet = originalAddWallet
+		db.AddWallet = originalAddWallet
 	}
 
 	return mockServer, cleanup
@@ -102,37 +106,40 @@ func TestCreateWallet(t *testing.T) {
 	mockServer, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
+	signers, err := SignersList()
+	require.NoError(t, err)
+
 	// Test cases
 	tests := []struct {
-		name          string
-		identity      string
-		identityCurve string
-		wantErr       bool
+		name         string
+		identity     string
+		blockchainID blockchains.BlockchainID
+		wantErr      bool
 	}{
 		{
-			name:          "Success case",
-			identity:      "testIdentity",
-			identityCurve: "testCurve",
-			wantErr:       false,
+			name:         "Success case",
+			identity:     "testIdentity",
+			blockchainID: blockchains.Ethereum,
+			wantErr:      false,
 		},
 		{
-			name:          "Empty identity",
-			identity:      "",
-			identityCurve: "testCurve",
-			wantErr:       true,
+			name:         "Empty identity",
+			identity:     "",
+			blockchainID: blockchains.Ethereum,
+			wantErr:      true,
 		},
 		{
-			name:          "Empty curve",
-			identity:      "testIdentity",
-			identityCurve: "",
-			wantErr:       true,
+			name:         "Empty curve",
+			identity:     "testIdentity",
+			blockchainID: "",
+			wantErr:      true,
 		},
 	}
 
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := createWallet(tt.identity, tt.identityCurve)
+			err := createWallet(tt.identity, tt.blockchainID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("createWallet() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -140,7 +147,7 @@ func TestCreateWallet(t *testing.T) {
 
 			if !tt.wantErr {
 				// Verify the wallet was created with correct values
-				mockDB := SignersList()[0]
+				mockDB := signers[0]
 				if mockDB.URL != mockServer.URL {
 					t.Errorf("Expected server URL %s, got %s", mockServer.URL, mockDB.URL)
 				}
@@ -167,7 +174,9 @@ func TestCreateWalletWithMaximumSigners(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	signers := SignersList()
+	signers, err := SignersList()
+	require.NoError(t, err)
+
 	if len(signers) > MaximumSigners {
 		t.Errorf("Expected maximum %d signers, got %d", MaximumSigners, len(signers))
 	}
@@ -188,11 +197,11 @@ func TestCreateWalletServerErrors(t *testing.T) {
 
 	// Override SignersList to return error server
 	originalSignersList := SignersList
-	SignersList = func() []Signer {
+	SignersList = func() ([]Signer, error) {
 		return []Signer{
 			{URL: errorServer.URL, PublicKey: "errorKey1"},
 			{URL: errorServer.URL, PublicKey: "errorKey2"},
-		}
+		}, nil
 	}
 	defer func() { SignersList = originalSignersList }()
 

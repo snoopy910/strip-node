@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-strip-node-bootnode
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-strip-node-bootnode
+  template:
+    metadata:
+      labels:
+        app: backend-strip-node-bootnode
+    spec:
+      containers:
+        - name: backend-strip-node-bootnode
+          image: 806060079291.dkr.ecr.us-east-1.amazonaws.com/dev/backend/strip-node/bootnode:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          ports:
+            - containerPort: 30303
+          env:
+            - name: PORT
+              value: "30303"
+            - name: ENV
+              value: "production"

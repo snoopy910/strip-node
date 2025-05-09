@@ -1,36 +1,41 @@
 package sequencer
 
 import (
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
+	"context"
+	"fmt"
 	"math/rand"
-	"net/http"
-	"strings"
 	"time"
+
+	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
+	db "github.com/StripChain/strip-node/libs/database"
+	pb "github.com/StripChain/strip-node/libs/proto"
+	"github.com/StripChain/strip-node/util/logger"
 )
 
-// createWallet creates a new wallet with the specified identity and identity curve.
+// createWallet creates a new wallet with the specified identity and blockchain ID.
 // Note: It selects a list of signers, ensuring the number of signers does not exceed MaximumSigners.
 // The function performs the following steps:
 // 1. Selects a random subset of signers if the total number exceeds MaximumSigners.
-// 2. Constructs a CreateWalletRequest for both "eddsa" and "ecdsa" key curves.
-// 3. Sends HTTP requests to the first signer's URL to generate keys.
-// 4. Retrieves the generated addresses for both key curves.
-// 5. Constructs a WalletSchema and adds it to the wallet store.
+// 2. Determines the required key curve based on the blockchain.
+// 3. Sends a gRPC request to the first signer to generate keys.
+// 4. Waits for the key generation to complete.
 //
 // Parameters:
 // - identity: A string representing the identity for the wallet.
-// - identityCurve: A string representing the curve type for the identity.
+// - blockchainID: The blockchain identifier for which to create the wallet.
 //
 // Returns:
 // - error: An error if any step in the wallet creation process fails.
-func createWallet(identity string, identityCurve string) error {
+func createWallet(identity string, blockchainID blockchains.BlockchainID) error {
 	// select a list of nodes.
 	// If length of selected nodes is more than maximum nodes then use maximum nodes length as signers.
 	// If length of selected nodes is less than maximum nodes then use all nodes as signers.
 
-	signers := SignersList()
+	signers, err := SignersList()
+	if err != nil {
+		return fmt.Errorf("failed to get signers: %w", err)
+	}
 
 	if len(signers) > MaximumSigners {
 		// select random number of max signers
@@ -44,111 +49,89 @@ func createWallet(identity string, identityCurve string) error {
 		signersPublicKeyList[i] = signer.PublicKey
 	}
 
-	// create the wallet whose keycurve is eddsa here
-	createWalletRequest := CreateWalletRequest{
+	blockchain, err := blockchains.GetBlockchain(blockchainID, blockchains.NetworkType(blockchains.Mainnet))
+	if err != nil {
+		return fmt.Errorf("failed to get blockchain: %w", err)
+	}
+
+	protoCurve, err := libs.CommonCurveToProto(blockchain.KeyCurve())
+	if err != nil {
+		return fmt.Errorf("failed to convert curve to proto: %w", err)
+	}
+
+	client, err := validatorClientManager.GetClient(signers[0].URL)
+	if err != nil {
+		return fmt.Errorf("failed to get validator client: %w", err)
+	}
+
+	_, err = client.Keygen(context.Background(), &pb.KeygenRequest{
 		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "eddsa",
+		IdentityCurve: protoCurve,
 		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err := json.Marshal(createWalletRequest)
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to keygen: %w", err)
 	}
 
-	req, err := http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client := http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	// create the wallet whose keycurve is ecdsa here
-	createWalletRequest = CreateWalletRequest{
+	resp, err := client.GetAddresses(context.Background(), &pb.GetAddressesRequest{
 		Identity:      identity,
-		IdentityCurve: identityCurve,
-		KeyCurve:      "ecdsa",
-		Signers:       signersPublicKeyList,
-	}
-
-	marshalled, err = json.Marshal(createWalletRequest)
+		IdentityCurve: protoCurve,
+	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get addresses: %w", err)
 	}
 
-	req, err = http.NewRequest("GET", signers[0].URL+"/keygen", bytes.NewReader(marshalled))
-
-	if err != nil {
-		return err
+	wallet := db.WalletSchema{
+		Identity:       identity,
+		BlockchainID:   blockchainID,
+		Signers:        signersPublicKeyList,
+		EDDSAPublicKey: resp.EddsaAddress,
+		ECDSAPublicKey: resp.EcdsaAddress,
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	client = http.Client{Timeout: 3 * time.Minute}
-	_, err = client.Do(req)
-	if err != nil {
-		return err
+	for protoBlockchainID, addresses := range resp.Addresses {
+		blockchainID, err := libs.ProtoToBlockchainsID(pb.BlockchainID(protoBlockchainID))
+		if err != nil {
+			return fmt.Errorf("failed to convert proto blockchain ID to blockchain ID: %w", err)
+		}
+
+		switch blockchainID {
+		case blockchains.Sui:
+			wallet.SuiPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+		case blockchains.Algorand:
+			wallet.AlgorandEDDSAPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+		case blockchains.Bitcoin:
+			wallet.BitcoinMainnetPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+			wallet.BitcoinTestnetPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_TESTNET)].Address
+			wallet.BitcoinRegtestPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_REGNET)].Address
+		case blockchains.Dogecoin:
+			wallet.DogecoinMainnetPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+			wallet.DogecoinTestnetPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_TESTNET)].Address
+		case blockchains.Stellar:
+			wallet.StellarPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+		case blockchains.Ripple:
+			wallet.RippleEDDSAPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+		case blockchains.Cardano:
+			wallet.CardanoPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+		case blockchains.Aptos:
+			wallet.AptosEDDSAPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+		case blockchains.Solana:
+			wallet.SolanaPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+		default:
+			if blockchains.IsEVMBlockchain(blockchainID) {
+				logger.Sugar().Infof("%s address: %s", blockchainID, addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address)
+				wallet.EthereumPublicKey = addresses.NetworkAddresses[int32(pb.NetworkType_MAINNET)].Address
+			} else {
+				logger.Sugar().Errorw("unsupported blockchain ID", "blockchainID", blockchainID)
+				return fmt.Errorf("unsupported blockchain ID: %s", blockchainID)
+			}
+		}
 	}
-
-	// get the address of the wallet whose keycurve is eddsa here
-	resp, err := http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=eddsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	var getAddressResponse GetAddressResponse
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	eddsaAddress := getAddressResponse.Address
-
-	// get the address of the wallet whose keycurve is ecdsa here
-	resp, err = http.Get(signers[0].URL + "/address?identity=" + identity + "&identityCurve=" + identityCurve + "&keyCurve=ecdsa")
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	body, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-
-	}
-
-	err = json.Unmarshal(body, &getAddressResponse)
-	if err != nil {
-		return err
-	}
-
-	ecdsaAddress := getAddressResponse.Address
 
 	// add created wallet to the store
-	wallet := WalletSchema{
-		Identity:       identity,
-		IdentityCurve:  identityCurve,
-		Signers:        strings.Join(signersPublicKeyList, ","),
-		EDDSAPublicKey: eddsaAddress,
-		ECDSAPublicKey: ecdsaAddress,
-	}
-
-	_, err = AddWallet(&wallet)
+	_, err = db.AddWallet(&wallet)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to add wallet to store: %w", err)
 	}
 
 	return nil

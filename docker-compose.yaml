@@ -1,238 +1,143 @@
-version: '3'
-
 services:
   ganache:
-    image: trufflesuite/ganache:v7.9.2
+    image: strip-contracts
     container_name: ganache
     ports:
-      - '8545:8545'
-    command: [
-      "-h", "0.0.0.0",
-      "-m", "rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain",
-      "--timeout", "1800000"
-    ]
-    environment:
-      - TIMEOUT=1800000          # 30 minutes
-  
-  ganache_wait:
-    image: alpine
-    command:
-      - /bin/sh
-      - -c
-      - |
-          echo "sleep for 10sec"
-          sleep 10 
-    depends_on:
-      - ganache
+      - "8545:8545"
+    entrypoint: "anvil --chain-id 1337 --host 0.0.0.0 --port 8545 --mnemonic 'rifle cloud amused end pyramid swarm anxiety kitchen ceiling cotton rib gain'"
+    volumes:
+      - ganache-data:/root/.anvil
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8545",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "--data",
+          '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 3s
 
-  deploy_intentoperatorsregistry:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_intentoperatorsregistry
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployIntentOperatorsRegistry", "true"]
-    depends_on:
-      ganache_wait:
-          condition: service_completed_successfully
-
-  deploy_solversregistry:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_solversregistry
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeploySolversRegistry", "true"]
-    depends_on:
-      deploy_intentoperatorsregistry:
-          condition: service_completed_successfully
-
-  deploy_bridge:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_bridge
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridge", "true"]
-    depends_on:
-      deploy_solversregistry:
-          condition: service_completed_successfully
-
-  deploy_eth_token:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_eth_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridgeToken", "true", "--tokenName", "Strip ETH", "--tokenSymbol", "sETH", "--tokenDecimals", "18"]
-    depends_on:
-      deploy_bridge:
-          condition: service_completed_successfully
-
-  deploy_sol_token:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_sol_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridgeToken", "true", "--tokenName", "Strip SOL", "--tokenSymbol", "sSOL", "--tokenDecimals", "9"]
-    depends_on:
-      deploy_eth_token:
-          condition: service_completed_successfully
-
-  deploy_usdc_token:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_usdc_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployBridgeToken", "true", "--tokenName", "Strip USDC", "--tokenSymbol", "sUSDC", "--tokenDecimals", "6"]
-    depends_on:
-      deploy_sol_token:
-          condition: service_completed_successfully
-  
-  deploy_original_usdc_token:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_original_usdc_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isDeployERC20Token", "true", "--tokenName", "USD Coin", "--tokenSymbol", "USDC", "--tokenDecimals", "6"]
-    depends_on:
-      deploy_usdc_token:
-          condition: service_completed_successfully
-
-  add_eth_pegged_token:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_eth_pegged_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--chainId", "1337","--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x37AA3eF8aB0CD9E22D4Cfce5355ec2cd07e9E36B","--isAddToken", "true",  ]
-    depends_on:
-      deploy_original_usdc_token:
-          condition: service_completed_successfully
-
-  add_usdc_pegged_token:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: add_usdc_pegged_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--chainId", "1337","--tokenAddress", "0x0c3729964A75870f9c692833A18AFE315be700e1", "--peggedToken", "0x9af0e87FBA28e20863488bda3CfA012d1c7863d9","--isAddToken", "true",  ]
-    depends_on:
-      add_eth_pegged_token:
-          condition: service_completed_successfully
-  
-  add_sol_pegged_token:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: deploy_sol_pegged_token
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545",  "--chainId", "901","--tokenAddress", "0x0000000000000000000000000000000000000000", "--peggedToken", "0x45ff1aD4D8BdDC5c9573f8e30f725D3FF12A0a3e","--isAddToken", "true"]
-    depends_on:
-      add_usdc_pegged_token:
-          condition: service_completed_successfully
-
-  deploy-dex:
+  # Foundry deployment service
+  foundry:
     image: strip-contracts
-    container_name: deploy-dex
+    environment:
+      PRIVATE_KEY: "0x76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a"
+      RPC_URL: "http://ganache:8545"
+      NETWORK: "ganache"
     depends_on:
-      add_sol_pegged_token:
-        condition: service_completed_successfully
-
-  add_signer_1:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: add_signer_1
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--signerNodeURL", "http://signer1:8080", "--signerPublicKey", "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--isAddsigner", "true"]
-    depends_on:
-      deploy-dex:
-        condition: service_completed_successfully
-
-  add_signer_2:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: add_signer_2
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--signerNodeURL", "http://signer2:8080", "--signerPublicKey", "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35", "--isAddsigner", "true"]
-    depends_on:
-      add_signer_1:
-        condition: service_completed_successfully
-  
-  add_solver:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: add_solver
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--solverDomain", "http://solver:8083", "--isAddSolver", "true"]
-    depends_on:
-      add_signer_2:
-        condition: service_completed_successfully
+      ganache:
+        condition: service_healthy
+    # Override the entrypoint to wait for anvil to be ready
+    entrypoint: "make deploy"
 
   bootnode:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
+    build:
+      context: ./bootnode
     container_name: bootnode
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "30303"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
     ports:
-      - '30303:30303'
-    command: ["--port", "30303", "--keyPath", "/app/static-bootnode", "--isBootstrap", "true"]
+      - "30303:30303"
+    environment:
+      PORT: 30303
     depends_on:
-      add_solver:
+      foundry:
         condition: service_completed_successfully
+    volumes:
+      - bootnode-keys:/app/static-bootnode
 
-  signer1postgres:
+  validator1postgres:
     image: postgres:14.13
-    container_name: signer1postgres
+    container_name: validator1postgres
     environment:
       POSTGRES_PASSWORD: password
     ports:
-      - '5432:5432'
-  
-  signer2postgres:
+      - "5432:5432"
+    volumes:
+      - validator1postgres-data:/var/lib/postgresql/data
+
+  validator2postgres:
     image: postgres:14.13
-    container_name: signer2postgres
+    container_name: validator2postgres
     environment:
       POSTGRES_PASSWORD: password
     ports:
-      - '5433:5432'
+      - "5433:5432"
+    volumes:
+      - validator2postgres-data:/var/lib/postgresql/data
 
-  signer1:
-    build: 
+  validator1:
+    build:
       context: .
-      dockerfile: ./Dockerfile
-    container_name: signer1
+      dockerfile: ./strip-validator/Dockerfile
+    container_name: validator1
     depends_on:
       - bootnode
-      - signer1postgres
+      - validator1postgres
     ports:
-      - '30304:30304'
-      - '8080:8080'
-    environment:
-      - HTTP_TIMEOUT=1800000      # 30 minutes
-      - REQUEST_TIMEOUT=1800000   # 30 minutes
-      - NODE_OPTIONS="--max-http-header-size=16384"
+      - "30304:30304"
+      - "50051:50051"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    command: ["--signerPublicKey", "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf", "--signerPrivateKey", "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2", "--rpcURL", "http://ganache:8545", "--httpPort", "8080", "--port", "30304", "--postgresHost", "signer1postgres:5432", "--bootnode", "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"]
+      # test: ["CMD", "grpc_health_probe", "-addr=localhost:50051", "-tls", "-tls-ca-cert=/etc/ssl/certs/client_ca.pem", "-tls-client-cert=/etc/ssl/certs/probe_client.pem", "-tls-client-key=/etc/ssl/certs/probe_client.key", "-tls-server-name=validator1"]
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    environment:
+      VALIDATOR_PUBLIC_KEY: "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf"
+      VALIDATOR_PRIVATE_KEY: "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2"
+      RPC_URL: "http://ganache:8545"
+      GRPC_PORT: 50051
+      PORT: 30304
+      POSTGRES_HOST: "validator1postgres:5432"
+      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmdDinF9dkWKxLeftQhNEo8pWMd1cRWoo4mzAGzTBwJvDp"
+    #   SERVER_CERT_ARN: "YOUR_VALIDATOR1_SERVER_CERT_ARN"
+    #   SERVER_KEY_ARN: "YOUR_VALIDATOR1_SERVER_KEY_ARN"
+    #   CLIENT_CA_ARN: "YOUR_CLIENT_CA_CERT_ARN"
 
-  signer2:
-    build: 
+  validator2:
+    build:
       context: .
-      dockerfile: ./Dockerfile
-    container_name: signer2
+      dockerfile: ./strip-validator/Dockerfile
+    container_name: validator2
     depends_on:
       - bootnode
-      - signer2postgres
+      - validator2postgres
     ports:
-      - '30305:30305'
-      - '8081:8081'
-    environment:
-      - HTTP_TIMEOUT=1800000      # 30 minutes
-      - REQUEST_TIMEOUT=1800000   # 30 minutes
-      - NODE_OPTIONS="--max-http-header-size=16384"
+      - "30305:30305"
+      - "50052:50052"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    command: ["--signerPublicKey", "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35", "--signerPrivateKey", "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de", "--rpcURL", "http://ganache:8545", "--httpPort", "8081", "--port", "30305", "--postgresHost", "signer2postgres:5432", "--bootnode", "/dns/bootnode/tcp/30303/p2p/QmTfM73oQxzx6DVyjCm5AECW3hVbXJiSLYtosNauaX9gJR"]
+      # test: ["CMD", "grpc_health_probe", "-addr=localhost:50052", "-tls", "-tls-ca-cert=/etc/ssl/certs/client_ca.pem", "-tls-client-cert=/etc/ssl/certs/probe_client.pem", "-tls-client-key=/etc/ssl/certs/probe_client.key", "-tls-server-name=validator2"]
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50052"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    environment:
+      VALIDATOR_PUBLIC_KEY: "0x54455a1f7f4244ef645ac62baa8bd90af0cc18cdb0eae369766b7b58134edf35"
+      VALIDATOR_PRIVATE_KEY: "0x4d539b1896a8f7064a7207fa005b13b64f90eff78564e278c14b1089d2d5f8de"
+      RPC_URL: "http://ganache:8545"
+      PORT: 30305
+      GRPC_PORT: 50052
+      POSTGRES_HOST: "validator2postgres:5432"
+      BOOTNODE_URL: "/dns/bootnode/tcp/30303/p2p/QmdDinF9dkWKxLeftQhNEo8pWMd1cRWoo4mzAGzTBwJvDp"
+      # SERVER_CERT_ARN: "YOUR_VALIDATOR2_SERVER_CERT_ARN"
+      # SERVER_KEY_ARN: "YOUR_VALIDATOR2_SERVER_KEY_ARN"
+      # CLIENT_CA_ARN: "YOUR_CLIENT_CA_CERT_ARN"
 
   sequencerpostgres:
     image: postgres:14.13
@@ -240,60 +145,109 @@ services:
     environment:
       POSTGRES_PASSWORD: password
     ports:
-      - '5434:5432'
-
-  set_swap_router:
-    build: 
-      context: .
-      dockerfile: ./Dockerfile
-    container_name: set_swap_router
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--isSetSwapRouter", "true"]
-    depends_on:
-      - signer2
-      - signer1
-
-  sequencer_wait:
-    image: alpine
-    depends_on:
-      - set_swap_router
-    command:
-      - /bin/sh
-      - -c
-      - |
-          echo "sleep for 60sec"
-          sleep 60 
+      - "5434:5432"
+    volumes:
+      - sequencerpostgres-data:/var/lib/postgresql/data
 
   sequencer:
-    build: 
+    build:
       context: .
       dockerfile: ./Dockerfile
     container_name: sequencer
     depends_on:
-      sequencer_wait:
-        condition: service_completed_successfully
+      validator1:
+        condition: service_healthy
+      validator2:
+        condition: service_healthy
     ports:
-      - '30306:30306'
-      - '80:8082'
-    environment:
-      - HTTP_TIMEOUT=1800000      # 30 minutes
-      - REQUEST_TIMEOUT=1800000   # 30 minutes
-      - NODE_OPTIONS="--max-http-header-size=16384"
+      - "30306:30306"
+      - "80:8082"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    command: ["--privateKey", "76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a", "--rpcURL", "http://ganache:8545", "--httpPort", "8082", "--postgresHost", "sequencerpostgres:5432", "--isSequencer", "true"]
-  
+      test: ["CMD", "curl", "-f", "http://localhost:8082/status"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+    environment:
+      PRIVATE_KEY: 76163f58a83febacfdef93e2142591d4d676432fa6c737ce1dd90a51083c461a
+      RPC_URL: "http://ganache:8545"
+      HTTP_PORT: 8082
+      PORT: 30306
+      POSTGRES_HOST: "sequencerpostgres:5432"
+      IS_SEQUENCER: true
+      SWAP_ROUTER: "0x0c3729964A75870f9c692833A18AFE315be700e1"
+      # CLIENT_CERT_ARN: "YOUR_SEQUENCER_CLIENT_CERT_ARN"
+      # CLIENT_KEY_ARN: "YOUR_SEQUENCER_CLIENT_KEY_ARN"
+      # SERVER_CA_ARN: "YOUR_CLIENT_CA_CERT_ARN"
+    # volumes:
+    #   - ~/.aws:/root/.aws:ro
+
   solver:
-    build: 
+    build:
       context: .
       dockerfile: ./Dockerfile
     container_name: solver
     ports:
-      - '8083:8083'
+      - "8083:8083"
     environment:
-      - HTTP_TIMEOUT=1800000      # 30 minutes
-      - REQUEST_TIMEOUT=1800000   # 30 minutes
-      - NODE_OPTIONS="--max-http-header-size=16384"
-    command: ["--httpPort", "8083", "--isTestSolver", "true"]
+      HTTP_PORT: 8083
+      IS_TEST_SOLVER: true
+
+  swap-solver:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: swap-solver
+    ports:
+      - "8084:8084"
+    environment:
+      HTTP_PORT: 8084
+      IS_SWAP_SOLVER: true
+
+  # Bitcoin Core service
+  bitcoind:
+    image: blockstream/bitcoind:latest
+    container_name: bitcoind
+    restart: unless-stopped
+    ports:
+      - "8332:8332" # RPC port
+      - "8333:8333" # P2P port
+      - "28332:28332" # ZMQ rawblock
+      - "28333:28333" # ZMQ rawtx
+    volumes:
+      - bitcoin-data:/data
+      - ./bitcoin.conf:/data/bitcoin.conf
+    command: bitcoind -conf=/data/bitcoin.conf
+
+  # Electrs (Electrum Rust Server)
+  electrs:
+    image: mempool/electrs:latest
+    container_name: electrs
+    restart: unless-stopped
+    depends_on:
+      - bitcoind
+    ports:
+      - "50001:50001" # Default Electrum server port
+    volumes:
+      - electrs-data:/home/electrs/db
+    command:
+      - --network=regtest
+      - --daemon-rpc-addr=bitcoind:8332
+      - --db-dir=/home/electrs/db
+      - --http-addr=0.0.0.0:50001
+      - --cookie=bitcoin:bitcoin
+      - --jsonrpc-import
+      - --timestamp
+      - --cors=*
+      - --electrum-txs-limit=1000
+      - --address-search
+    environment:
+      - RUST_BACKTRACE=1
+
+volumes:
+  bitcoin-data:
+  electrs-data:
+  validator1postgres-data:
+  validator2postgres-data:
+  sequencerpostgres-data:
+  ganache-data:
+  bootnode-keys:

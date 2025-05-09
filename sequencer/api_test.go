@@ -7,6 +7,10 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
+	"github.com/google/uuid"
 )
 
 // TestCreateWalletEndpoint tests the /createWallet endpoint for creating a wallet.
@@ -28,7 +32,7 @@ func TestCreateWalletEndpoint(t *testing.T) {
 			name:          "Missing identity",
 			identity:      "",
 			identityCurve: "ecdsa",
-			wantStatus:    http.StatusInternalServerError,
+			wantStatus:    http.StatusBadRequest,
 		},
 	}
 
@@ -40,7 +44,7 @@ func TestCreateWalletEndpoint(t *testing.T) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if tt.identity == "" {
-						http.Error(w, "identity required", http.StatusInternalServerError)
+						http.Error(w, "identity required", http.StatusBadRequest)
 						return
 					}
 					w.WriteHeader(http.StatusOK)
@@ -75,7 +79,7 @@ func TestGetWalletEndpoint(t *testing.T) {
 			name:          "Missing identity",
 			identity:      "",
 			identityCurve: "ecdsa",
-			wantStatus:    http.StatusInternalServerError,
+			wantStatus:    http.StatusBadRequest,
 		},
 	}
 
@@ -86,7 +90,7 @@ func TestGetWalletEndpoint(t *testing.T) {
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if tt.identity == "" {
-					http.Error(w, "identity required", http.StatusInternalServerError)
+					http.Error(w, "identity required", http.StatusBadRequest)
 					return
 				}
 				json.NewEncoder(w).Encode(map[string]string{"identity": tt.identity})
@@ -105,16 +109,15 @@ func TestGetWalletEndpoint(t *testing.T) {
 // It verifies the JSON payload and response status code.
 func TestCreateIntent(t *testing.T) {
 	// Create a test intent
-	testIntent := Intent{
-		Identity:      "testIdentity",
-		IdentityCurve: "ecdsa",
-		Status:        INTENT_STATUS_PROCESSING,
-		Operations: []Operation{
+	testIntent := libs.Intent{
+		Identity:     "testIdentity",
+		BlockchainID: blockchains.Ethereum,
+		Status:       libs.IntentStatusProcessing,
+		Operations: []libs.Operation{
 			{
-				Type:     OPERATION_TYPE_TRANSACTION,
-				Status:   OPERATION_STATUS_PENDING,
-				ChainId:  "1",
-				KeyCurve: "ecdsa",
+				Type:         libs.OperationTypeTransaction,
+				Status:       libs.OperationStatusPending,
+				BlockchainID: blockchains.Ethereum,
 			},
 		},
 	}
@@ -133,7 +136,7 @@ func TestCreateIntent(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
-		var intent Intent
+		var intent libs.Intent
 		err := json.NewDecoder(r.Body).Decode(&intent)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -177,11 +180,11 @@ func TestGetIntent(t *testing.T) {
 		}
 
 		// Mock response intent
-		intent := Intent{
-			ID:            1,
-			Identity:      "testIdentity",
-			IdentityCurve: "ecdsa",
-			Status:        INTENT_STATUS_COMPLETED,
+		intent := libs.Intent{
+			ID:           uuid.New(),
+			Identity:     "testIdentity",
+			BlockchainID: blockchains.Ethereum,
+			Status:       libs.IntentStatusCompleted,
 		}
 
 		json.NewEncoder(w).Encode(intent)
@@ -194,13 +197,13 @@ func TestGetIntent(t *testing.T) {
 	}
 
 	// Decode response
-	var response Intent
+	var response libs.Intent
 	err := json.NewDecoder(w.Body).Decode(&response)
 	if err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if response.ID != 1 || response.Status != INTENT_STATUS_COMPLETED {
+	if response.Status != libs.IntentStatusCompleted {
 		t.Errorf("Got unexpected response: %+v", response)
 	}
 }
@@ -239,7 +242,7 @@ func TestGetIntentsWithPagination(t *testing.T) {
 					return
 				}
 				result := IntentsResult{
-					Intents: []*Intent{},
+					Intents: []*libs.Intent{},
 					Total:   0,
 				}
 				json.NewEncoder(w).Encode(result)

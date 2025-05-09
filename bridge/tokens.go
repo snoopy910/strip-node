@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"log"
 	"math/big"
+	"strings"
 
 	"github.com/StripChain/strip-node/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -15,6 +15,10 @@ import (
 )
 
 func TokenExists(rpcURL string, bridgeContractAddress string, chainId string, srcToken string) (bool, string, error) {
+	// Convert srcToken and chainId to lowercase for consistent handling
+	srcToken = strings.ToLower(srcToken)
+	chainId = strings.ToLower(chainId)
+
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return false, "", err
@@ -26,12 +30,13 @@ func TokenExists(rpcURL string, bridgeContractAddress string, chainId string, sr
 	}
 
 	peggedToken, err := instance.PeggedTokens(&bind.CallOpts{}, chainId, srcToken)
-
 	if err != nil {
 		return false, "", err
 	}
 
-	if peggedToken != common.HexToAddress(util.ZERO_ADDRESS) {
+	zeroAddress := common.HexToAddress(util.ZERO_ADDRESS)
+	if peggedToken != zeroAddress {
+		fmt.Printf("TokenExists: Token exists, pegged to: %s\n", peggedToken.Hex())
 		return true, peggedToken.Hex(), nil
 	}
 
@@ -51,24 +56,24 @@ func AddToken(rpcURL string, bridgeContractAddress string, privKey string, chain
 
 	privateKey, err := crypto.HexToECDSA(privKey)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to convert private key to ECDSA: %v", err)
 	}
 
 	publicKey := privateKey.Public()
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
 	if !ok {
-		log.Fatal("error casting public key to ECDSA")
+		return fmt.Errorf("error casting public key to ECDSA")
 	}
 
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to get pending nonce: %v", err)
 	}
 
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to suggest gas price: %v", err)
 	}
 
 	auth := bind.NewKeyedTransactor(privateKey)
@@ -80,12 +85,12 @@ func AddToken(rpcURL string, bridgeContractAddress string, privKey string, chain
 
 	tx, err := instance.AddToken(auth, chainId, srcToken, common.HexToAddress(peggedToken))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to add token: %v", err)
 	}
 
 	_, err = bind.WaitMined(context.Background(), client, tx)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to wait for transaction to be mined: %v", err)
 	}
 
 	fmt.Println("Token added successfully")

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log"
 
 	intentoperatorsregistry "github.com/StripChain/strip-node/intentOperatorsRegistry"
 	"github.com/ethereum/go-ethereum"
@@ -18,13 +17,16 @@ type Signer struct {
 	URL       string
 }
 
-var SignersList = func() []Signer {
+var SignersList = func() ([]Signer, error) {
 	client, err := ethclient.Dial(RPC_URL)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to dial ethclient: %w", err)
 	}
 
-	instance := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	instance, err := intentoperatorsregistry.GetIntentOperatorsRegistryContract(RPC_URL, IntentOperatorsRegistryContractAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get intent operators registry contract: %w", err)
+	}
 
 	eventSignature := []byte("SignerUpdated(bytes32,string,bool)")
 	hashEvent := crypto.Keccak256Hash(eventSignature)
@@ -44,7 +46,7 @@ var SignersList = func() []Signer {
 
 	logs, err := client.FilterLogs(context.Background(), query)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to filter logs: %w", err)
 	}
 
 	signers := []Signer{}
@@ -52,7 +54,7 @@ var SignersList = func() []Signer {
 	for _, log := range logs {
 		data, err := instance.ParseSignerUpdated(log)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("failed to parse signer updated: %w", err)
 		}
 
 		if data.Added {
@@ -74,11 +76,16 @@ var SignersList = func() []Signer {
 		signers[i].PublicKey = "0x" + signer.PublicKey
 	}
 
-	return signers
+	return signers, nil
 }
 
 func GetSigner(publicKey string) (Signer, error) {
-	for _, signer := range SignersList() {
+	signers, err := SignersList()
+	if err != nil {
+		return Signer{}, fmt.Errorf("failed to get signers: %w", err)
+	}
+
+	for _, signer := range signers {
 		if signer.PublicKey == publicKey {
 			return signer, nil
 		}

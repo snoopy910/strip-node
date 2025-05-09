@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: validator1
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: validator1
+  template:
+    metadata:
+      labels:
+        app: validator1
+    spec:
+      initContainers:
+        - name: wait-for-bootnode
+          image: busybox
+          command: ['sh', '-c', 'until nslookup bootnode.dev.svc.cluster.local; do echo waiting for bootnode; sleep 2; done;']
+      containers:
+        - name: validator1
+          image: public.ecr.aws/p3d4l8o0/strip-validator:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1500m"
+              memory: "2Gi"
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 30304
+              name: p2p
+          env:
+            - name: HTTP_CLIENT_TIMEOUT
+              value: "300s"
+            - name: KEYGEN_TIMEOUT
+              value: "600s"
+            - name: VALIDATOR_PUBLIC_KEY
+              value: "0x26d1556a83c01a9d2b1cce29b32cb520238efc602f86481d2d0b9af8a2fff0cf"
+            - name: VALIDATOR_PRIVATE_KEY
+              value: "0xb0a0aa1369839ffbf2778fcedcad2ba70b0237e6071b791a80a6f9e11380ffa2"
+            - name: RPC_URL
+              value: "https://rpc-stripsepolia-5w8r5b9f7b.t.conduit.xyz/"
+            - name: HTTP_PORT
+              value: "8080"
+            - name: PORT
+              value: "30304"
+            - name: POSTGRES_HOST
+              value: "dev-stage-stripchain.clrdhmz5qrnm.us-east-1.rds.amazonaws.com:5432"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              value: z2D76R4euvBd
+            - name: POSTGRES_DB
+              value: validator1
+            - name: BOOTNODE_URL
+              value: "/dns/bootnode/tcp/30303/p2p/QmTuUh2kCEMWV1MxoT1UAk9hrutcKF9rfYFCszPgF61T8p"
+            - name: SIGNER_HUB_CONTRACT_ADDRESS
+              value: "0x2001fB1169aC097C2AADE991543dB1A55D7bFd4c"
+            - name: SOLVERS_REGISTRY_CONTRACT_ADDRESS
+              value: "0x77127C2fF8C77bCD8F0461b207fc435d10b86989"
+            - name: BRIDGE_CONTRACT_ADDRESS
+              value: "0xeEDD625917C74bb5baE72d9E23A1EB776Af247D4"
+            - name: SEQUENCER_HOST
+              value: "https://sequencer.stripchain.xyz"

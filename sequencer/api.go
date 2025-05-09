@@ -8,75 +8,47 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/StripChain/strip-node/libs"
+	"github.com/StripChain/strip-node/libs/blockchains"
+	db "github.com/StripChain/strip-node/libs/database"
 	solversRegistry "github.com/StripChain/strip-node/solversRegistry"
-)
-
-type Operation struct {
-	ID               int64  `json:"id"`
-	SerializedTxn    string `json:"serializedTxn"`
-	DataToSign       string `json:"dataToSign"`
-	ChainId          string `json:"chainId"`
-	KeyCurve         string `json:"keyCurve"`
-	Status           string `json:"status"`
-	Result           string `json:"result"`
-	Type             string `json:"type"`
-	Solver           string `json:"solver"`
-	SolverMetadata   string `json:"solverMetadata"`
-	SolverDataToSign string `json:"solverDataToSign"`
-	SolverOutput     string `json:"solverOutput"`
-}
-
-type Intent struct {
-	ID            int64       `json:"id"`
-	Operations    []Operation `json:"operations"`
-	Signature     string      `json:"signature"`
-	Identity      string      `json:"identity"`
-	IdentityCurve string      `json:"identityCurve"`
-	Status        string      `json:"status"`
-	Expiry        uint64      `json:"expiry"`
-	CreatedAt     uint64      `json:"createdAt"`
-}
-
-const (
-	INTENT_STATUS_PROCESSING = "processing"
-	INTENT_STATUS_COMPLETED  = "completed"
-	INTENT_STATUS_FAILED     = "failed"
-	INTENT_STATUS_EXPIRED    = "expired"
+	"github.com/StripChain/strip-node/util/logger"
+	"github.com/google/uuid"
 )
 
 const (
-	OPERATION_STATUS_PENDING   = "pending"
-	OPERATION_STATUS_WAITING   = "waiting"
-	OPERATION_STATUS_COMPLETED = "completed"
-	OPERATION_STATUS_FAILED    = "failed"
+	GET_WALLET_ERROR              = "failed to get wallet"
+	CREATE_WALLET_ERROR           = "failed to create wallet"
+	ENCODE_ERROR                  = "failed to encode response"
+	DECODE_ERROR                  = "request decode error"
+	ADD_INTENT_ERROR              = "failed to add intent"
+	GET_INTENT_ERROR              = "failed to get intent"
+	GET_SOLVER_STATS_ERROR        = "failed to get solver stats"
+	GET_OPERATION_ERROR           = "failed to get operation"
+	OPERATION_NOT_COMPLETED_ERROR = "operation not completed"
+	GET_TRANSFERS_ERROR           = "failed to get transfers"
+	GET_BLOCKCHAIN_ERROR          = "failed to get blockchain"
+	PARSE_UUID_ID_ERROR           = "failed to parse intent id"
 )
-
-const (
-	OPERATION_TYPE_TRANSACTION    = "transaction"
-	OPERATION_TYPE_SOLVER         = "solver"
-	OPERATION_TYPE_BRIDGE_DEPOSIT = "bridgeDeposit"
-	OPERATION_TYPE_SWAP           = "swap"
-	OPERATION_TYPE_BURN           = "burn"
-	OPERATION_TYPE_WITHDRAW       = "withdraw"
-	//------------------sign messages
-	OPERATION_TYPE_SIGN_MESSAGE       = "sign_message"
-	OPERATION_TYPE_SIGN_TYPED_MESSAGE = "sign_typed_message"
-)
-
-type CreateWalletRequest struct {
-	Identity      string   `json:"identity"`
-	IdentityCurve string   `json:"identityCurve"`
-	KeyCurve      string   `json:"keyCurve"`
-	Signers       []string `json:"signers"`
-}
 
 type GetAddressResponse struct {
 	Address string `json:"address"`
 }
 
+type GetBitcoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
+	RegtestAddress string `json:"regtestAddress"`
+}
+
+type GetDogecoinAddressesResponse struct {
+	MainnetAddress string `json:"mainnetAddress"`
+	TestnetAddress string `json:"testnetAddress"`
+}
+
 type IntentsResult struct {
-	Intents []*Intent `json:"intents"`
-	Total   int       `json:"total"`
+	Intents []*libs.Intent `json:"intents"`
+	Total   int            `json:"total"`
 }
 
 type SolverStatResult struct {
@@ -88,6 +60,17 @@ type SolverStatResult struct {
 type TotalStats struct {
 	TotalSolvers uint `json:"totalSolvers"`
 	TotalIntents uint `json:"totalIntents"`
+}
+
+type MPCKey struct {
+	Title     string `json:"title"`
+	Network   string `json:"network"`
+	PublicKey string `json:"publicKey"`
+}
+
+type WalletResponse struct {
+	db.WalletSchema
+	MPCKeys []MPCKey `json:"mpcKeys"`
 }
 
 func enableCors(w *http.ResponseWriter) {
@@ -155,38 +138,54 @@ func startHTTPServer(port string) {
 	//   - identityCurve: The curve type for the identity
 	// Response:
 	//   - Success: "wallet already exists" if wallet exists
-	//   - Success: Empty response if wallet created
+	//   - Success: 201 if wallet created
+	//   - Error: 400 if identityCurve is invalid or identity is empty
+	//   - Error: 409 if wallet already exists
 	//   - Error: 500 with error message
 	http.HandleFunc("/createWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		// then store the wallet and it's list of signers in the db
 		identity := r.URL.Query().Get("identity")
-		identityCurve := r.URL.Query().Get("identityCurve")
+		blockchainIDStr := r.URL.Query().Get("blockchain")
 
 		_createWallet := false
 
-		_, err := GetWallet(identity, identityCurve)
+		if identity == "" {
+			http.Error(w, "identity required", http.StatusBadRequest)
+			return
+		}
+
+		blockchainID, err := blockchains.ParseBlockchainID(blockchainIDStr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		_, err = db.GetWallet(identity, blockchainID)
 		if err != nil {
 
 			if err.Error() == "pg: no rows in result set" {
 				_createWallet = true
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 				return
 			}
 		}
 
 		if !_createWallet {
+			w.WriteHeader(http.StatusConflict)
 			fmt.Fprintf(w, "wallet already exists")
 			return
 		}
 
-		err = createWallet(identity, identityCurve)
+		err = createWallet(identity, blockchainID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, CREATE_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
+
+		w.WriteHeader(http.StatusCreated)
 	})
 
 	// GetWallet endpoint - Retrieves wallet information
@@ -195,23 +194,78 @@ func startHTTPServer(port string) {
 	//   - identity: The unique identifier for the wallet
 	//   - identityCurve: The curve type for the identity
 	// Response:
-	//   - Success: JSON encoded wallet object
+	//   - Success: 200 JSON encoded wallet object
+	//   - Error: 400 if identityCurve is invalid or identity is empty
+	//   - Error: 404 if wallet not found
 	//   - Error: 500 with error message
 	http.HandleFunc("/getWallet", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
 		identity := r.URL.Query().Get("identity")
-		identityCurve := r.URL.Query().Get("identityCurve")
-
-		wallet, err := GetWallet(identity, identityCurve)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		blockchainIDStr := r.URL.Query().Get("blockchain")
+		if identity == "" {
+			http.Error(w, "identity required", http.StatusBadRequest)
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(wallet)
+		blockchainID, err := blockchains.ParseBlockchainID(blockchainIDStr)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		wallet, err := db.GetWallet(identity, blockchainID)
+		if err != nil {
+			if err.Error() == "pg: no rows in result set" {
+				http.Error(w, "wallet not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
+			return
+		}
+
+		// Create response with extended fields
+		response := WalletResponse{
+			WalletSchema: *wallet,
+			MPCKeys:      []MPCKey{}, // Initialize with empty array
+		}
+
+		// Helper function to add keys to MPCKeys array
+		addKey := func(title, network, publicKey string) {
+			if publicKey != "" {
+				response.MPCKeys = append(response.MPCKeys, MPCKey{
+					Title:     title,
+					Network:   network,
+					PublicKey: publicKey,
+				})
+			}
+		}
+
+		// Add Bitcoin keys
+		addKey("Bitcoin", "mainnet", wallet.BitcoinMainnetPublicKey)
+		addKey("Bitcoin", "testnet", wallet.BitcoinTestnetPublicKey)
+		addKey("Bitcoin Regtest", "testnet", wallet.BitcoinRegtestPublicKey)
+
+		// Add Dogecoin keys
+		addKey("Dogecoin", "mainnet", wallet.DogecoinMainnetPublicKey)
+		addKey("Dogecoin", "testnet", wallet.DogecoinTestnetPublicKey)
+
+		// Add other blockchain keys (all default to testnet)
+		addKey("Stellar", "testnet", wallet.StellarPublicKey)
+		addKey("Ripple", "testnet", wallet.RippleEDDSAPublicKey)
+		addKey("Sui", "testnet", wallet.SuiPublicKey)
+		addKey("Algorand", "testnet", wallet.AlgorandEDDSAPublicKey)
+		addKey("Cardano", "testnet", wallet.CardanoPublicKey)
+		addKey("Aptos", "testnet", wallet.AptosEDDSAPublicKey)
+		addKey("Ethereum", "testnet", wallet.EthereumPublicKey)
+		addKey("Solana", "testnet", wallet.SolanaPublicKey)
+
+		// Add general cryptographic keys
+		addKey("EDDSA", "testnet", wallet.EDDSAPublicKey)
+		addKey("ECDSA", "testnet", wallet.ECDSAPublicKey)
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -224,15 +278,15 @@ func startHTTPServer(port string) {
 	http.HandleFunc("/getBridgeAddress", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
-		wallet, err := GetWallet(BridgeContractAddress, "ecdsa")
+		wallet, err := db.GetWallet(BridgeContractAddress, blockchains.Ethereum)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(wallet)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -245,6 +299,7 @@ func startHTTPServer(port string) {
 	//   - Error: 400 for invalid request body
 	//   - Error: 500 for processing errors
 	// Notes: Triggers async intent processing after creation
+	// TODO: Intent validation
 	http.HandleFunc("/createIntent", func(w http.ResponseWriter, r *http.Request) {
 		enableCors(&w)
 
@@ -253,24 +308,24 @@ func startHTTPServer(port string) {
 			return
 		}
 
-		var intent Intent
+		var intent libs.Intent
 
 		err := json.NewDecoder(r.Body).Decode(&intent)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, DECODE_ERROR, http.StatusBadRequest)
 			return
 		}
 
-		id, err := AddIntent(&intent)
-
+		id, err := db.AddIntent(&intent)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logger.Sugar().Errorw("failed to add intent", "error", err)
+			http.Error(w, ADD_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		go ProcessIntent(id)
 
-		fmt.Fprintf(w, "{\"id\": %d}", id)
+		fmt.Fprintf(w, "{\"id\": \"%s\"}", id.String())
 	})
 
 	// GetIntent endpoint - Retrieves a specific intent by ID
@@ -284,17 +339,24 @@ func startHTTPServer(port string) {
 		enableCors(&w)
 
 		intentId := r.URL.Query().Get("id")
-		i, _ := strconv.ParseInt(intentId, 10, 64)
-
-		intent, err := GetIntent(i)
+		id, err := uuid.Parse(intentId)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logger.Sugar().Errorw("failed to parse intent id", "error", err)
+			http.Error(w, PARSE_UUID_ID_ERROR, http.StatusInternalServerError)
+			return
+		}
+
+		intent, err := db.GetIntent(id)
+		if err != nil {
+			logger.Sugar().Errorw("failed to get intent", "error", err)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
 		err = json.NewEncoder(w).Encode(intent)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logger.Sugar().Errorw("failed to encode intent", "error", err)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -316,9 +378,9 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, count, err := GetIntentsWithPagination(l, s)
+		intents, count, err := db.GetIntentsWithPagination(l, s)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -329,7 +391,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -353,9 +415,9 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, count, err := GetSolverIntents(solver, l, s)
+		intents, count, err := db.GetSolverIntents(solver, l, s)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -366,7 +428,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -390,9 +452,9 @@ func startHTTPServer(port string) {
 		l, _ := strconv.Atoi(limit)
 		s, _ := strconv.Atoi(skip)
 
-		intents, count, err := GetIntentsOfAddress(address, l, s)
+		intents, count, err := db.GetIntentsOfAddress(address, l, s)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -403,7 +465,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(intentsResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -431,7 +493,7 @@ func startHTTPServer(port string) {
 		)
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_SOLVER_STATS_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -443,7 +505,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(solverStatResult)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -465,15 +527,15 @@ func startHTTPServer(port string) {
 		)
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_SOLVER_STATS_ERROR, http.StatusInternalServerError)
 			return
 
 		}
 
-		totalIntents, err := GetTotalIntents()
+		totalIntents, err := db.GetTotalIntents()
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_INTENT_ERROR, http.StatusInternalServerError)
 			return
 		}
 
@@ -484,7 +546,7 @@ func startHTTPServer(port string) {
 
 		err = json.NewEncoder(w).Encode(totalStats)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
 			return
 		}
 	})
@@ -503,59 +565,42 @@ func startHTTPServer(port string) {
 
 		operationId := r.URL.Query().Get("operationId")
 		intentId := r.URL.Query().Get("intentId")
-		i, _ := strconv.ParseInt(operationId, 10, 64)
-		j, _ := strconv.ParseInt(intentId, 10, 64)
+		opID, _ := strconv.ParseInt(operationId, 10, 64)
+		intentID, _ := uuid.Parse(intentId)
 
-		operation, err := GetOperation(j, i)
+		operation, err := db.GetOperation(intentID, opID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_OPERATION_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		intent, err := GetIntent(j)
+		if operation.Result == "" || operation.Status != libs.OperationStatusCompleted {
+			http.Error(w, OPERATION_NOT_COMPLETED_ERROR, http.StatusInternalServerError)
+			return
+		}
+
+		wallet, err := db.GetWallet(BridgeContractAddress, operation.BlockchainID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_WALLET_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		wallet, err := GetWallet(intent.Identity, intent.IdentityCurve)
-
+		opBlockchain, err := blockchains.GetBlockchain(operation.BlockchainID, operation.NetworkType)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, GET_BLOCKCHAIN_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		if operation.Result == "" || operation.Status != OPERATION_STATUS_COMPLETED {
-			http.Error(w, "operation not completed", http.StatusInternalServerError)
+		transfers, err := opBlockchain.GetTransfers(operation.Result, &wallet.EthereumPublicKey)
+		if err != nil {
+			http.Error(w, GET_TRANSFERS_ERROR, http.StatusInternalServerError)
 			return
 		}
 
-		if operation.KeyCurve == "ecdsa" {
-			transfers, err := GetEthereumTransfers(operation.ChainId, operation.Result, wallet.ECDSAPublicKey)
-
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		} else {
-			transfers, err := GetSolanaTransfers(operation.ChainId, operation.Result, HeliusApiKey)
-
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			err = json.NewEncoder(w).Encode(transfers)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+		err = json.NewEncoder(w).Encode(transfers)
+		if err != nil {
+			http.Error(w, ENCODE_ERROR, http.StatusInternalServerError)
+			return
 		}
 	})
 
